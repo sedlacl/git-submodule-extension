@@ -22,7 +22,7 @@ are the machine-checked source for labels and the deviation list below.
 - `git.untrackedChanges`: mixed / separate / hidden
 - Status letters, tooltip text, and `gitDecoration.*` colors from
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`
-- Branch description `name*+!` plus `↔ remote/branch` ahead/behind
+- Compact clickable branch description (`name*` when dirty); upstream details are omitted and Fetch/Pull are repository-row actions
 - File theme icons when `git.decorations.enabled` is true (default)
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`

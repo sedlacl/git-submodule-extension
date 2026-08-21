@@ -30,6 +30,9 @@ describe("adopted-view contributions", () => {
         COMMANDS.clean,
         COMMANDS.commit,
         COMMANDS.generateSubmoduleChore,
+        COMMANDS.checkoutBranch,
+        COMMANDS.fetch,
+        COMMANDS.pull,
         COMMANDS.sync,
         COMMANDS.publish,
         COMMANDS.retryRestore,
@@ -51,11 +54,24 @@ describe("adopted-view contributions", () => {
     );
     expect(chore?.when).toContain("workspaceRoot");
     expect(chore?.when).toContain("submodule");
-    expect(chore?.group).toBe("inline@1");
+    expect(chore?.group).toBe("inline@4");
     const repositoryOpenAll = pkg.contributes.menus["view/item/context"].find(
       (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("workspaceRoot"),
     );
-    expect(repositoryOpenAll?.group).toBe("inline@2");
+    expect(repositoryOpenAll?.group).toBe("inline@5");
+    const checkout = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.checkoutBranch,
+    );
+    const fetch = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.fetch,
+    );
+    const pull = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.pull,
+    );
+    expect(checkout?.group).toBe("inline@1");
+    expect(fetch?.group).toBe("inline@2");
+    expect(pull?.group).toBe("inline@3");
+    expect(pull?.when).toContain("hasUpstream");
     const sync = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.sync);
     const publish = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.publish);
     expect(sync?.when).toContain("hasUpstream");

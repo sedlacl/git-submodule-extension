@@ -98,7 +98,7 @@ describe("visibleTreeGroups", () => {
 });
 
 describe("repositoryBranchDescription", () => {
-  it("adds built-in * + ! markers and upstream tracking", () => {
+  it("shows only the local branch and a dirty working-tree marker", () => {
     const head = {
       name: "main",
       detached: false,
@@ -106,7 +106,7 @@ describe("repositoryBranchDescription", () => {
       behind: 1,
       upstream: { remote: "origin", name: "main" },
     };
-    expect(repositoryBranchDescription(head, mixedWorking)).toBe("main*+! ↔ origin/main 1↓ 2↑");
+    expect(repositoryBranchDescription(head, mixedWorking)).toBe("main*");
   });
 
   it("uses an 8-character SHA when detached", () => {

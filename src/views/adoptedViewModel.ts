@@ -273,6 +273,7 @@ function buildWorkspaceRootNode(
     expandByDefault: children.length > 0,
     contextValue: repositoryContextValue(CONTEXT.workspaceRoot, snapshot),
     iconId: "repo",
+    clickCommand: { command: COMMANDS.checkoutBranch, title: "Checkout Branch…" },
     children,
   };
 }
@@ -299,6 +300,7 @@ function buildSubmoduleTreeNode(
     contextValue: repositoryContextValue(CONTEXT.submodule, snapshot),
     iconId: icon.iconId,
     themeColorId: icon.themeColorId,
+    clickCommand: { command: COMMANDS.checkoutBranch, title: "Checkout Branch…" },
     restoreTarget: {
       parentRootPath: node.parentRootPath,
       relativePath: node.relativePath,

@@ -61,6 +61,13 @@ export interface Branch extends Ref {
   readonly behind?: number;
 }
 
+export interface BranchQuery {
+  readonly remote?: boolean;
+  readonly contains?: string;
+  readonly sort?: "alphabetically" | "committerdate";
+  readonly count?: number;
+}
+
 export interface CommitShortStat {
   readonly files: number;
   readonly insertions: number;
@@ -169,6 +176,8 @@ export interface Repository {
   clean(paths: string[]): Promise<void>;
   commit(message: string, opts?: CommitOptions): Promise<void>;
   status(): Promise<void>;
+  getBranches(query: BranchQuery): Promise<Ref[]>;
+  checkout(treeish: string): Promise<void>;
 
   diffWithHEAD(): Promise<Change[]>;
   diffWithHEAD(path: string): Promise<string>;

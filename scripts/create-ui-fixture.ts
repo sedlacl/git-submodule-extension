@@ -69,12 +69,18 @@ function createSourceRepo(
   return commits;
 }
 
+/**
+ * Deployment branches must diverge from `startPoint`, not from whatever the
+ * previous call left checked out; otherwise they stack into one chain and a
+ * diff between two of them accumulates the commits in between.
+ */
 function createBranchCommits(
   repoDir: string,
   branch: string,
   files: Array<{ path: string; content: string; message: string }>,
+  startPoint = "main",
 ): Record<string, string> {
-  createBranch(repoDir, branch);
+  createBranch(repoDir, branch, startPoint);
   checkout(repoDir, branch);
   const commits: Record<string, string> = {};
   for (const file of files) {

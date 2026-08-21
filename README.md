@@ -16,7 +16,7 @@ The built-in Git **Changes** panel cannot be replaced or hidden through a stable
 
 This extension contributes a native SCM `TreeView` named **CHANGES with submodules** that lists:
 
-- workspace folders as sibling repositories (including multi-root workspaces), each with a branch/upstream description (`main*+! ↔ origin/main`)
+- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` when dirty) plus Fetch/Pull hover actions
 - **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations
 - empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`); there is no `Adopted Changes none` row
 - an **Adopted Changes** group on the parent repository that records gitlink pointer shifts, only when a direct child pointer actually moved. A gitlink that is also a normal staged/unstaged parent change stays in **Staged Changes** / **Changes**; Adopted Changes additionally explains the inner commit diff
@@ -84,7 +84,8 @@ npm run package
 ```bash
 npm run create-ui-fixture   # generate fixtures/ui if missing
 npm run dev:ui:reset        # wipe and regenerate the fixture
-npm run dev:ui
+npm run dev:ui              # VS Code engine from @vscode/test-electron
+npm run dev:cursor          # same harness in Cursor (Electron app, not the CLI shim)
 ```
 
 The harness opens `fixtures/ui/ui-dev.code-workspace`:

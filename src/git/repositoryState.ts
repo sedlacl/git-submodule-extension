@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { Branch, CommitOptions, FetchOptions, ForcePushMode, Remote, Repository } from "./git.js";
+import type { Branch, CommitOptions, FetchOptions, ForcePushMode, Ref, Remote, Repository } from "./git.js";
 import { normalizeRepoPath } from "./pathUtils.js";
 
 /**
@@ -123,9 +123,16 @@ export interface GitRepositoryOperations {
   clean(paths: string[]): Promise<void>;
   commit(message: string, opts?: CommitOptions): Promise<void>;
   status(): Promise<void>;
+  getBranches(): Promise<RepositoryBranch[]>;
+  checkout(branchName: string): Promise<void>;
   fetch(options?: FetchOptions): Promise<void>;
   pull(unshallow?: boolean): Promise<void>;
   push(remoteName?: string, branchName?: string, setUpstream?: boolean, force?: ForcePushMode): Promise<void>;
+}
+
+export interface RepositoryBranch {
+  readonly name: string;
+  readonly commit?: string;
 }
 
 /**
@@ -157,7 +164,10 @@ export interface RepositoryLike {
   readonly state: RepositoryStateLike;
 }
 
-type OperationsHost = Pick<Repository, "add" | "revert" | "clean" | "commit" | "status" | "pull" | "push"> & {
+type OperationsHost = Pick<
+  Repository,
+  "add" | "revert" | "clean" | "commit" | "status" | "getBranches" | "checkout" | "pull" | "push"
+> & {
   fetch(options?: FetchOptions): Promise<void>;
 };
 
@@ -238,6 +248,12 @@ export function snapshotRemotes(remotes: readonly Remote[] | undefined): Reposit
   }));
 }
 
+function branchRefs(refs: readonly Ref[]): RepositoryBranch[] {
+  return refs
+    .filter((ref): ref is Ref & { name: string } => Boolean(ref.name))
+    .map((ref) => ({ name: ref.name, commit: ref.commit }));
+}
+
 export function visibleChangeGroups(groups: RepositoryChangeGroups): ChangeGroupViewModel[] {
   return CHANGE_GROUP_ORDER.filter((kind) => groups[kind].length > 0).map((kind) => ({
     kind,
@@ -269,6 +285,8 @@ export function bindRepositoryOperations(repository: OperationsHost): GitReposit
     clean: (paths) => repository.clean(paths),
     commit: (message, opts) => repository.commit(message, opts),
     status: () => repository.status(),
+    getBranches: async () => branchRefs(await repository.getBranches({ remote: false, sort: "alphabetically" })),
+    checkout: (branchName) => repository.checkout(branchName),
     fetch: (options) => repository.fetch(options),
     pull: (unshallow) => repository.pull(unshallow),
     push: (remoteName, branchName, setUpstream, force) =>

@@ -102,6 +102,29 @@ describe("create-ui-fixture", () => {
     expect(indexSha).not.toBe(headSha);
   }, 120_000);
 
+  it("branches deployment refs off main instead of chaining them", async () => {
+    const fixtureRoot = makeTempFixtureRoot();
+    const manifest = await createUiFixture({ force: true, fixtureRoot });
+    const aflex = path.join(manifest.sourcesRoot, "usy_aflex_initdatag01");
+    const branches = ["feature/t1-deployment", "feature/t2-deployment", "feature/prod-deployment"];
+
+    for (const branch of branches) {
+      expect(runGit(aflex, ["merge-base", branch, "main"])).toBe(runGit(aflex, ["rev-parse", "main"]));
+      for (const other of branches.filter((candidate) => candidate !== branch)) {
+        expect(runGit(aflex, ["rev-list", "--count", `${other}..${branch}`])).toBe("1");
+      }
+    }
+
+    // prod -> t1 must drop prod's env file and add t1's, not accumulate t2.
+    const nameStatus = runGit(aflex, [
+      "diff",
+      "--name-status",
+      "feature/prod-deployment",
+      "feature/t1-deployment",
+    ]);
+    expect(nameStatus.split("\n").sort()).toEqual(["A\tenv/t1.env", "D\tenv/prod.env"]);
+  }, 120_000);
+
   it("reuses an existing manifest unless force is requested", async () => {
     const fixtureRoot = makeTempFixtureRoot();
     const first = await createUiFixture({ force: true, fixtureRoot });

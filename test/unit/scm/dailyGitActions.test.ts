@@ -67,6 +67,11 @@ class FakeRepository implements DailyGitRepositoryHandle {
       clean: (paths) => record("clean", paths),
       commit: (message, options) => record("commit", message, options),
       status: () => record("status"),
+      getBranches: async () => [
+        { name: "main", commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        { name: "feature/test", commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      ],
+      checkout: (branchName) => record("checkout", branchName),
       fetch: (options) => record("fetch", options),
       pull: (unshallow) => record("pull", unshallow),
       push: (remote, branch, setUpstream, force) => record("push", remote, branch, setUpstream, force),
@@ -89,6 +94,7 @@ class FakeUi implements DailyGitActionsUi {
   nextConfirmation: string | undefined;
   nextInput: string | undefined;
   nextRemote: string | undefined;
+  nextBranch: string | undefined;
 
   async confirm(message: string, actions: readonly string[]): Promise<string | undefined> {
     this.confirmations.push({ message, actions });
@@ -102,6 +108,12 @@ class FakeUi implements DailyGitActionsUi {
 
   async pickRemote(remotes: readonly { name: string; description?: string }[]): Promise<string | undefined> {
     return this.nextRemote ?? remotes[0]?.name;
+  }
+
+  async pickBranch(
+    branches: readonly { name: string; description?: string; current?: boolean }[],
+  ): Promise<string | undefined> {
+    return this.nextBranch ?? branches[0]?.name;
   }
 
   info(message: string): void {
@@ -302,6 +314,29 @@ describe("DailyGitActions repository commands", () => {
 
     expect(first.calls).toEqual([]);
     expect(second.calls).toEqual([{ operation: "status", args: [] }]);
+  });
+
+  it("checks out the branch selected from the repository branch picker", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextBranch = "feature/test";
+    const { actions } = harness([repository], ui);
+
+    await actions.checkoutBranch(root);
+
+    expect(repository.calls).toEqual([{ operation: "checkout", args: ["feature/test"] }]);
+  });
+
+  it("fetches and pulls the targeted repository independently", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const { actions } = harness([repository]);
+
+    await actions.fetch(root);
+    await actions.pull(root);
+
+    expect(repository.calls.map((call) => call.operation)).toEqual(["fetch", "pull"]);
   });
 
   it("prompts before smart-commit and commits all only after confirmation", async () => {

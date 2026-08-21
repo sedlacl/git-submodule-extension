@@ -16,5 +16,6 @@ describe("scaffold", () => {
     expect(pkg.scripts["test:extension-host"]).toContain("run-extension-tests.ts");
     expect(pkg.scripts.build).toBe("node esbuild.mjs");
     expect(pkg.scripts.package).toContain("vsce package");
+    expect(pkg.scripts["dev:cursor"]).toContain("--host=cursor");
   });
 });

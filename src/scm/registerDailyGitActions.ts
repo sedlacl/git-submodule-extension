@@ -37,7 +37,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     };
 
   const repositoryHandler =
-    (kind: "commit" | "prepareSubmoduleChore" | "sync" | "publish") =>
+    (kind: "commit" | "prepareSubmoduleChore" | "checkoutBranch" | "fetch" | "pull" | "sync" | "publish") =>
     async (node?: AdoptedTreeNode): Promise<void> => {
       const rootPath = await resolveRepositoryRoot(options.gitApi, node);
       if (rootPath) {
@@ -63,6 +63,9 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     register(COMMANDS.cleanAllUntracked, "Discard All Untracked Changes", discard),
     register(COMMANDS.commit, "Commit", repositoryHandler("commit")),
     register(COMMANDS.generateSubmoduleChore, "Generate Submodule Chore", repositoryHandler("prepareSubmoduleChore")),
+    register(COMMANDS.checkoutBranch, "Checkout Branch", repositoryHandler("checkoutBranch")),
+    register(COMMANDS.fetch, "Fetch", repositoryHandler("fetch")),
+    register(COMMANDS.pull, "Pull", repositoryHandler("pull")),
     register(COMMANDS.sync, "Sync", repositoryHandler("sync")),
     register(COMMANDS.publish, "Publish Branch", repositoryHandler("publish")),
     register(COMMANDS.refresh, "Refresh", async (node) => {
@@ -134,6 +137,20 @@ function createUi(): DailyGitActionsUi {
           name: remote.name,
         })),
         { placeHolder: "Choose a remote to publish the branch" },
+      );
+      return selected?.name;
+    },
+    pickBranch: async (branches) => {
+      const selected = await vscode.window.showQuickPick(
+        branches.map((branch) => ({
+          label: branch.current ? `$(check) ${branch.name}` : `$(git-branch) ${branch.name}`,
+          description: branch.description,
+          name: branch.name,
+        })),
+        {
+          placeHolder: "Choose a branch to check out",
+          matchOnDescription: true,
+        },
       );
       return selected?.name;
     },

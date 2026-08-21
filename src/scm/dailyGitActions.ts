@@ -19,6 +19,9 @@ export interface DailyGitActionsUi {
   confirm(message: string, actions: readonly string[]): Promise<string | undefined>;
   input(options: { value: string; placeHolder: string; prompt: string }): Promise<string | undefined>;
   pickRemote(remotes: readonly { name: string; description?: string }[]): Promise<string | undefined>;
+  pickBranch(
+    branches: readonly { name: string; description?: string; current?: boolean }[],
+  ): Promise<string | undefined>;
   info(message: string): void;
 }
 
@@ -192,6 +195,43 @@ export class DailyGitActions {
 
       await target.operations().pull();
       await target.operations().push(head.upstream.remote, head.upstream.name, false);
+    });
+  }
+
+  async checkoutBranch(rootPath: string): Promise<void> {
+    const repository = this.requireRepository(rootPath);
+    await this.runBusy([repository], async (target) => {
+      const current = target.snapshot().head?.name;
+      const branches = await target.operations().getBranches();
+      const selected = await this.ui.pickBranch(
+        branches.map((branch) => ({
+          name: branch.name,
+          description: branch.commit?.slice(0, 8),
+          current: branch.name === current,
+        })),
+      );
+      if (!selected || selected === current) {
+        return;
+      }
+      await target.operations().checkout(selected);
+    });
+  }
+
+  async fetch(rootPath: string): Promise<void> {
+    const repository = this.requireRepository(rootPath);
+    await this.runBusy([repository], async (target) => {
+      await target.operations().fetch();
+    });
+  }
+
+  async pull(rootPath: string): Promise<void> {
+    const repository = this.requireRepository(rootPath);
+    await this.runBusy([repository], async (target) => {
+      if (!target.snapshot().head?.upstream) {
+        this.ui.info("The current branch has no upstream to pull from.");
+        return;
+      }
+      await target.operations().pull();
     });
   }
 

@@ -370,6 +370,18 @@ class GitBackedRepository implements DailyGitRepositoryHandle {
       status: async () => {
         this.calls.push({ operation: "status", args: [] });
       },
+      getBranches: async () =>
+        runGit(this.rootPath, ["for-each-ref", "--format=%(refname:short)%00%(objectname)", "refs/heads"])
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => {
+            const [name, commit] = line.split("\0");
+            return { name: name!, commit };
+          }),
+      checkout: async (branchName) => {
+        this.calls.push({ operation: "checkout", args: [branchName] });
+        runGit(this.rootPath, ["checkout", branchName]);
+      },
       fetch: async (options) => {
         this.calls.push({ operation: "fetch", args: [options] });
       },
@@ -400,6 +412,10 @@ class RecordingUi implements DailyGitActionsUi {
 
   async pickRemote(): Promise<string | undefined> {
     return this.nextRemote;
+  }
+
+  async pickBranch(): Promise<string | undefined> {
+    return undefined;
   }
 
   info(): void {}
@@ -454,5 +470,6 @@ const NO_PROMPT_UI: DailyGitActionsUi = {
   confirm: async () => undefined,
   input: async () => undefined,
   pickRemote: async () => undefined,
+  pickBranch: async () => undefined,
   info: () => undefined,
 };

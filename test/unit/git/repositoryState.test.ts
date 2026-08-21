@@ -188,7 +188,7 @@ describe("resource status mapping", () => {
 });
 
 describe("bindRepositoryOperations", () => {
-  it("forwards add/revert/clean/commit/status/fetch/pull/push to the vscode.git repository", async () => {
+  it("forwards repository operations to vscode.git", async () => {
     const calls: string[] = [];
     const ops = bindRepositoryOperations({
       add: async (paths) => {
@@ -206,6 +206,13 @@ describe("bindRepositoryOperations", () => {
       status: async () => {
         calls.push("status");
       },
+      getBranches: async () => {
+        calls.push("getBranches");
+        return [{ type: 0, name: "main", commit: "abc" }];
+      },
+      checkout: async (branchName) => {
+        calls.push(`checkout:${branchName}`);
+      },
       fetch: async () => {
         calls.push("fetch");
       },
@@ -222,6 +229,8 @@ describe("bindRepositoryOperations", () => {
     await ops.clean(["/ws/c.ts"]);
     await ops.commit("wip");
     await ops.status();
+    await ops.getBranches();
+    await ops.checkout("main");
     await ops.fetch();
     await ops.pull();
     await ops.push("origin", "main", true);
@@ -232,6 +241,8 @@ describe("bindRepositoryOperations", () => {
       "clean:/ws/c.ts",
       "commit:wip",
       "status",
+      "getBranches",
+      "checkout:main",
       "fetch",
       "pull",
       "push:origin:main:true",

@@ -82,6 +82,24 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "gitSubmodule.checkoutBranch",
+        "title": "Checkout Branch...",
+        "category": "Git Submodule",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitSubmodule.fetch",
+        "title": "Fetch",
+        "category": "Git Submodule",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitSubmodule.pull",
+        "title": "Pull",
+        "category": "Git Submodule",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "gitSubmodule.sync",
         "title": "Sync",
         "category": "Git Submodule",
@@ -303,14 +321,29 @@
       ],
       "view/item/context": [
         {
-          "command": "gitSubmodule.generateSubmoduleChore",
+          "command": "gitSubmodule.checkoutBranch",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "inline@1"
         },
         {
-          "command": "gitSubmodule.openAllChanges",
+          "command": "gitSubmodule.fetch",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.pull",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitSubmodule.generateSubmoduleChore",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "inline@4"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "inline@5"
         },
         {
           "command": "gitSubmodule.openAllChanges",
@@ -501,6 +534,7 @@
     "test:extension-host": "tsx scripts/run-extension-tests.ts",
     "create-ui-fixture": "tsx scripts/create-ui-fixture.ts",
     "dev:ui": "tsx scripts/dev-ui.ts",
+    "dev:cursor": "tsx scripts/dev-ui.ts --host=cursor",
     "dev:ui:reset": "tsx scripts/create-ui-fixture.ts --force",
     "package": "npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build"

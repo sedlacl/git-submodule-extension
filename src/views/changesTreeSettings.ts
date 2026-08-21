@@ -7,7 +7,6 @@ import {
   type RepositoryChangeGroups,
   type RepositoryHead,
   type ResourceChange,
-  formatAheadBehind,
 } from "../git/repositoryState.js";
 
 /** Built-in `git.untrackedChanges` (microsoft/vscode Git, tag 1.96.0). */
@@ -128,10 +127,7 @@ export function shouldShowGroup(
   return count > 0;
 }
 
-/**
- * Built-in `Repository.headLabel` plus upstream tracking from `headDescription`.
- * Upstream: `headLabel` in `extensions/git/src/repository.ts` tag 1.96.0.
- */
+/** Compact branch label shown on the right side of a repository row. */
 export function repositoryBranchDescription(
   head: RepositoryHead | undefined,
   groups: RepositoryChangeGroups,
@@ -147,15 +143,7 @@ export function repositoryBranchDescription(
     groups.workingTree.length + groups.untracked.length > 0
       ? "*"
       : "";
-  const staged = groups.index.length > 0 ? "+" : "";
-  const merge = groups.merge.length > 0 ? "!" : "";
-  const label = `${name}${dirty}${staged}${merge}`;
-  if (!head.upstream) {
-    return label;
-  }
-  const sync = formatAheadBehind(head);
-  const tracking = `${label} ↔ ${head.upstream.remote}/${head.upstream.name}`;
-  return sync ? `${tracking} ${sync}` : tracking;
+  return `${name}${dirty}`;
 }
 
 /**
