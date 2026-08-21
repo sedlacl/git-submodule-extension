@@ -3,6 +3,7 @@ import type { AdoptedChangeKind, AdoptedDiffSpec, SubmoduleViewModel } from "../
 import {
   indexSnapshots,
   lookupSnapshot,
+  ResourceStatus,
   resourceStatusLetter,
   resourceStatusText,
   resourceStatusThemeColorId,
@@ -11,7 +12,6 @@ import {
   type RepositoryChangeGroups,
   type RepositoryStateSnapshot,
   type ResourceChange,
-  type ResourceStatus,
 } from "../git/repositoryState.js";
 import type {
   NameStatusEntry,
@@ -103,6 +103,12 @@ const STATUS_DECORATION: Record<NameStatusKind, FileDecorationSpec> = {
   typechange: { badge: "T", tooltip: "Type change", themeColorId: "gitDecoration.modifiedResourceForeground" },
   unmerged: { badge: "U", tooltip: "Unmerged", themeColorId: "gitDecoration.conflictingResourceForeground" },
   unknown: { badge: "?", tooltip: "Changed", themeColorId: "gitDecoration.modifiedResourceForeground" },
+};
+
+const SUBMODULE_DECORATION: FileDecorationSpec = {
+  badge: "S",
+  tooltip: "Submodule",
+  themeColorId: "gitDecoration.submoduleResourceForeground",
 };
 
 const FILE_ICON: Record<NameStatusKind, { iconId: string; themeColorId: string }> = {
@@ -225,7 +231,11 @@ export function buildAdoptedTree(
 
 export const buildChangesTree = buildAdoptedTree;
 
-export function fileNodesFromNameStatus(spec: AdoptedDiffSpec, entries: readonly NameStatusEntry[]): AdoptedTreeNode[] {
+export function fileNodesFromNameStatus(
+  spec: AdoptedDiffSpec,
+  entries: readonly NameStatusEntry[],
+  settings: ChangesTreeSettings = DEFAULT_CHANGES_TREE_SETTINGS,
+): AdoptedTreeNode[] {
   if (entries.length === 0) {
     return [
       messageNode(
@@ -236,7 +246,12 @@ export function fileNodesFromNameStatus(spec: AdoptedDiffSpec, entries: readonly
     ];
   }
 
-  return entries.map((entry) => toFileNode(spec, entry));
+  const files = entries.map((entry) => toFileNode(spec, entry));
+  return settings.viewMode === "tree"
+    ? nestNodesByPath(files, settings.compactFolders, (relativePath, children) =>
+        buildPathFolderNode(spec.repoRoot, relativePath, children),
+      )
+    : files;
 }
 
 export function errorMessageNode(id: string, error: unknown, label = "Failed to list changes"): AdoptedTreeNode {
@@ -338,24 +353,29 @@ function repoChildNodes(
   snapshots: ReadonlyMap<string, RepositoryStateSnapshot>,
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode[] {
-  const changeGroups = visibleTreeGroups(groups, settings).map((group) =>
-    buildChangeGroupNode(node.rootPath, group, settings),
+  const changeGroups = visibleTreeGroups(withAdoptedGitlinks(groups, node.rootPath, node.children), settings).map(
+    (group) => buildChangeGroupNode(node.rootPath, group, node.children, settings),
   );
-  const adopted = buildParentAdoptedGroup(node.rootPath, node.children);
   const childRepos = node.children.map((child) => buildSubmoduleTreeNode(child, snapshots, settings));
-  return adopted ? [...changeGroups, adopted, ...childRepos] : [...changeGroups, ...childRepos];
+  return [...changeGroups, ...childRepos];
 }
 
 function buildChangeGroupNode(
   rootPath: string,
   group: ChangeGroupViewModel,
+  children: readonly SubmoduleNode[],
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode {
+  const gitlinks = gitlinkByPath(children);
   const files = [...group.resources]
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath))
-    .map((resource) => toChangeNode(rootPath, group.kind, resource, settings));
-  const children =
-    settings.viewMode === "tree" ? nestChangeFiles(rootPath, group.kind, files, settings.compactFolders) : files;
+    .map((resource) => toChangeNode(rootPath, group.kind, resource, gitlinks.get(resource.relativePath), settings));
+  const nested =
+    settings.viewMode === "tree"
+      ? nestNodesByPath(files, settings.compactFolders, (relativePath, children) =>
+          buildFolderNode(rootPath, group.kind, relativePath, children),
+        )
+      : files;
   return {
     id: `change-group:${rootPath}:${group.kind}`,
     kind: "change-group",
@@ -368,7 +388,7 @@ function buildChangeGroupNode(
     expandByDefault: true,
     contextValue: CHANGE_GROUP_CONTEXT[group.kind],
     iconId: CHANGE_GROUP_ICON[group.kind],
-    children,
+    children: nested,
   };
 }
 
@@ -376,21 +396,35 @@ function toChangeNode(
   rootPath: string,
   group: ChangeGroupKind,
   resource: ResourceChange,
+  gitlink: SubmoduleNode | undefined,
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode {
-  const decoration = changeDecoration(resource.status);
-  const icon = changeStatusIcon(resource.status);
+  const pointer = gitlinkPointer(group, gitlink);
+  const decoration = gitlink ? SUBMODULE_DECORATION : changeDecoration(resource.status);
+  const icon = gitlink
+    ? { iconId: "file-submodule", themeColorId: SUBMODULE_DECORATION.themeColorId }
+    : changeStatusIcon(resource.status);
   const useIcons = !settings.decorationsEnabled;
+  const spec = pointer && gitlink
+    ? {
+        repoRoot: gitlink.rootPath,
+        fromSha: pointer.fromSha,
+        toSha: pointer.toSha,
+        kind: pointer.kind,
+      }
+    : undefined;
+  const adopted = spec && gitlink ? [buildGitlinkAdoptedGroup(rootPath, group, gitlink, spec)] : [];
   return {
     id: `change:${rootPath}:${group}:${resource.relativePath}`,
     kind: "change",
     repositoryRoot: rootPath,
     changeGroup: group,
     label: resource.relativePath,
-    tooltip: `${decoration.tooltip}\n${resource.relativePath}`,
-    collapsible: false,
-    expandByDefault: false,
-    contextValue: CHANGE_FILE_CONTEXT[group],
+    description: spec && gitlink ? gitlinkPointerDescription(gitlink, spec) : undefined,
+    tooltip: gitlinkTooltip(resource.relativePath, decoration.tooltip, gitlink, spec),
+    collapsible: adopted.length > 0,
+    expandByDefault: adopted.length > 0,
+    contextValue: gitlink ? `${CHANGE_FILE_CONTEXT[group]}.${CONTEXT.gitlink}` : CHANGE_FILE_CONTEXT[group],
     iconId: useIcons ? icon.iconId : "file",
     themeColorId: useIcons ? icon.themeColorId : decoration.themeColorId,
     decoration,
@@ -399,6 +433,29 @@ function toChangeNode(
     clickCommand: settings.openDiffOnClick
       ? { command: COMMANDS.openChange, title: "Open Changes" }
       : { command: COMMANDS.openFile, title: "Open File" },
+    children: adopted,
+  };
+}
+
+function buildGitlinkAdoptedGroup(
+  parentRootPath: string,
+  group: ChangeGroupKind,
+  gitlink: SubmoduleNode,
+  spec: AdoptedDiffSpec,
+): AdoptedTreeNode {
+  const tooltip =
+    spec.kind === "staged" ? "HEAD gitlink → index gitlink" : "index gitlink → checkout HEAD";
+  return {
+    id: `adopted:${parentRootPath}:${group}:${gitlink.rootPath}`,
+    kind: "adopted-group",
+    repositoryRoot: gitlink.rootPath,
+    label: "Adopted Changes",
+    tooltip,
+    collapsible: true,
+    expandByDefault: true,
+    contextValue: CONTEXT.adoptedGroup,
+    iconId: "layers",
+    diffSpec: spec,
     children: [],
   };
 }
@@ -429,27 +486,31 @@ interface FolderTrie {
   folders: Map<string, FolderTrie>;
 }
 
-function nestChangeFiles(
-  rootPath: string,
-  group: ChangeGroupKind,
+function nestPath(node: AdoptedTreeNode): string {
+  return node.fileDiff?.path ?? node.change?.resource.relativePath ?? node.label;
+}
+
+function nestNodesByPath(
   files: readonly AdoptedTreeNode[],
   compactFolders: boolean,
+  makeFolder: (relativePath: string, children: AdoptedTreeNode[]) => AdoptedTreeNode,
 ): AdoptedTreeNode[] {
   const root: FolderTrie = { name: "", files: [], folders: new Map() };
   for (const file of files) {
-    const parts = file.label.split("/").filter(Boolean);
+    const parts = nestPath(file).split("/").filter(Boolean);
     if (parts.length === 0) {
       root.files.push(file);
       continue;
     }
     insertFile(root, parts, file);
   }
-  return trieToNodes(rootPath, group, root, compactFolders);
+  return trieToNodes(root, compactFolders, makeFolder);
 }
 
 function insertFile(trie: FolderTrie, parts: string[], file: AdoptedTreeNode): void {
   if (parts.length === 1) {
-    trie.files.push({ ...file, label: parts[0]! });
+    const leafLabel = file.label.includes(" → ") ? file.label : parts[0]!;
+    trie.files.push({ ...file, label: leafLabel });
     return;
   }
   const [head, ...rest] = parts;
@@ -473,17 +534,31 @@ function compactTrie(trie: FolderTrie): FolderTrie {
 }
 
 function trieToNodes(
-  rootPath: string,
-  group: ChangeGroupKind,
   trie: FolderTrie,
   compactFolders: boolean,
+  makeFolder: (relativePath: string, children: AdoptedTreeNode[]) => AdoptedTreeNode,
 ): AdoptedTreeNode[] {
   const folderNodes = [...trie.folders.values()].map((child) => {
     const folded = compactFolders ? compactTrie(child) : child;
-    const children = trieToNodes(rootPath, group, folded, compactFolders);
-    return buildFolderNode(rootPath, group, folded.name, children);
+    const children = trieToNodes(folded, compactFolders, makeFolder);
+    return makeFolder(folded.name, children);
   });
   return [...folderNodes, ...trie.files].sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function buildPathFolderNode(rootPath: string, relativePath: string, children: AdoptedTreeNode[]): AdoptedTreeNode {
+  return {
+    id: `folder:${rootPath}:adopted:${relativePath}`,
+    kind: "folder",
+    label: relativePath,
+    tooltip: relativePath,
+    collapsible: true,
+    expandByDefault: true,
+    contextValue: CONTEXT.folder,
+    iconId: "folder",
+    resourceUri: `${rootPath}/${relativePath}`,
+    children,
+  };
 }
 
 function buildFolderNode(
@@ -508,103 +583,84 @@ function buildFolderNode(
   };
 }
 
-function buildParentAdoptedGroup(
+function gitlinkByPath(children: readonly SubmoduleNode[]): Map<string, SubmoduleNode> {
+  return new Map(children.map((child) => [child.relativePath, child]));
+}
+
+function withAdoptedGitlinks(
+  groups: RepositoryChangeGroups,
   parentRootPath: string,
   children: readonly SubmoduleNode[],
-): AdoptedTreeNode | undefined {
-  const pointerNodes = children
-    .map(buildPointerNode)
-    .filter((node): node is AdoptedTreeNode => node !== undefined);
-  if (pointerNodes.length === 0) {
-    return undefined;
+): RepositoryChangeGroups {
+  const index = [...groups.index];
+  const workingTree = [...groups.workingTree];
+  for (const child of children) {
+    const adopted = child.adoptedChanges ?? computeAdoptedPointers(child.pins);
+    if (adopted.staged && !hasRelativePath(index, child.relativePath)) {
+      index.push(syntheticGitlink(parentRootPath, child.relativePath, ResourceStatus.INDEX_MODIFIED));
+    }
+    if (adopted.unstaged && !hasRelativePath(workingTree, child.relativePath)) {
+      workingTree.push(syntheticGitlink(parentRootPath, child.relativePath, ResourceStatus.MODIFIED));
+    }
   }
-
-  const specs = pointerNodes.flatMap((node) => node.diffSpecs ?? []);
-  const hasStaged = pointerNodes.some((node) => node.children.some((child) => child.kind === "staged"));
-  const hasUnstaged = pointerNodes.some((node) => node.children.some((child) => child.kind === "unstaged"));
-  const count = pointerNodes.length === 1 ? "1 pointer" : `${pointerNodes.length} pointers`;
-  const status = adoptedChangeKinds(hasStaged, hasUnstaged);
-  return {
-    id: `adopted:${parentRootPath}`,
-    kind: "adopted-group",
-    label: "Adopted Changes",
-    description: status ? `${count} · ${status}` : count,
-    tooltip: "Gitlink pointer shifts recorded in this parent repository.",
-    collapsible: true,
-    expandByDefault: true,
-    contextValue: CONTEXT.adoptedGroup,
-    iconId: "layers",
-    diffSpecs: specs,
-    children: pointerNodes,
-  };
+  return { ...groups, index, workingTree };
 }
 
-function buildPointerNode(node: SubmoduleNode): AdoptedTreeNode | undefined {
-  const adopted = node.adoptedChanges ?? computeAdoptedPointers(node.pins);
-  const children: AdoptedTreeNode[] = [];
-  const specs: AdoptedDiffSpec[] = [];
-
-  if (adopted.staged) {
-    const spec: AdoptedDiffSpec = {
-      repoRoot: node.rootPath,
-      fromSha: adopted.staged.fromSha,
-      toSha: adopted.staged.toSha,
-      kind: "staged",
-    };
-    specs.push(spec);
-    children.push(buildPointerGroup(node.rootPath, "staged", spec, "HEAD gitlink → index gitlink"));
-  }
-
-  if (adopted.unstaged) {
-    const spec: AdoptedDiffSpec = {
-      repoRoot: node.rootPath,
-      fromSha: adopted.unstaged.fromSha,
-      toSha: adopted.unstaged.toSha,
-      kind: "unstaged",
-    };
-    specs.push(spec);
-    children.push(buildPointerGroup(node.rootPath, "unstaged", spec, "index gitlink → checkout HEAD"));
-  }
-
-  if (children.length === 0) {
-    return undefined;
-  }
-
-  return {
-    id: `pointer:${node.rootPath}`,
-    kind: "pointer",
-    label: node.displayName,
-    description: adoptedChangeKinds(Boolean(adopted.staged), Boolean(adopted.unstaged)),
-    tooltip: pointerTooltip(node),
-    collapsible: true,
-    expandByDefault: true,
-    contextValue: CONTEXT.adoptedPointer,
-    iconId: "git-commit",
-    themeColorId: "gitDecoration.modifiedResourceForeground",
-    diffSpecs: specs,
-    children,
-  };
+function hasRelativePath(resources: readonly ResourceChange[], relativePath: string): boolean {
+  return resources.some((resource) => resource.relativePath === relativePath);
 }
 
-function buildPointerGroup(
-  repoRoot: string,
-  kind: AdoptedChangeKind,
-  spec: AdoptedDiffSpec,
-  tooltip: string,
-): AdoptedTreeNode {
-  return {
-    id: `${kind}:${repoRoot}`,
-    kind,
-    label: kind === "staged" ? "Staged" : "Unstaged",
-    description: `${shortSha(spec.fromSha)} → ${shortSha(spec.toSha)}`,
-    tooltip,
-    collapsible: true,
-    expandByDefault: true,
-    contextValue: kind === "staged" ? CONTEXT.staged : CONTEXT.unstaged,
-    iconId: kind === "staged" ? "check" : "edit",
-    diffSpec: spec,
-    children: [],
-  };
+function syntheticGitlink(rootPath: string, relativePath: string, status: ResourceStatus): ResourceChange {
+  const uri = `${rootPath}/${relativePath}`;
+  return { uri, originalUri: uri, status, relativePath };
+}
+
+function gitlinkPointer(
+  group: ChangeGroupKind,
+  gitlink: SubmoduleNode | undefined,
+): { kind: AdoptedChangeKind; fromSha: string; toSha: string } | undefined {
+  if (!gitlink) {
+    return undefined;
+  }
+  const adopted = gitlink.adoptedChanges ?? computeAdoptedPointers(gitlink.pins);
+  if (group === "index" && adopted.staged) {
+    return { kind: "staged", ...adopted.staged };
+  }
+  if (group === "workingTree" && adopted.unstaged) {
+    return { kind: "unstaged", ...adopted.unstaged };
+  }
+  return undefined;
+}
+
+function gitlinkPointerDescription(gitlink: SubmoduleNode, spec: AdoptedDiffSpec): string {
+  return `${gitlinkSideLabel(spec.fromSha, gitlink)} → ${gitlinkSideLabel(spec.toSha, gitlink)}`;
+}
+
+function gitlinkSideLabel(sha: string, gitlink: SubmoduleNode): string {
+  if (sha === gitlink.pins.checkoutHeadSha && gitlink.branch.name && !gitlink.workingState.detached) {
+    return gitlink.branch.name;
+  }
+  return shortSha(sha);
+}
+
+function gitlinkTooltip(
+  relativePath: string,
+  statusTooltip: string,
+  gitlink: SubmoduleNode | undefined,
+  spec: AdoptedDiffSpec | undefined,
+): string {
+  const lines = [statusTooltip, relativePath];
+  if (gitlink) {
+    lines.push(
+      `HEAD gitlink: ${shortSha(gitlink.pins.headGitlinkSha)}`,
+      `index gitlink: ${shortSha(gitlink.pins.indexGitlinkSha)}`,
+      `checkout HEAD: ${shortSha(gitlink.pins.checkoutHeadSha)}`,
+    );
+  }
+  if (spec) {
+    lines.push(`${spec.kind}: ${shortSha(spec.fromSha)} → ${shortSha(spec.toSha)}`);
+  }
+  return lines.join("\n");
 }
 
 function toFileNode(spec: AdoptedDiffSpec, entry: NameStatusEntry): AdoptedTreeNode {
@@ -650,29 +706,6 @@ function messageNode(id: string, label: string, tooltip: string, iconId = "info"
     iconId,
     children: [],
   };
-}
-
-function adoptedChangeKinds(staged: boolean, unstaged: boolean): string | undefined {
-  if (staged && unstaged) {
-    return "staged · unstaged";
-  }
-  if (staged) {
-    return "staged";
-  }
-  if (unstaged) {
-    return "unstaged";
-  }
-  return undefined;
-}
-
-function pointerTooltip(node: SubmoduleNode): string {
-  return [
-    `Gitlink in parent ${node.parentRootPath}`,
-    `path: ${node.relativePath}`,
-    `HEAD gitlink: ${node.pins.headGitlinkSha ?? "unknown"}`,
-    `index gitlink: ${node.pins.indexGitlinkSha ?? "unknown"}`,
-    `checkout HEAD: ${node.pins.checkoutHeadSha ?? "unknown"}`,
-  ].join("\n");
 }
 
 function submoduleTooltip(node: SubmoduleNode): string {
@@ -773,6 +806,9 @@ export function collectDiffSpecs(node: AdoptedTreeNode): AdoptedDiffSpec[] {
   if (
     node.kind === "workspace-root" ||
     node.kind === "submodule" ||
+    node.kind === "change-group" ||
+    node.kind === "folder" ||
+    node.kind === "change" ||
     node.kind === "adopted-group" ||
     node.kind === "pointer"
   ) {
@@ -794,4 +830,8 @@ export function collectChangeRefs(node: AdoptedTreeNode): ChangeFileRef[] {
     return node.children.flatMap(collectChangeRefs);
   }
   return [];
+}
+
+export function collectFileDiffs(nodes: readonly AdoptedTreeNode[]): AdoptedFileDiff[] {
+  return nodes.flatMap((node) => (node.fileDiff ? [node.fileDiff] : collectFileDiffs(node.children)));
 }

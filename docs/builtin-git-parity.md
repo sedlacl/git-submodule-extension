@@ -21,13 +21,16 @@ are the machine-checked source for labels and the deviation list below.
   `git.alwaysShowStagedChangesResourceGroup`; Changes stays visible when empty
 - `git.untrackedChanges`: mixed / separate / hidden
 - Status letters, tooltip text, and `gitDecoration.*` colors from
-  `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`
-- Compact clickable branch description (`name*` when dirty); upstream details are omitted and Fetch/Pull are repository-row actions
+  `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
+  `gitDecoration.submoduleResourceForeground` on gitlink rows
+- Compact clickable branch description (`name*` when dirty); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
 - File theme icons when `git.decorations.enabled` is true (default)
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`
 - Menu titles and inline/context slots for Open / Stage / Unstage / Discard /
   Commit / Refresh / Sync / Publish (command IDs are `gitSubmodule.*`)
+- Repository rows expose the same hover toolbar as the built-in Git view:
+  Commit, Sync (or Publish without an upstream), Refresh
 
 ## Intentional deviations
 
@@ -36,11 +39,11 @@ are the machine-checked source for labels and the deviation list below.
 | `treeview-not-sourcecontrol` | Hierarchy uses a native SCM TreeView named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
 | `no-proposed-scm-api` | No `scmActionButton`, `scmMultiDiffEditor`, `scmValidation`, merge editor, or internal `git.*` command/resource contracts. |
 | `command-ids` | Commands are `gitSubmodule.*` contributed on this view, not built-in `git.*` IDs. |
-| `adopted-changes-group` | Adopted Changes is an extra parent-level group that explains gitlink pointer diffs; the gitlink resource also stays in Staged/Changes. |
+| `adopted-changes-group` | Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. |
 | `hierarchical-repos` | Child repositories nest under their gitlink parent instead of the built-in flat repository list. |
 | `status-icons` | When `git.decorations.enabled` is false, status ThemeIcons are used instead of shipping copies of Git’s `status-*.svg` assets. |
 | `no-strikethrough` | TreeView items cannot apply `SourceControlResourceDecorations.strikeThrough` on `vscode ^1.85`; deleted files use the D decoration only. |
-| `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs live in Adopted Changes. |
+| `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs nest under the gitlink row. |
 | `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
 | `count-badge-scope` | `git.countBadge` is applied as a single TreeView badge over every hierarchical repository, not per SourceControl instance. |
 

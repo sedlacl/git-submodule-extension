@@ -14,7 +14,7 @@ import {
 } from "./adoptedDiffPrep.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";
 import { changeOpenTarget } from "./changeOpenPlan.js";
-import { readChangesTreeSettings } from "./changesTreeSettings.js";
+import { readChangesTreeSettings, type ScmViewMode } from "./changesTreeSettings.js";
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
 import { AdoptedFileDecorationProvider, SubmoduleTreeProvider, toVscodeUri } from "./submoduleTree.js";
@@ -99,6 +99,8 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
         openSelected(options.gitApi, controller, node, selected),
     ),
+    vscode.commands.registerCommand(COMMANDS.viewAsTree, () => setScmViewMode("tree")),
+    vscode.commands.registerCommand(COMMANDS.viewAsList, () => setScmViewMode("list")),
     options.gitApi.subscribe({
       onOpenRepository: scheduleDiscovery.run,
       onCloseRepository: scheduleDiscovery.run,
@@ -121,6 +123,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         event.affectsConfiguration("scm.defaultViewMode") ||
         event.affectsConfiguration("scm.compactFolders")
       ) {
+        syncViewModeContext();
         overlayRefresh.run();
       }
     }),
@@ -131,6 +134,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     }),
   ];
 
+  syncViewModeContext();
   overlayRefresh.run();
 
   return new vscode.Disposable(() => {
@@ -138,6 +142,21 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       disposable.dispose();
     }
   });
+}
+
+function currentViewMode(): ScmViewMode {
+  return readChangesTreeSettings((section, key, fallback) =>
+    vscode.workspace.getConfiguration(section).get(key, fallback),
+  ).viewMode;
+}
+
+function syncViewModeContext(): void {
+  void vscode.commands.executeCommand("setContext", "gitSubmodule.viewMode", currentViewMode());
+}
+
+async function setScmViewMode(mode: ScmViewMode): Promise<void> {
+  await vscode.workspace.getConfiguration("scm").update("defaultViewMode", mode, vscode.ConfigurationTarget.Workspace);
+  syncViewModeContext();
 }
 
 async function openChange(gitApi: VsCodeGitApiAdapter, node: AdoptedTreeNode | undefined): Promise<void> {

@@ -122,6 +122,22 @@ function groupLabels(nodes: readonly AdoptedTreeNode[] | undefined): string[] {
   return (nodes ?? []).map((node) => node.label);
 }
 
+function findByRelativePath(
+  nodes: readonly AdoptedTreeNode[] | undefined,
+  relativePath: string,
+): AdoptedTreeNode | undefined {
+  for (const node of nodes ?? []) {
+    if (node.change?.resource.relativePath === relativePath) {
+      return node;
+    }
+    const nested = findByRelativePath(node.children, relativePath);
+    if (nested) {
+      return nested;
+    }
+  }
+  return undefined;
+}
+
 describe("buildAdoptedTree change groups", () => {
   const httplib = submodule({
     rootPath: "/ws/http/httplib",
@@ -147,7 +163,7 @@ describe("buildAdoptedTree change groups", () => {
   });
   const model = { roots: [workspaceRoot("/ws/http", [httplib, common], "httpendpoint")] };
 
-  it("composes Merge, Staged, Changes, Adopted, then child repos with built-in labels", () => {
+  it("composes Merge, Staged, Changes, then child repos with built-in labels", () => {
     const gitlink = resource("/ws/http", "submodules/uu_energygateway_httpendpointg01", ResourceStatus.INDEX_MODIFIED);
     const dirty = resource("/ws/http", "src/app.ts", ResourceStatus.MODIFIED);
     const untracked = resource("/ws/http", "tmp.log", ResourceStatus.UNTRACKED);
@@ -168,7 +184,6 @@ describe("buildAdoptedTree change groups", () => {
       BUILTIN_GROUP_LABELS.merge,
       BUILTIN_GROUP_LABELS.index,
       BUILTIN_GROUP_LABELS.workingTree,
-      "Adopted Changes",
       "uu_energygateway_httpendpointg01",
       "usy_idsmari_commong01",
     ]);
@@ -176,7 +191,6 @@ describe("buildAdoptedTree change groups", () => {
       "change-group",
       "change-group",
       "change-group",
-      "adopted-group",
       "submodule",
       "submodule",
     ]);
@@ -190,30 +204,43 @@ describe("buildAdoptedTree change groups", () => {
     expect(staged?.description).toBe("1");
     expect(staged?.contextValue).toBe(CONTEXT.changeGroupIndex);
     expect(changes?.label).toBe(BUILTIN_GROUP_LABELS.workingTree);
-    expect(changes?.description).toBe("3");
+    expect(changes?.description).toBe("4");
     expect(changes?.contextValue).toBe(CONTEXT.changeGroupWorkingTree);
 
-    expect(staged?.children.map((child) => child.label)).toEqual(["submodules/uu_energygateway_httpendpointg01"]);
-    expect(changes?.children.map((child) => child.label)).toEqual([
-      "src/app.ts",
-      "submodules/uu_energygateway_httpendpointg01",
-      "tmp.log",
-    ]);
+    expect(staged?.children.map((child) => child.label)).toEqual(["submodules"]);
+    expect(changes?.children.map((child) => child.label)).toEqual(["src", "submodules", "tmp.log"]);
 
-    const gitlinkChange = staged?.children[0];
+    const gitlinkChange = findByRelativePath(staged?.children, "submodules/uu_energygateway_httpendpointg01");
     expect(gitlinkChange?.kind).toBe("change");
-    expect(gitlinkChange?.contextValue).toBe(CONTEXT.changeIndex);
-    expect(gitlinkChange?.decoration?.badge).toBe("M");
+    expect(gitlinkChange?.label).toBe("uu_energygateway_httpendpointg01");
+    expect(gitlinkChange?.contextValue).toBe(`${CONTEXT.changeIndex}.${CONTEXT.gitlink}`);
+    expect(gitlinkChange?.decoration?.badge).toBe("S");
+    expect(gitlinkChange?.decoration?.tooltip).toBe("Submodule");
+    expect(gitlinkChange?.description).toBe(`${HEAD.slice(0, 7)} → main`);
+    expect(gitlinkChange?.diffSpec).toBeUndefined();
+    expect(gitlinkChange?.children.map((child) => child.kind)).toEqual(["adopted-group"]);
+    expect(gitlinkChange?.children[0]?.label).toBe("Adopted Changes");
+    expect(gitlinkChange?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/httplib",
+      fromSha: HEAD,
+      toSha: INDEX,
+      kind: "staged",
+    });
     expect(usesThemeFileIcon(gitlinkChange!)).toBe(true);
     expect(treeItemCommand(gitlinkChange!)?.title).toBe(BUILTIN_COMMAND_TITLES.openChange);
     expect(treeItemCommand(gitlinkChange!)?.command).toBe(COMMANDS.openChange);
 
-    const adopted = byKind(http?.children, "adopted-group")[0];
-    expect(adopted?.children.map((child) => child.label)).toEqual([
-      "uu_energygateway_httpendpointg01",
-      "usy_idsmari_commong01",
-    ]);
-    expect(adopted?.label).not.toMatch(/none/i);
+    const workingGitlink = findByRelativePath(changes?.children, "submodules/uu_energygateway_httpendpointg01");
+    expect(workingGitlink?.decoration?.badge).toBe("S");
+    expect(workingGitlink?.collapsible).toBe(false);
+    expect(workingGitlink?.description).toBeUndefined();
+    expect(workingGitlink?.children).toEqual([]);
+
+    const commonGitlink = findByRelativePath(changes?.children, "submodules/usy_idsmari_commong01");
+    expect(commonGitlink?.decoration?.badge).toBe("S");
+    expect(commonGitlink?.description).toBe(`${HEAD.slice(0, 7)} → development/AFLEX`);
+    expect(commonGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
+    expect(byKind(http?.children, "adopted-group")).toEqual([]);
   });
 
   it("omits empty Adopted Changes and still shows empty Changes", () => {
@@ -275,15 +302,33 @@ describe("buildAdoptedTree change groups", () => {
     expect(root?.children[0]?.children.map((child) => child.label)).toEqual(["dirty.ts"]);
   });
 
-  it("keeps parent-level Adopted Changes on httpendpoint and common, not on the child checkout", () => {
+  it("nests pointer diffs under the matching gitlink row, not on the child checkout", () => {
     const tree = buildAdoptedTree(model, []);
     const http = tree[0];
-    const adopted = byKind(http?.children, "adopted-group")[0];
-    expect(adopted?.id).toBe("adopted:/ws/http");
-    expect(adopted?.children.map((child) => child.label)).toEqual([
-      "uu_energygateway_httpendpointg01",
-      "usy_idsmari_commong01",
+    expect(byKind(http?.children, "adopted-group")).toEqual([]);
+    expect(http?.children.map((child) => child.kind)).toEqual([
+      "change-group",
+      "change-group",
+      "submodule",
+      "submodule",
     ]);
+
+    const staged = byLabel(http?.children, BUILTIN_GROUP_LABELS.index);
+    const changes = byLabel(http?.children, BUILTIN_GROUP_LABELS.workingTree);
+    const libGitlink = findByRelativePath(staged?.children, "submodules/uu_energygateway_httpendpointg01");
+    expect(libGitlink?.description).toBe(`${HEAD.slice(0, 7)} → main`);
+    expect(libGitlink?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/httplib",
+      fromSha: HEAD,
+      toSha: INDEX,
+      kind: "staged",
+    });
+    expect(findByRelativePath(changes?.children, "submodules/usy_idsmari_commong01")?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/common",
+      fromSha: HEAD,
+      toSha: INDEX,
+      kind: "unstaged",
+    });
 
     const libNode = byLabel(http?.children, "uu_energygateway_httpendpointg01");
     expect(libNode?.kind).toBe("submodule");
@@ -291,9 +336,18 @@ describe("buildAdoptedTree change groups", () => {
     expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
 
     const commonNode = byLabel(http?.children, "usy_idsmari_commong01");
-    const commonGroup = byKind(commonNode?.children, "adopted-group")[0];
-    expect(commonGroup?.id).toBe("adopted:/ws/http/common");
-    expect(commonGroup?.children.map((child) => child.label)).toEqual(["uu_energygateway_datagatewayg01"]);
+    const nestedGitlink = findByRelativePath(
+      byLabel(commonNode?.children, BUILTIN_GROUP_LABELS.workingTree)?.children,
+      "submodules/uu_energygateway_datagatewayg01",
+    );
+    expect(nestedGitlink?.decoration?.badge).toBe("S");
+    expect(nestedGitlink?.description).toBe(`${NESTED_HEAD.slice(0, 7)} → ${CHECKOUT.slice(0, 7)}`);
+    expect(nestedGitlink?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/common/data",
+      fromSha: NESTED_HEAD,
+      toSha: CHECKOUT,
+      kind: "unstaged",
+    });
 
     const nestedNode = byLabel(commonNode?.children, "uu_energygateway_datagatewayg01");
     expect(byKind(nestedNode?.children, "adopted-group")).toEqual([]);

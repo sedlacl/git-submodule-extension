@@ -17,6 +17,7 @@ import {
   buildAdoptedTree,
   collectChangeRefs,
   collectDiffSpecs,
+  collectFileDiffs,
   errorMessageNode,
   fileNodesFromNameStatus,
 } from "./adoptedViewModel.js";
@@ -87,7 +88,7 @@ export class AdoptedTreeController {
     if (!node) {
       return this.getRootNodes();
     }
-    if (node.kind === "staged" || node.kind === "unstaged") {
+    if (node.diffSpec && (node.kind === "staged" || node.kind === "unstaged" || node.kind === "adopted-group")) {
       return this.getFileChildren(node);
     }
     return node.children;
@@ -101,12 +102,7 @@ export class AdoptedTreeController {
     const specs = collectDiffSpecs(node);
     const files: AdoptedFileDiff[] = [];
     for (const spec of specs) {
-      const children = await this.loadFileNodes(spec);
-      for (const child of children) {
-        if (child.fileDiff) {
-          files.push(child.fileDiff);
-        }
-      }
+      files.push(...collectFileDiffs(await this.loadFileNodes(spec)));
     }
     return files;
   }
@@ -174,7 +170,7 @@ export class AdoptedTreeController {
       if (generation !== this.generation) {
         return this.loadFileNodes(spec);
       }
-      const nodes = fileNodesFromNameStatus(spec, entries);
+      const nodes = fileNodesFromNameStatus(spec, entries, this.settings());
       this.fileCache.set(key, nodes);
       return nodes;
     } catch (error) {

@@ -36,7 +36,7 @@ export const DEFAULT_CHANGES_TREE_SETTINGS: ChangesTreeSettings = {
   openDiffOnClick: true,
   showInlineOpenFileAction: true,
   decorationsEnabled: true,
-  viewMode: "list",
+  viewMode: "tree",
   compactFolders: true,
 };
 

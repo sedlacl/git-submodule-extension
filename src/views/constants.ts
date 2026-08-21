@@ -27,6 +27,8 @@ export const COMMANDS = {
   pull: "gitSubmodule.pull",
   sync: "gitSubmodule.sync",
   publish: "gitSubmodule.publish",
+  viewAsTree: "gitSubmodule.viewAsTree",
+  viewAsList: "gitSubmodule.viewAsList",
   retryRestore: "gitSubmodule.retryRestore",
   fetchRemote: "gitSubmodule.fetchRemote",
 } as const;
@@ -50,8 +52,10 @@ export const CONTEXT = {
   resourceFolderUntracked: "gitSubmodule.resourceFolder.untracked",
   adoptedGroup: "gitSubmodule.adoptedGroup",
   adoptedPointer: "gitSubmodule.adoptedPointer",
+  gitlink: "gitlink",
   staged: "gitSubmodule.staged",
   unstaged: "gitSubmodule.unstaged",
   file: "gitSubmodule.file",
+  folder: "gitSubmodule.folder",
   message: "gitSubmodule.message",
 } as const;

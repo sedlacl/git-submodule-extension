@@ -1,7 +1,7 @@
 {
   "name": "git-submodule-extension",
   "displayName": "Git Submodule Extension",
-  "description": "Hierarchical Changes view for Git repositories and submodules, with parent-level Adopted Changes and safe branch restore.",
+  "description": "Hierarchical Changes view for Git repositories and submodules, with gitlink pointer diffs nested under the matching change row and safe branch restore.",
   "version": "0.0.1",
   "publisher": "qjohn",
   "license": "MIT",
@@ -110,6 +110,18 @@
         "title": "Publish Branch...",
         "category": "Git Submodule",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "gitSubmodule.viewAsTree",
+        "title": "View as Tree",
+        "category": "Git Submodule",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "gitSubmodule.viewAsList",
+        "title": "View as List",
+        "category": "Git Submodule",
+        "icon": "$(list-flat)"
       },
       {
         "command": "gitSubmodule.openDiff",
@@ -317,38 +329,48 @@
           "command": "gitSubmodule.retryRestore",
           "when": "view == gitSubmodule.repos",
           "group": "navigation@3"
+        },
+        {
+          "command": "gitSubmodule.viewAsList",
+          "when": "view == gitSubmodule.repos && gitSubmodule.viewMode == tree",
+          "group": "navigation@4"
+        },
+        {
+          "command": "gitSubmodule.viewAsTree",
+          "when": "view == gitSubmodule.repos && gitSubmodule.viewMode != tree",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "gitSubmodule.checkoutBranch",
+          "command": "gitSubmodule.commit",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "inline@1"
         },
         {
-          "command": "gitSubmodule.fetch",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "command": "gitSubmodule.sync",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
           "group": "inline@2"
         },
         {
-          "command": "gitSubmodule.pull",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
+          "command": "gitSubmodule.publish",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.noUpstream/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.refresh",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "inline@3"
         },
         {
-          "command": "gitSubmodule.generateSubmoduleChore",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "inline@4"
-        },
-        {
           "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "inline@5"
-        },
-        {
-          "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(adoptedGroup|adoptedPointer|staged|unstaged|changeGroup)/",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(staged|unstaged|changeGroup|adoptedGroup)/",
           "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\..*\\.gitlink/",
+          "group": "inline@3"
         },
         {
           "command": "gitSubmodule.openFile",
@@ -418,32 +440,37 @@
         {
           "command": "gitSubmodule.retryRestore",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.submodule/",
-          "group": "inline@3"
+          "group": "inline@4"
         },
         {
           "command": "gitSubmodule.fetchRemote",
           "when": "view == gitSubmodule.repos && viewItem =~ /restoreBlocked/",
-          "group": "inline@4"
+          "group": "inline@5"
         },
         {
-          "command": "gitSubmodule.commit",
+          "command": "gitSubmodule.checkoutBranch",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "1_modification@1"
         },
         {
-          "command": "gitSubmodule.sync",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
+          "command": "gitSubmodule.fetch",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "1_modification@2"
         },
         {
-          "command": "gitSubmodule.publish",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.noUpstream/",
+          "command": "gitSubmodule.pull",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
           "group": "1_modification@3"
         },
         {
-          "command": "gitSubmodule.refresh",
+          "command": "gitSubmodule.generateSubmoduleChore",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "1_modification@4"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "1_modification@5"
         },
         {
           "command": "gitSubmodule.stageAllMerge",

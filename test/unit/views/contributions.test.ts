@@ -35,6 +35,8 @@ describe("adopted-view contributions", () => {
         COMMANDS.pull,
         COMMANDS.sync,
         COMMANDS.publish,
+        COMMANDS.viewAsTree,
+        COMMANDS.viewAsList,
         COMMANDS.retryRestore,
         COMMANDS.fetchRemote,
       ]),
@@ -43,22 +45,33 @@ describe("adopted-view contributions", () => {
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.refresh && entry.when.includes(VIEW_ID))).toBe(
       true,
     );
+    expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.viewAsList && entry.group === "navigation@4")).toBe(
+      true,
+    );
+    expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.viewAsTree && entry.group === "navigation@4")).toBe(
+      true,
+    );
     expect(pkg.contributes.menus["view/item/context"].some((entry) => entry.command === COMMANDS.openAllChanges)).toBe(true);
     const openAll = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("adoptedGroup"),
+      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("changeGroup"),
     );
+    expect(openAll?.when).toContain("changeGroup");
+    expect(openAll?.when).toContain("staged");
     expect(openAll?.when).toContain("adoptedGroup");
-    expect(openAll?.when).toContain("adoptedPointer");
+    const gitlinkOpenAll = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("gitlink"),
+    );
+    expect(gitlinkOpenAll?.group).toBe("inline@3");
     const chore = pkg.contributes.menus["view/item/context"].find(
       (entry) => entry.command === COMMANDS.generateSubmoduleChore,
     );
     expect(chore?.when).toContain("workspaceRoot");
     expect(chore?.when).toContain("submodule");
-    expect(chore?.group).toBe("inline@4");
+    expect(chore?.group).toBe("1_modification@4");
     const repositoryOpenAll = pkg.contributes.menus["view/item/context"].find(
       (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("workspaceRoot"),
     );
-    expect(repositoryOpenAll?.group).toBe("inline@5");
+    expect(repositoryOpenAll?.group).toBe("1_modification@5");
     const checkout = pkg.contributes.menus["view/item/context"].find(
       (entry) => entry.command === COMMANDS.checkoutBranch,
     );
@@ -68,9 +81,9 @@ describe("adopted-view contributions", () => {
     const pull = pkg.contributes.menus["view/item/context"].find(
       (entry) => entry.command === COMMANDS.pull,
     );
-    expect(checkout?.group).toBe("inline@1");
-    expect(fetch?.group).toBe("inline@2");
-    expect(pull?.group).toBe("inline@3");
+    expect(checkout?.group).toBe("1_modification@1");
+    expect(fetch?.group).toBe("1_modification@2");
+    expect(pull?.group).toBe("1_modification@3");
     expect(pull?.when).toContain("hasUpstream");
     const sync = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.sync);
     const publish = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.publish);
@@ -78,6 +91,31 @@ describe("adopted-view contributions", () => {
     expect(publish?.when).toContain("noUpstream");
     expect(CONTEXT.adoptedGroup).toContain("adoptedGroup");
     expect(CONTEXT.adoptedPointer).toContain("adoptedPointer");
+  });
+
+  it("mirrors the built-in Git repository row toolbar and keeps inline slots unambiguous", () => {
+    const repositoryRow = /workspaceRoot\|submodule/;
+    const inlineOnRepositoryRows = pkg.contributes.menus["view/item/context"]
+      .filter((entry) => entry.group?.startsWith("inline") && repositoryRow.test(entry.when))
+      .map((entry) => ({ command: entry.command, group: entry.group }));
+    expect(inlineOnRepositoryRows).toEqual([
+      { command: COMMANDS.commit, group: "inline@1" },
+      { command: COMMANDS.sync, group: "inline@2" },
+      { command: COMMANDS.publish, group: "inline@2" },
+      { command: COMMANDS.refresh, group: "inline@3" },
+    ]);
+
+    const submoduleInline = pkg.contributes.menus["view/item/context"].filter(
+      (entry) => entry.group?.startsWith("inline") && (repositoryRow.test(entry.when) || /submodule|restoreBlocked/.test(entry.when)),
+    );
+    const slotOwners = new Map<string, string[]>();
+    for (const entry of submoduleInline) {
+      slotOwners.set(entry.group ?? "", [...(slotOwners.get(entry.group ?? "") ?? []), entry.command]);
+    }
+    // Only sync/publish may share a slot; they are mutually exclusive via the upstream context key.
+    expect([...slotOwners].filter(([, commands]) => commands.length > 1)).toEqual([
+      ["inline@2", [COMMANDS.sync, COMMANDS.publish]],
+    ]);
   });
 
   it("defaults auto-safe restore on and keeps fetch/retry as native hover actions", () => {

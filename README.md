@@ -1,6 +1,6 @@
 # Git Submodule Extension
 
-VS Code extension that shows a recursive submodule hierarchy and **Adopted Changes** in Source Control, then safely restores submodule branches after Git operations.
+VS Code extension that shows a recursive submodule hierarchy in Source Control, nests gitlink pointer diffs under the matching change row, then safely restores submodule branches after Git operations.
 
 Publisher: `qjohn`. Identifier: `git-submodule-extension`.
 
@@ -16,12 +16,13 @@ The built-in Git **Changes** panel cannot be replaced or hidden through a stable
 
 This extension contributes a native SCM `TreeView` named **CHANGES with submodules** that lists:
 
-- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` when dirty) plus Fetch/Pull hover actions
-- **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations
-- empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`); there is no `Adopted Changes none` row
-- an **Adopted Changes** group on the parent repository that records gitlink pointer shifts, only when a direct child pointer actually moved. A gitlink that is also a normal staged/unstaged parent change stays in **Staged Changes** / **Changes**; Adopted Changes additionally explains the inner commit diff
+- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` when dirty) and the built-in Git hover toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch and Pull sit in the row context menu
+- **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations; gitlink rows use `S`
+- empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`)
+- gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), including the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label
 - nested submodules under their immediate gitlink parent, each with the same group layout
 - file rows that open `vscode.diff` (or `vscode.changes` for Open All)
+- tree layout by default (`scm.defaultViewMode`); the view title toggles **View as List** / **View as Tree** and writes that setting so it applies globally
 
 The tree uses native `TreeItem` APIs only (`collapsibleState`, `contextValue`, `resourceUri`, `iconPath`, `command`, menu contributions). File rows rely on the file icon theme plus status decorations; inline actions are hover-only. Row height and indent come from VS Code’s SCM tree (22px / 8px) — there is no webview or custom CSS.
 

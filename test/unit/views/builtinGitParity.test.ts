@@ -88,9 +88,10 @@ describe("built-in Git parity", () => {
     expect(menu(COMMANDS.openFile, "inline", "config.git.openDiffOnClick")).toBe(true);
     expect(menu(COMMANDS.stageAllMerge, "1_modification", CONTEXT.changeGroupMerge)).toBe(true);
     expect(menu(COMMANDS.openChange, "navigation", "change")).toBe(true);
-    expect(menu(COMMANDS.commit, "1_modification", "workspaceRoot")).toBe(true);
-    expect(menu(COMMANDS.sync, "1_modification", "workspaceRoot")).toBe(true);
-    expect(menu(COMMANDS.publish, "1_modification", "workspaceRoot")).toBe(true);
+    expect(menu(COMMANDS.commit, "inline", "workspaceRoot")).toBe(true);
+    expect(menu(COMMANDS.sync, "inline", "workspaceRoot")).toBe(true);
+    expect(menu(COMMANDS.publish, "inline", "workspaceRoot")).toBe(true);
+    expect(menu(COMMANDS.refresh, "inline", "workspaceRoot")).toBe(true);
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.commit && entry.group === "navigation@1")).toBe(
       true,
     );

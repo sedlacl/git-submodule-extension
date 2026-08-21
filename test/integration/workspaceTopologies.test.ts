@@ -120,7 +120,7 @@ describe("generated fixture topologies", () => {
     expect(path.basename(t1!.rootPath)).toBe("usy_aflex_initdatag01#t1");
   }, 60_000);
 
-  it("builds httpendpoint Merge/Staged/Changes/Adopted order with parent-level pointers and gitlink resources", async () => {
+  it("builds httpendpoint Staged/Changes order with gitlink rows that nest pointer diffs", async () => {
     const snapshot = await model.snapshot();
     const tree = buildAdoptedTree(
       toSubmoduleViewModel(snapshot),
@@ -132,37 +132,38 @@ describe("generated fixture topologies", () => {
     expect(labels(http)).toEqual([
       CHANGE_GROUP_LABELS.index,
       CHANGE_GROUP_LABELS.workingTree,
-      "Adopted Changes",
       "uu_energygateway_httpendpointg01",
       "usy_idsmari_commong01",
     ]);
     expect(http?.children.map((child) => child.kind)).toEqual([
       "change-group",
       "change-group",
-      "adopted-group",
       "submodule",
       "submodule",
     ]);
 
     const staged = byLabel(http, CHANGE_GROUP_LABELS.index);
     const changes = byLabel(http, CHANGE_GROUP_LABELS.workingTree);
-    const adopted = byLabel(http, "Adopted Changes");
-    expect(staged?.children.map((child) => child.label)).toContain(
-      "submodules/uu_energygateway_httpendpointg01",
-    );
-    expect(changes?.children.map((child) => child.label)).toContain("submodules/usy_idsmari_commong01");
-    expect(adopted?.children.map((child) => child.label)).toEqual([
-      "uu_energygateway_httpendpointg01",
-      "usy_idsmari_commong01",
-    ]);
+    const stagedGitlink = findByRelativePath(staged, "submodules/uu_energygateway_httpendpointg01");
+    const unstagedGitlink = findByRelativePath(changes, "submodules/usy_idsmari_commong01");
+    expect(stagedGitlink?.decoration?.badge).toBe("S");
+    expect(stagedGitlink?.children[0]?.label).toBe("Adopted Changes");
+    expect(stagedGitlink?.children[0]?.diffSpec?.kind).toBe("staged");
+    expect(unstagedGitlink?.decoration?.badge).toBe("S");
+    expect(unstagedGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
+    expect(byLabel(http, "Adopted Changes")).toBeUndefined();
     expect(byLabel(http, CHANGE_GROUP_LABELS.merge)).toBeUndefined();
     expect(byLabel(http, CHANGE_GROUP_LABELS.untracked)).toBeUndefined();
 
     const libNode = byLabel(http, "uu_energygateway_httpendpointg01");
     const commonNode = byLabel(http, "usy_idsmari_commong01");
     expect(byKind(libNode, "adopted-group")).toEqual([]);
-    const nestedAdopted = byLabel(commonNode, "Adopted Changes");
-    expect(nestedAdopted?.children.map((child) => child.label)).toEqual(["uu_energygateway_datagatewayg01"]);
+    const nestedGitlink = findByRelativePath(
+      byLabel(commonNode, CHANGE_GROUP_LABELS.workingTree),
+      "submodules/uu_energygateway_datagatewayg01",
+    );
+    expect(nestedGitlink?.decoration?.badge).toBe("S");
+    expect(nestedGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
     const nested = byLabel(commonNode, "uu_energygateway_datagatewayg01");
     expect(byKind(nested, "adopted-group")).toEqual([]);
     expect(nested?.children.some((child) => child.kind === "change-group")).toBe(true);
@@ -229,6 +230,22 @@ function labels(node: AdoptedTreeNode | undefined): string[] {
 
 function byLabel(node: AdoptedTreeNode | undefined, label: string): AdoptedTreeNode | undefined {
   return node?.children.find((child) => child.label === label);
+}
+
+function findByRelativePath(node: AdoptedTreeNode | undefined, relativePath: string): AdoptedTreeNode | undefined {
+  if (!node) {
+    return undefined;
+  }
+  if (node.change?.resource.relativePath === relativePath) {
+    return node;
+  }
+  for (const child of node.children) {
+    const nested = findByRelativePath(child, relativePath);
+    if (nested) {
+      return nested;
+    }
+  }
+  return undefined;
 }
 
 function byKind(node: AdoptedTreeNode | undefined, kind: AdoptedTreeNode["kind"]): AdoptedTreeNode[] {

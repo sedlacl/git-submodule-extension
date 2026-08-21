@@ -35,9 +35,9 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<AdoptedTre
     item.id = element.id;
     item.tooltip = element.tooltip;
     item.contextValue = element.contextValue;
+    item.description = element.description;
 
     if (!usesThemeFileIcon(element)) {
-      item.description = element.description;
       item.iconPath = new vscode.ThemeIcon(
         element.iconId,
         element.themeColorId ? new vscode.ThemeColor(element.themeColorId) : undefined,

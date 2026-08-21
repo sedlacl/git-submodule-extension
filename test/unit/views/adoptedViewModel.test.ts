@@ -13,6 +13,8 @@ import {
   usesThemeFileIcon,
   type AdoptedTreeNode,
 } from "../../../src/views/adoptedViewModel.js";
+import { BUILTIN_GROUP_LABELS } from "../../../src/views/builtinGitParity.js";
+import { DEFAULT_CHANGES_TREE_SETTINGS } from "../../../src/views/changesTreeSettings.js";
 import { COMMANDS, CONTEXT } from "../../../src/views/constants.js";
 
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -87,8 +89,24 @@ function byLabel(nodes: readonly AdoptedTreeNode[] | undefined, label: string): 
   return nodes?.find((node) => node.label === label);
 }
 
+function findByRelativePath(
+  nodes: readonly AdoptedTreeNode[] | undefined,
+  relativePath: string,
+): AdoptedTreeNode | undefined {
+  for (const node of nodes ?? []) {
+    if (node.change?.resource.relativePath === relativePath) {
+      return node;
+    }
+    const nested = findByRelativePath(node.children, relativePath);
+    if (nested) {
+      return nested;
+    }
+  }
+  return undefined;
+}
+
 describe("buildAdoptedTree", () => {
-  it("attaches Adopted Changes to the parent that owns the gitlink, not the child checkout", () => {
+  it("nests pointer diffs under the parent gitlink row, not the child checkout", () => {
     const nested = submodule({
       rootPath: "/ws/http/common/data",
       parentRootPath: "/ws/http/common",
@@ -117,43 +135,44 @@ describe("buildAdoptedTree", () => {
 
     expect(tree.map((node) => node.label)).toEqual(["http", "plain"]);
     expect(tree[0]?.kind).toBe("workspace-root");
-    expect(tree[0]?.children.map((child) => child.kind)).toEqual(["change-group", "adopted-group", "submodule", "submodule"]);
+    expect(tree[0]?.children.map((child) => child.kind)).toEqual([
+      "change-group",
+      "change-group",
+      "submodule",
+      "submodule",
+    ]);
     expect(treeCollapsibleMode(tree[0]!)).toBe("expanded");
     expect(treeCollapsibleMode(tree[1]!)).toBe("expanded");
     expect(byKind(tree[1]?.children, "adopted-group")).toEqual([]);
     expect(tree[1]?.children.map((child) => child.kind)).toEqual(["change-group"]);
 
-    const httpGroup = byKind(tree[0]?.children, "adopted-group")[0];
-    expect(httpGroup).toMatchObject({
-      id: "adopted:/ws/http",
+    const staged = byLabel(tree[0]?.children, BUILTIN_GROUP_LABELS.index);
+    const changes = byLabel(tree[0]?.children, BUILTIN_GROUP_LABELS.workingTree);
+    const libGitlink = findByRelativePath(staged?.children, "submodules/uu_energygateway_httpendpointg01");
+    expect(libGitlink).toMatchObject({
+      kind: "change",
+      label: "uu_energygateway_httpendpointg01",
+      contextValue: `${CONTEXT.changeIndex}.${CONTEXT.gitlink}`,
+      decoration: { badge: "S", tooltip: "Submodule" },
+      description: `${HEAD.slice(0, 7)} → main`,
+    });
+    expect(libGitlink?.children[0]).toMatchObject({
+      kind: "adopted-group",
       label: "Adopted Changes",
       contextValue: CONTEXT.adoptedGroup,
     });
-    expect(httpGroup?.description).toContain("2 pointers");
-    expect(httpGroup?.children.map((child) => child.kind)).toEqual(["pointer", "pointer"]);
-    expect(httpGroup?.children.map((child) => child.label)).toEqual([
-      "uu_energygateway_httpendpointg01",
-      "usy_idsmari_commong01",
-    ]);
-
-    const libPointer = httpGroup?.children[0];
-    expect(libPointer).toMatchObject({
-      kind: "pointer",
-      contextValue: CONTEXT.adoptedPointer,
-      description: "staged",
-    });
-    expect(libPointer?.children.map((child) => child.kind)).toEqual(["staged"]);
-    expect(libPointer?.children[0]?.diffSpec).toEqual({
+    expect(libGitlink?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/httplib",
       fromSha: HEAD,
       toSha: INDEX,
       kind: "staged",
     });
 
-    const commonPointer = httpGroup?.children[1];
-    expect(commonPointer?.description).toBe("unstaged");
-    expect(commonPointer?.children.map((child) => child.kind)).toEqual(["unstaged"]);
-    expect(commonPointer?.children[0]?.diffSpec).toEqual({
+    const commonGitlink = findByRelativePath(changes?.children, "submodules/usy_idsmari_commong01");
+    expect(commonGitlink?.label).toBe("usy_idsmari_commong01");
+    expect(commonGitlink?.decoration?.badge).toBe("S");
+    expect(commonGitlink?.description).toBe(`${HEAD.slice(0, 7)} → development/AFLEX`);
+    expect(commonGitlink?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/common",
       fromSha: HEAD,
       toSha: INDEX,
@@ -167,12 +186,14 @@ describe("buildAdoptedTree", () => {
     expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
     expect(treeCollapsibleMode(libNode!)).toBe("collapsed");
 
-    const commonGroup = byKind(commonNode?.children, "adopted-group")[0];
-    expect(commonGroup?.id).toBe("adopted:/ws/http/common");
-    expect(commonGroup?.children.map((child) => child.label)).toEqual(["uu_energygateway_datagatewayg01"]);
-    expect(commonGroup?.children[0]?.kind).toBe("pointer");
-    expect(commonGroup?.children[0]?.children.map((child) => child.kind)).toEqual(["unstaged"]);
-    expect(commonGroup?.children[0]?.children[0]?.diffSpec).toEqual({
+    const nestedGitlink = findByRelativePath(
+      byLabel(commonNode?.children, BUILTIN_GROUP_LABELS.workingTree)?.children,
+      "submodules/uu_energygateway_datagatewayg01",
+    );
+    expect(nestedGitlink?.kind).toBe("change");
+    expect(nestedGitlink?.decoration?.badge).toBe("S");
+    expect(nestedGitlink?.description).toBe(`${NESTED_HEAD.slice(0, 7)} → ${CHECKOUT.slice(0, 7)}`);
+    expect(nestedGitlink?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/common/data",
       fromSha: NESTED_HEAD,
       toSha: CHECKOUT,
@@ -186,7 +207,7 @@ describe("buildAdoptedTree", () => {
     expect(nestedNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
   });
 
-  it("omits empty Adopted Changes when the parent has no pointer diffs", () => {
+  it("omits gitlink rows when the parent has no pointer diffs", () => {
     const child = submodule({
       rootPath: "/ws/app/mod",
       parentRootPath: "/ws/app",
@@ -210,12 +231,16 @@ describe("fileNodesFromNameStatus", () => {
   };
 
   it("maps add, modify, delete, and rename into file nodes with open-diff commands", () => {
-    const nodes = fileNodesFromNameStatus(spec, [
-      { status: "added", path: "src/new.ts" },
-      { status: "modified", path: "src/index.ts" },
-      { status: "deleted", path: "gone.md" },
-      { status: "renamed", path: "new/name.ts", oldPath: "old/name.ts", similarity: 100 },
-    ]);
+    const nodes = fileNodesFromNameStatus(
+      spec,
+      [
+        { status: "added", path: "src/new.ts" },
+        { status: "modified", path: "src/index.ts" },
+        { status: "deleted", path: "gone.md" },
+        { status: "renamed", path: "new/name.ts", oldPath: "old/name.ts", similarity: 100 },
+      ],
+      { ...DEFAULT_CHANGES_TREE_SETTINGS, viewMode: "list" },
+    );
 
     expect(nodes.map((node) => node.label)).toEqual(["src/new.ts", "src/index.ts", "gone.md", "old/name.ts → new/name.ts"]);
     expect(nodes.map((node) => node.decoration?.badge)).toEqual(["A", "M", "D", "R"]);
@@ -246,6 +271,17 @@ describe("fileNodesFromNameStatus", () => {
     expect(nodes[0]?.kind).toBe("message");
     expect(nodes[0]?.label).toBe("No file changes");
     expect(treeItemCommand(nodes[0]!)).toBeUndefined();
+  });
+
+  it("nests adopted files by folder in tree view mode", () => {
+    const nodes = fileNodesFromNameStatus(spec, [
+      { status: "added", path: "src/new.ts" },
+      { status: "modified", path: "src/index.ts" },
+      { status: "deleted", path: "gone.md" },
+    ]);
+    expect(nodes.map((node) => node.label)).toEqual(["gone.md", "src"]);
+    expect(nodes[1]?.kind).toBe("folder");
+    expect(nodes[1]?.children.map((child) => child.label)).toEqual(["index.ts", "new.ts"]);
   });
 });
 

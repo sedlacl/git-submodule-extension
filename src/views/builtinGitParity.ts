@@ -61,7 +61,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "adopted-changes-group",
     summary:
-      "Adopted Changes is an extra parent-level group that explains gitlink pointer diffs; the gitlink resource also stays in Staged/Changes.",
+      "Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group.",
   },
   {
     id: "hierarchical-repos",
@@ -80,7 +80,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "gitlink-submoduleof",
     summary:
-      "Gitlink click uses public toGitUri(uri, ref) only; built-in submoduleOf git URIs are not part of the public API. Inner file diffs live in Adopted Changes.",
+      "Gitlink click uses public toGitUri(uri, ref) only; built-in submoduleOf git URIs are not part of the public API. Inner file diffs nest under the gitlink row.",
   },
   {
     id: "mutation-handlers",

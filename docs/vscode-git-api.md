@@ -42,5 +42,5 @@ empty array (mixed/hidden untracked settings), the adapter does not regroup.
 
 Mutating daily Git actions (stage/commit/sync) and submodule chore commit
 summary are later plan items. Visual tree rendering of merge/index/working-tree
-groups plus parent-level Adopted Changes lives in `src/views/` and is documented
+groups plus gitlink pointer diffs nested under the matching Staged/Changes row lives in `src/views/` and is documented
 in [`builtin-git-parity.md`](builtin-git-parity.md).
