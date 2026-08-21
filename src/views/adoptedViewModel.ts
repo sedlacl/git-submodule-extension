@@ -143,13 +143,6 @@ const RESOURCE_FOLDER_CONTEXT: Record<ChangeGroupKind, string> = {
   untracked: CONTEXT.resourceFolderUntracked,
 };
 
-const CHANGE_GROUP_ICON: Record<ChangeGroupKind, string> = {
-  merge: "warning",
-  index: "check",
-  workingTree: "request-changes",
-  untracked: "new-file",
-};
-
 export function shortSha(sha: string | null | undefined): string {
   return sha && sha.length >= 7 ? sha.slice(0, 7) : "unknown";
 }
@@ -237,13 +230,7 @@ export function fileNodesFromNameStatus(
   settings: ChangesTreeSettings = DEFAULT_CHANGES_TREE_SETTINGS,
 ): AdoptedTreeNode[] {
   if (entries.length === 0) {
-    return [
-      messageNode(
-        `${spec.kind}:${spec.repoRoot}:empty`,
-        "No file changes",
-        `${spec.kind} pointer ${shortSha(spec.fromSha)} → ${shortSha(spec.toSha)} has no name-status entries.`,
-      ),
-    ];
+    return [];
   }
 
   const files = entries.map((entry) => toFileNode(spec, entry));
@@ -387,7 +374,7 @@ function buildChangeGroupNode(
     collapsible: true,
     expandByDefault: true,
     contextValue: CHANGE_GROUP_CONTEXT[group.kind],
-    iconId: CHANGE_GROUP_ICON[group.kind],
+    iconId: "",
     children: nested,
   };
 }
@@ -413,7 +400,7 @@ function toChangeNode(
         kind: pointer.kind,
       }
     : undefined;
-  const adopted = spec && gitlink ? [buildGitlinkAdoptedGroup(rootPath, group, gitlink, spec)] : [];
+  const adopted = gitlink ? [buildGitlinkAdoptedGroup(rootPath, group, gitlink, spec)] : [];
   return {
     id: `change:${rootPath}:${group}:${resource.relativePath}`,
     kind: "change",
@@ -441,20 +428,24 @@ function buildGitlinkAdoptedGroup(
   parentRootPath: string,
   group: ChangeGroupKind,
   gitlink: SubmoduleNode,
-  spec: AdoptedDiffSpec,
+  spec: AdoptedDiffSpec | undefined,
 ): AdoptedTreeNode {
-  const tooltip =
-    spec.kind === "staged" ? "HEAD gitlink → index gitlink" : "index gitlink → checkout HEAD";
+  const tooltip = !spec
+    ? "No gitlink pointer change"
+    : spec.kind === "staged"
+      ? "HEAD gitlink → index gitlink"
+      : "index gitlink → checkout HEAD";
   return {
     id: `adopted:${parentRootPath}:${group}:${gitlink.rootPath}`,
     kind: "adopted-group",
     repositoryRoot: gitlink.rootPath,
     label: "Adopted Changes",
+    description: "0",
     tooltip,
     collapsible: true,
     expandByDefault: true,
     contextValue: CONTEXT.adoptedGroup,
-    iconId: "layers",
+    iconId: "",
     diffSpec: spec,
     children: [],
   };

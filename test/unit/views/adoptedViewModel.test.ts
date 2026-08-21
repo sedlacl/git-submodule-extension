@@ -159,6 +159,7 @@ describe("buildAdoptedTree", () => {
     expect(libGitlink?.children[0]).toMatchObject({
       kind: "adopted-group",
       label: "Adopted Changes",
+      description: "0",
       contextValue: CONTEXT.adoptedGroup,
     });
     expect(libGitlink?.children[0]?.diffSpec).toEqual({
@@ -265,12 +266,8 @@ describe("fileNodesFromNameStatus", () => {
     expect(usesThemeFileIcon(nodes[3]!)).toBe(true);
   });
 
-  it("renders an informational child when the pointer shifted but name-status is empty", () => {
-    const nodes = fileNodesFromNameStatus(spec, []);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]?.kind).toBe("message");
-    expect(nodes[0]?.label).toBe("No file changes");
-    expect(treeItemCommand(nodes[0]!)).toBeUndefined();
+  it("returns no children when the pointer shifted but name-status is empty", () => {
+    expect(fileNodesFromNameStatus(spec, [])).toEqual([]);
   });
 
   it("nests adopted files by folder in tree view mode", () => {

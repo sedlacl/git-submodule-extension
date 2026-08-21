@@ -19,7 +19,7 @@ This extension contributes a native SCM `TreeView` named **CHANGES with submodul
 - workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` when dirty) and the built-in Git hover toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch and Pull sit in the row context menu
 - **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations; gitlink rows use `S`
 - empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`)
-- gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), including the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label
+- gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), always shown with a file count (including `0`) and the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label. **View as List** / **View as Tree** (`scm.defaultViewMode`, plus `scm.compactFolders`) applies to those inner files as well
 - nested submodules under their immediate gitlink parent, each with the same group layout
 - file rows that open `vscode.diff` (or `vscode.changes` for Open All)
 - tree layout by default (`scm.defaultViewMode`); the view title toggles **View as List** / **View as Tree** and writes that setting so it applies globally

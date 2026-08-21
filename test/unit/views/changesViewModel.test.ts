@@ -220,6 +220,7 @@ describe("buildAdoptedTree change groups", () => {
     expect(gitlinkChange?.diffSpec).toBeUndefined();
     expect(gitlinkChange?.children.map((child) => child.kind)).toEqual(["adopted-group"]);
     expect(gitlinkChange?.children[0]?.label).toBe("Adopted Changes");
+    expect(gitlinkChange?.children[0]?.description).toBe("0");
     expect(gitlinkChange?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/httplib",
       fromSha: HEAD,
@@ -232,14 +233,20 @@ describe("buildAdoptedTree change groups", () => {
 
     const workingGitlink = findByRelativePath(changes?.children, "submodules/uu_energygateway_httpendpointg01");
     expect(workingGitlink?.decoration?.badge).toBe("S");
-    expect(workingGitlink?.collapsible).toBe(false);
+    expect(workingGitlink?.collapsible).toBe(true);
     expect(workingGitlink?.description).toBeUndefined();
-    expect(workingGitlink?.children).toEqual([]);
+    expect(workingGitlink?.children[0]).toMatchObject({
+      kind: "adopted-group",
+      label: "Adopted Changes",
+      description: "0",
+    });
+    expect(workingGitlink?.children[0]?.diffSpec).toBeUndefined();
 
     const commonGitlink = findByRelativePath(changes?.children, "submodules/usy_idsmari_commong01");
     expect(commonGitlink?.decoration?.badge).toBe("S");
     expect(commonGitlink?.description).toBe(`${HEAD.slice(0, 7)} → development/AFLEX`);
     expect(commonGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
+    expect(commonGitlink?.children[0]?.description).toBe("0");
     expect(byKind(http?.children, "adopted-group")).toEqual([]);
   });
 

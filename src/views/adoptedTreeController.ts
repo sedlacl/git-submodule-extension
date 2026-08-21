@@ -2,7 +2,7 @@ import type { AdoptedDiffReader, AdoptedDiffSpec, GitModelProvider } from "../gi
 import { toSubmoduleViewModel } from "../git/interfaces.js";
 import { normalizeRepoPath } from "../git/pathUtils.js";
 import type { RepositoryStateSnapshot } from "../git/repositoryState.js";
-import type { WorkspaceGitModel } from "../git/types.js";
+import type { NameStatusEntry, WorkspaceGitModel } from "../git/types.js";
 import type { RestoreResult } from "../restore/branchRestoreService.js";
 import {
   DEFAULT_CHANGES_TREE_SETTINGS,
@@ -33,7 +33,7 @@ export class AdoptedTreeController {
   private roots: AdoptedTreeNode[] | undefined;
   private cachedModel: WorkspaceGitModel | undefined;
   private readonly lastStates = new Map<string, RepositoryStateSnapshot>();
-  private readonly fileCache = new Map<string, AdoptedTreeNode[]>();
+  private readonly fileCache = new Map<string, CachedFileList>();
   private inflight: Promise<AdoptedTreeNode[]> | undefined;
 
   constructor(
@@ -130,6 +130,10 @@ export class AdoptedTreeController {
         buildAdoptedTree(toSubmoduleViewModel(snapshot), this.repositorySnapshots(), this.settings()),
         this.restoreStatus,
       );
+      await this.hydrateAdoptedCounts(roots, generation);
+      if (generation !== this.generation) {
+        return this.getRootNodes();
+      }
       this.roots = roots;
       this.onRefresh?.({ usedCachedModel, durationMs: Date.now() - started });
       return roots;
@@ -150,6 +154,22 @@ export class AdoptedTreeController {
     }
   }
 
+  private async hydrateAdoptedCounts(roots: readonly AdoptedTreeNode[], generation: number): Promise<void> {
+    await Promise.all(
+      collectAdoptedGroups(roots).map(async (group) => {
+        if (!group.diffSpec) {
+          group.description = "0";
+          return;
+        }
+        const files = await this.loadFileNodes(group.diffSpec);
+        if (generation !== this.generation) {
+          return;
+        }
+        group.description = String(collectFileDiffs(files).length);
+      }),
+    );
+  }
+
   private async getFileChildren(node: AdoptedTreeNode): Promise<AdoptedTreeNode[]> {
     if (!node.diffSpec) {
       return node.children;
@@ -161,7 +181,7 @@ export class AdoptedTreeController {
     const key = cacheKey(spec);
     const cached = this.fileCache.get(key);
     if (cached) {
-      return cached;
+      return nodesFromCache(spec, cached, this.settings());
     }
 
     const generation = this.generation;
@@ -170,21 +190,34 @@ export class AdoptedTreeController {
       if (generation !== this.generation) {
         return this.loadFileNodes(spec);
       }
-      const nodes = fileNodesFromNameStatus(spec, entries, this.settings());
-      this.fileCache.set(key, nodes);
-      return nodes;
+      this.fileCache.set(key, { ok: true, entries });
+      return fileNodesFromNameStatus(spec, entries, this.settings());
     } catch (error) {
       if (generation !== this.generation) {
         return this.loadFileNodes(spec);
       }
       const nodes = [errorMessageNode(`${spec.kind}:${spec.repoRoot}:error`, error)];
-      this.fileCache.set(key, nodes);
+      this.fileCache.set(key, { ok: false, nodes });
       return nodes;
     }
   }
 }
 
+type CachedFileList =
+  | { ok: true; entries: readonly NameStatusEntry[] }
+  | { ok: false; nodes: AdoptedTreeNode[] };
+
 function cacheKey(spec: AdoptedDiffSpec): string {
   return `${spec.repoRoot}|${spec.kind}|${spec.fromSha}|${spec.toSha}`;
+}
+
+function nodesFromCache(spec: AdoptedDiffSpec, cached: CachedFileList, settings: ChangesTreeSettings): AdoptedTreeNode[] {
+  return cached.ok ? fileNodesFromNameStatus(spec, cached.entries, settings) : cached.nodes;
+}
+
+function collectAdoptedGroups(nodes: readonly AdoptedTreeNode[]): AdoptedTreeNode[] {
+  return nodes.flatMap((node) =>
+    node.kind === "adopted-group" ? [node, ...collectAdoptedGroups(node.children)] : collectAdoptedGroups(node.children),
+  );
 }
 
