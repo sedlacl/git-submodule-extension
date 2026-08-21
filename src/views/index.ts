@@ -1,5 +1,6 @@
 export { COMMANDS, CONTEXT, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 export { AdoptedTreeController } from "./adoptedTreeController.js";
+export { gitModelNeedsRediscovery } from "./gitModelRefresh.js";
 export {
   applyRestoreOverlay,
   buildAdoptedTree,

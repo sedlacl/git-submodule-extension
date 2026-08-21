@@ -10,6 +10,7 @@ export interface RegisterDailyGitActionsOptions {
   gitApi: VsCodeGitApiAdapter;
   choreService: SubmoduleChoreReadService;
   refreshTree(): void;
+  beforeRefreshCommand?(): void;
 }
 
 export function registerDailyGitActions(options: RegisterDailyGitActionsOptions): vscode.Disposable {
@@ -65,6 +66,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     register(COMMANDS.sync, "Sync", repositoryHandler("sync")),
     register(COMMANDS.publish, "Publish Branch", repositoryHandler("publish")),
     register(COMMANDS.refresh, "Refresh", async (node) => {
+      options.beforeRefreshCommand?.();
       const rootPath = node?.repositoryRoot;
       const roots = rootPath ? [rootPath] : options.gitApi.getOpenRepositoryPaths();
       await actions.refresh(roots);

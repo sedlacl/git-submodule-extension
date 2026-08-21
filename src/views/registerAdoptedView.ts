@@ -19,6 +19,7 @@ import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
 import { AdoptedFileDecorationProvider, SubmoduleTreeProvider, toVscodeUri } from "./submoduleTree.js";
 
+/** Coalesce bursty vscode.git events before a full gitlink/HEAD rediscovery. File overlays stay immediate. */
 const REFRESH_DEBOUNCE_MS = 300;
 
 export interface RegisterAdoptedViewOptions {
@@ -37,6 +38,11 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       readChangesTreeSettings((section, key, fallback) =>
         vscode.workspace.getConfiguration(section).get(key, fallback),
       ),
+    (timings) => {
+      console.debug(
+        `[git-submodule] tree ${timings.usedCachedModel ? "overlay" : "discovery"} ${timings.durationMs}ms`,
+      );
+    },
   );
   const treeProvider = new SubmoduleTreeProvider(controller);
   const decorations = new AdoptedFileDecorationProvider();
@@ -48,16 +54,21 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     canSelectMany: true,
   });
 
-  const refresh = (): void => {
-    void controller.refresh().then(() => {
-      treeProvider.refresh();
-      decorations.refresh();
-      const count = controller.countBadge();
-      treeView.badge = count > 0 ? { value: count, tooltip: `${count}` } : undefined;
-    });
+  const render = (): void => {
+    treeProvider.refresh();
+    decorations.refresh();
+    const count = controller.countBadge();
+    treeView.badge = count > 0 ? { value: count, tooltip: `${count}` } : undefined;
   };
 
-  const scheduleRefresh = debounce(refresh, REFRESH_DEBOUNCE_MS);
+  const overlayRefresh = coalesce(() => {
+    void controller.refresh().then(render);
+  });
+
+  const scheduleDiscovery = debounce(() => {
+    controller.invalidateModel();
+    overlayRefresh.run();
+  }, REFRESH_DEBOUNCE_MS);
 
   const disposables: vscode.Disposable[] = [
     treeView,
@@ -66,7 +77,8 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     registerDailyGitActions({
       gitApi: options.gitApi,
       choreService: new SubmoduleChoreReadService(options.cli),
-      refreshTree: refresh,
+      refreshTree: overlayRefresh.run,
+      beforeRefreshCommand: () => controller.invalidateModel(),
     }),
     vscode.commands.registerCommand(
       COMMANDS.openDiff,
@@ -88,11 +100,16 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         openSelected(options.gitApi, controller, node, selected),
     ),
     options.gitApi.subscribe({
-      onOpenRepository: scheduleRefresh.run,
-      onCloseRepository: scheduleRefresh.run,
-      onDidChangeRepository: scheduleRefresh.run,
+      onOpenRepository: scheduleDiscovery.run,
+      onCloseRepository: scheduleDiscovery.run,
+      onDidChangeRepositoryState: (snapshot) => {
+        if (controller.consumeRepositoryState(snapshot)) {
+          scheduleDiscovery.run();
+        }
+        overlayRefresh.run();
+      },
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => scheduleRefresh.run()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => scheduleDiscovery.run()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration("git.untrackedChanges") ||
@@ -104,14 +121,17 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         event.affectsConfiguration("scm.defaultViewMode") ||
         event.affectsConfiguration("scm.compactFolders")
       ) {
-        scheduleRefresh.run();
+        overlayRefresh.run();
       }
     }),
-    options.restoreStatus?.subscribe(scheduleRefresh.run) ?? { dispose() {} },
-    new vscode.Disposable(() => scheduleRefresh.dispose()),
+    options.restoreStatus?.subscribe(overlayRefresh.run) ?? { dispose() {} },
+    new vscode.Disposable(() => {
+      overlayRefresh.dispose();
+      scheduleDiscovery.dispose();
+    }),
   ];
 
-  scheduleRefresh.run();
+  overlayRefresh.run();
 
   return new vscode.Disposable(() => {
     for (const disposable of disposables) {
@@ -232,6 +252,28 @@ async function commandExists(command: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function coalesce(fn: () => void): { run: () => void; dispose: () => void } {
+  let scheduled = false;
+  let disposed = false;
+  return {
+    run: () => {
+      if (disposed || scheduled) {
+        return;
+      }
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (!disposed) {
+          fn();
+        }
+      });
+    },
+    dispose: () => {
+      disposed = true;
+    },
+  };
 }
 
 function debounce(fn: () => void, waitMs: number): { run: () => void; dispose: () => void } {

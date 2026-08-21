@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { computeAdoptedPointers } from "../../../src/git/adoptedPointers.js";
 import type { AdoptedDiffReader, AdoptedDiffSpec, GitModelProvider } from "../../../src/git/interfaces.js";
+import { ResourceStatus, type RepositoryStateSnapshot } from "../../../src/git/repositoryState.js";
 import type { GitRepoNode, NameStatusEntry, RepoPins, SubmoduleNode, WorkspaceGitModel, WorkspaceRootNode } from "../../../src/git/types.js";
 import { AdoptedTreeController } from "../../../src/views/adoptedTreeController.js";
 import { treeItemCommand } from "../../../src/views/adoptedViewModel.js";
+import { emptyChangeGroups } from "../../../src/views/changesTreeSettings.js";
 import { COMMANDS } from "../../../src/views/constants.js";
 
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -127,7 +129,59 @@ describe("AdoptedTreeController", () => {
     expect(fromSubmodule).toHaveLength(0);
   });
 
-  it("refreshes by dropping the snapshot and file cache", async () => {
+  it("overlays staged file moves from repository state without a second git-model snapshot", async () => {
+    const delayMs = 80;
+    const fake = new FakeModel(modelWith(child));
+    fake.snapshotImpl = async () => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return modelWith(child);
+    };
+    const file = {
+      uri: "/ws/http/app.js",
+      originalUri: "/ws/http/app.js",
+      status: ResourceStatus.MODIFIED,
+      relativePath: "app.js",
+    };
+    let snapshots: RepositoryStateSnapshot[] = [
+      {
+        rootPath: "/ws/http",
+        head: { name: "main", commit: "c1", detached: false },
+        remotes: [],
+        groups: { ...emptyChangeGroups(), workingTree: [file] },
+      },
+    ];
+    const controller = new AdoptedTreeController(
+      fake,
+      () => undefined,
+      () => snapshots,
+    );
+    const first = await controller.getRootNodes();
+    expect(fake.snapshotCount).toBe(1);
+    expect(first[0]?.children.some((node) => node.kind === "change-group" && node.changeGroup === "workingTree" && node.children.some((childNode) => childNode.label === "app.js"))).toBe(true);
+
+    snapshots = [
+      {
+        rootPath: "/ws/http",
+        head: { name: "main", commit: "c1", detached: false },
+        remotes: [],
+        groups: {
+          ...emptyChangeGroups(),
+          index: [{ ...file, status: ResourceStatus.INDEX_MODIFIED }],
+        },
+      },
+    ];
+    const overlayStarted = Date.now();
+    await controller.refresh();
+    const second = await controller.getRootNodes();
+    const overlayMs = Date.now() - overlayStarted;
+    expect(fake.snapshotCount).toBe(1);
+    expect(overlayMs).toBeLessThan(delayMs);
+    const staged = second[0]?.children.find((node) => node.kind === "change-group" && node.changeGroup === "index");
+    expect(staged?.children.map((node) => node.label)).toEqual(["app.js"]);
+    expect(controller.consumeRepositoryState(snapshots[0]!)).toBe(false);
+  });
+
+  it("invalidates the cached git graph only when rediscovery is requested", async () => {
     const fake = new FakeModel(modelWith(child), [{ status: "modified", path: "once.ts" }]);
     const controller = new AdoptedTreeController(fake);
     const first = await controller.getRootNodes();
@@ -138,6 +192,10 @@ describe("AdoptedTreeController", () => {
     expect(fake.nameStatusCalls).toHaveLength(1);
 
     fake.nameStatusImpl = async () => [{ status: "added", path: "after-refresh.ts" }];
+    await controller.refresh();
+    expect(fake.snapshotCount).toBe(1);
+
+    controller.invalidateModel();
     await controller.refresh();
     const second = await controller.getRootNodes();
     const stagedAfter = second[0]?.children.find((node) => node.kind === "adopted-group")?.children[0]?.children[0];
