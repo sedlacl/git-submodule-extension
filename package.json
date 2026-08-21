@@ -1,0 +1,175 @@
+{
+  "name": "git-submodule-extension",
+  "displayName": "Git Submodule Extension",
+  "description": "Recursive submodule hierarchy and adopted changes in Source Control, with safe branch restore after Git operations.",
+  "version": "0.0.1",
+  "publisher": "qjohn",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sedlacl/git-submodule-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sedlacl/git-submodule-extension/issues"
+  },
+  "homepage": "https://github.com/sedlacl/git-submodule-extension#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers"
+  ],
+  "keywords": [
+    "git",
+    "submodule",
+    "scm",
+    "source control"
+  ],
+  "activationEvents": [
+    "onView:scm",
+    "onView:gitSubmodule.repos",
+    "workspaceContains:**/.git"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Git Submodule",
+      "properties": {
+        "gitSubmodule.restore.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically restore submodule branches after parent Git operations when every fail-closed check passes. Never fetches, pulls, pushes, commits, force-updates, or discards files."
+        },
+        "gitSubmodule.restore.debounceMs": {
+          "type": "number",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Delay in milliseconds before coalescing Git change events into a restore pass."
+        }
+      }
+    },
+    "views": {
+      "scm": [
+        {
+          "id": "gitSubmodule.repos",
+          "name": "Submodules",
+          "icon": "$(repo)",
+          "contextualTitle": "Submodules"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitSubmodule.refresh",
+        "title": "Refresh",
+        "category": "Git Submodule",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitSubmodule.openDiff",
+        "title": "Open Diff",
+        "category": "Git Submodule",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "gitSubmodule.openAllChanges",
+        "title": "Open All Changes",
+        "category": "Git Submodule",
+        "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "gitSubmodule.retryRestore",
+        "title": "Retry Branch Restore",
+        "category": "Git Submodule",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "gitSubmodule.fetchRemote",
+        "title": "Fetch Submodule Remote",
+        "category": "Git Submodule",
+        "icon": "$(cloud-download)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "gitSubmodule.openDiff",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitSubmodule.refresh",
+          "when": "view == gitSubmodule.repos",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitSubmodule.retryRestore",
+          "when": "view == gitSubmodule.repos",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(adoptedGroup|staged|unstaged|submodule)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.retryRestore",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.submodule/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.fetchRemote",
+          "when": "view == gitSubmodule.repos && viewItem =~ /restoreBlocked/",
+          "group": "inline@3"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "gitSubmodule.repos",
+        "contents": "No Git workspace folders found."
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test scripts --no-error-on-unmatched-pattern",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:extension-host": "tsx scripts/run-extension-tests.ts",
+    "create-ui-fixture": "tsx scripts/create-ui-fixture.ts",
+    "dev:ui": "tsx scripts/dev-ui.ts",
+    "dev:ui:reset": "tsx scripts/create-ui-fixture.ts --force",
+    "package": "npm run build && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@types/node": "^22.15.29",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.4.2",
+    "esbuild": "^0.25.5",
+    "eslint": "^9.27.0",
+    "ovsx": "^0.10.2",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.1",
+    "tsx": "^4.19.4",
+    "vitest": "^3.1.4"
+  }
+}
