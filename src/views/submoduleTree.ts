@@ -46,10 +46,15 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<AdoptedTre
 
     if (element.fileDiff) {
       item.resourceUri = toVscodeUri(prepareFileDiff(element.fileDiff).reveal);
-      const command = treeItemCommand(element);
-      if (command) {
-        item.command = command;
-      }
+    } else if (element.change && element.decoration) {
+      item.resourceUri = changeDecorationUri(element);
+    } else if (element.kind === "folder" && element.resourceUri) {
+      item.resourceUri = vscode.Uri.file(element.resourceUri);
+    }
+
+    const command = treeItemCommand(element);
+    if (command) {
+      item.command = command;
     }
 
     return item;
@@ -72,6 +77,16 @@ export class AdoptedFileDecorationProvider implements vscode.FileDecorationProvi
     if (uri.scheme !== GIT_SHOW_SCHEME) {
       return undefined;
     }
+    const query = new URLSearchParams(uri.query);
+    const badge = query.get("badge");
+    if (badge) {
+      const colorId = query.get("color");
+      return new vscode.FileDecoration(
+        badge,
+        query.get("tooltip") ?? undefined,
+        colorId ? new vscode.ThemeColor(colorId) : undefined,
+      );
+    }
     const parsed = parseGitShowUri(uri);
     const spec = tryFileDecoration(parsed.status);
     if (!spec) {
@@ -79,4 +94,24 @@ export class AdoptedFileDecorationProvider implements vscode.FileDecorationProvi
     }
     return new vscode.FileDecoration(spec.badge, spec.tooltip, new vscode.ThemeColor(spec.themeColorId));
   }
+}
+
+export function changeDecorationUri(node: AdoptedTreeNode): vscode.Uri {
+  const relativePath = node.change?.resource.relativePath ?? node.label;
+  const query = new URLSearchParams();
+  query.set("kind", "change");
+  if (node.decoration) {
+    query.set("badge", node.decoration.badge);
+    query.set("tooltip", node.decoration.tooltip);
+    query.set("color", node.decoration.themeColorId);
+  }
+  if (node.change) {
+    query.set("root", node.change.rootPath);
+    query.set("file", relativePath);
+  }
+  return vscode.Uri.from({
+    scheme: GIT_SHOW_SCHEME,
+    path: `/${relativePath.replace(/^\/+/, "")}`,
+    query: query.toString(),
+  });
 }

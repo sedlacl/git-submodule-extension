@@ -25,6 +25,13 @@ describe("adopted-view contributions", () => {
         COMMANDS.refresh,
         COMMANDS.openDiff,
         COMMANDS.openAllChanges,
+        COMMANDS.stage,
+        COMMANDS.unstage,
+        COMMANDS.clean,
+        COMMANDS.commit,
+        COMMANDS.generateSubmoduleChore,
+        COMMANDS.sync,
+        COMMANDS.publish,
         COMMANDS.retryRestore,
         COMMANDS.fetchRemote,
       ]),
@@ -34,7 +41,27 @@ describe("adopted-view contributions", () => {
       true,
     );
     expect(pkg.contributes.menus["view/item/context"].some((entry) => entry.command === COMMANDS.openAllChanges)).toBe(true);
+    const openAll = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("adoptedGroup"),
+    );
+    expect(openAll?.when).toContain("adoptedGroup");
+    expect(openAll?.when).toContain("adoptedPointer");
+    const chore = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.generateSubmoduleChore,
+    );
+    expect(chore?.when).toContain("workspaceRoot");
+    expect(chore?.when).toContain("submodule");
+    expect(chore?.group).toBe("inline@1");
+    const repositoryOpenAll = pkg.contributes.menus["view/item/context"].find(
+      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("workspaceRoot"),
+    );
+    expect(repositoryOpenAll?.group).toBe("inline@2");
+    const sync = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.sync);
+    const publish = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.publish);
+    expect(sync?.when).toContain("hasUpstream");
+    expect(publish?.when).toContain("noUpstream");
     expect(CONTEXT.adoptedGroup).toContain("adoptedGroup");
+    expect(CONTEXT.adoptedPointer).toContain("adoptedPointer");
   });
 
   it("defaults auto-safe restore on and keeps fetch/retry as native hover actions", () => {
@@ -44,7 +71,7 @@ describe("adopted-view contributions", () => {
       expect.arrayContaining([RESTORE_COMMANDS.retry, RESTORE_COMMANDS.fetch]),
     );
     const inline = pkg.contributes.menus["view/item/context"];
-    expect(inline.every((entry) => entry.group?.startsWith("inline"))).toBe(true);
+    expect(inline.some((entry) => entry.command === RESTORE_COMMANDS.retry && entry.group?.startsWith("inline"))).toBe(true);
     expect(inline.some((entry) => entry.command === RESTORE_COMMANDS.fetch && entry.when.includes("restoreBlocked"))).toBe(true);
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === RESTORE_COMMANDS.retry)).toBe(true);
   });

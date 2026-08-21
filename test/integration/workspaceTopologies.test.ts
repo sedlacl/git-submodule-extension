@@ -1,9 +1,15 @@
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createUiFixture, type FixtureManifest } from "../../scripts/create-ui-fixture.js";
+import { runGit } from "../../scripts/lib/git-fixture.js";
 import { createGitModelService } from "../../src/git/gitModelService.js";
+import { toSubmoduleViewModel } from "../../src/git/interfaces.js";
 import type { SubmoduleNode } from "../../src/git/types.js";
-import { createGitCli, makeTempRoot, removeTempRoot } from "./helpers.js";
+import { CHANGE_GROUP_LABELS } from "../../src/git/repositoryState.js";
+import { SubmoduleChoreReadService } from "../../src/scm/submoduleChoreService.js";
+import { buildAdoptedTree, type AdoptedTreeNode } from "../../src/views/adoptedViewModel.js";
+import { DEFAULT_CHANGES_TREE_SETTINGS } from "../../src/views/changesTreeSettings.js";
+import { collectRepositorySnapshots, createGitCli, makeTempRoot, removeTempRoot } from "./helpers.js";
 
 describe("generated fixture topologies", () => {
   let fixtureRoot: string;
@@ -113,8 +119,122 @@ describe("generated fixture topologies", () => {
     expect(prod?.workingState.dirty).toBe(false);
     expect(path.basename(t1!.rootPath)).toBe("usy_aflex_initdatag01#t1");
   }, 60_000);
+
+  it("builds httpendpoint Merge/Staged/Changes/Adopted order with parent-level pointers and gitlink resources", async () => {
+    const snapshot = await model.snapshot();
+    const tree = buildAdoptedTree(
+      toSubmoduleViewModel(snapshot),
+      collectRepositorySnapshots(snapshot),
+      DEFAULT_CHANGES_TREE_SETTINGS,
+    );
+    const http = tree.find((node) => node.label === "httpendpoint");
+    expect(http?.kind).toBe("workspace-root");
+    expect(labels(http)).toEqual([
+      CHANGE_GROUP_LABELS.index,
+      CHANGE_GROUP_LABELS.workingTree,
+      "Adopted Changes",
+      "uu_energygateway_httpendpointg01",
+      "usy_idsmari_commong01",
+    ]);
+    expect(http?.children.map((child) => child.kind)).toEqual([
+      "change-group",
+      "change-group",
+      "adopted-group",
+      "submodule",
+      "submodule",
+    ]);
+
+    const staged = byLabel(http, CHANGE_GROUP_LABELS.index);
+    const changes = byLabel(http, CHANGE_GROUP_LABELS.workingTree);
+    const adopted = byLabel(http, "Adopted Changes");
+    expect(staged?.children.map((child) => child.label)).toContain(
+      "submodules/uu_energygateway_httpendpointg01",
+    );
+    expect(changes?.children.map((child) => child.label)).toContain("submodules/usy_idsmari_commong01");
+    expect(adopted?.children.map((child) => child.label)).toEqual([
+      "uu_energygateway_httpendpointg01",
+      "usy_idsmari_commong01",
+    ]);
+    expect(byLabel(http, CHANGE_GROUP_LABELS.merge)).toBeUndefined();
+    expect(byLabel(http, CHANGE_GROUP_LABELS.untracked)).toBeUndefined();
+
+    const libNode = byLabel(http, "uu_energygateway_httpendpointg01");
+    const commonNode = byLabel(http, "usy_idsmari_commong01");
+    expect(byKind(libNode, "adopted-group")).toEqual([]);
+    const nestedAdopted = byLabel(commonNode, "Adopted Changes");
+    expect(nestedAdopted?.children.map((child) => child.label)).toEqual(["uu_energygateway_datagatewayg01"]);
+    const nested = byLabel(commonNode, "uu_energygateway_datagatewayg01");
+    expect(byKind(nested, "adopted-group")).toEqual([]);
+    expect(nested?.children.some((child) => child.kind === "change-group")).toBe(true);
+  }, 60_000);
+
+  it("keeps infra-deploy nested checkouts and multi-root siblings without parent Adopted Changes", async () => {
+    const snapshot = await model.snapshot();
+    const tree = buildAdoptedTree(
+      toSubmoduleViewModel(snapshot),
+      collectRepositorySnapshots(snapshot),
+      DEFAULT_CHANGES_TREE_SETTINGS,
+    );
+    expect(tree.map((node) => node.label)).toEqual(["httpendpoint", "infra-deploy", "plain-app", "plain-lib"]);
+
+    const infra = tree.find((node) => node.label === "infra-deploy");
+    expect(byLabel(infra, "Adopted Changes")).toBeUndefined();
+    expect(labels(infra)[0]).toBe(CHANGE_GROUP_LABELS.workingTree);
+    expect(infra?.children.filter((child) => child.kind === "submodule").map((child) => child.label)).toEqual([
+      "usy_aflex_initdatag01#t1",
+      "usy_aflex_initdatag01#t2",
+      "usy_aflex_initdatag01#prod",
+      "usy_iedc_initdatag01#t1",
+      "usy_iedc_initdatag01#t2",
+      "usy_iedc_initdatag01#prod",
+    ]);
+    const t1 = byLabel(infra, "usy_aflex_initdatag01#t1");
+    const t2 = byLabel(infra, "usy_aflex_initdatag01#t2");
+    expect(t1?.repositoryRoot).not.toBe(t2?.repositoryRoot);
+    expect(t1?.children.some((child) => child.kind === "change-group")).toBe(true);
+
+    const app = tree.find((node) => node.label === "plain-app");
+    const lib = tree.find((node) => node.label === "plain-lib");
+    expect(byLabel(app, "Adopted Changes")).toBeUndefined();
+    expect(byLabel(lib, "Adopted Changes")).toBeUndefined();
+    expect(app?.children.every((child) => child.kind !== "submodule")).toBe(true);
+    expect(lib?.children.every((child) => child.kind !== "submodule")).toBe(true);
+  }, 60_000);
+
+  it("previews a message-only httpendpoint submodule chore without committing", async () => {
+    const snapshot = await model.snapshot();
+    const http = snapshot.roots.find((root) => root.displayName === "httpendpoint");
+    const before = shaOrEmpty(http!.rootPath);
+    const chore = new SubmoduleChoreReadService(createGitCli());
+    const preview = await chore.preview(http!.rootPath);
+    expect(preview).not.toBeNull();
+    expect(preview?.subject).toBe("chore: update submodules");
+    expect(preview?.message).toContain("submodules/uu_energygateway_httpendpointg01");
+    expect(preview?.message).toContain("submodules/usy_idsmari_commong01");
+    expect(preview?.updates.some((update) => update.staged)).toBe(true);
+    expect(preview?.updates.some((update) => !update.staged)).toBe(true);
+    expect(preview?.hasUnstagedUpdates).toBe(true);
+    expect(preview?.unstagedNote).toBeTruthy();
+    expect(shaOrEmpty(http!.rootPath)).toBe(before);
+  }, 60_000);
 });
 
 function byRel(nodes: readonly SubmoduleNode[] | undefined, relativePath: string): SubmoduleNode | undefined {
   return nodes?.find((node) => node.relativePath === relativePath);
+}
+
+function labels(node: AdoptedTreeNode | undefined): string[] {
+  return node?.children.map((child) => child.label) ?? [];
+}
+
+function byLabel(node: AdoptedTreeNode | undefined, label: string): AdoptedTreeNode | undefined {
+  return node?.children.find((child) => child.label === label);
+}
+
+function byKind(node: AdoptedTreeNode | undefined, kind: AdoptedTreeNode["kind"]): AdoptedTreeNode[] {
+  return node?.children.filter((child) => child.kind === kind) ?? [];
+}
+
+function shaOrEmpty(rootPath: string): string {
+  return runGit(rootPath, ["rev-parse", "HEAD"]);
 }

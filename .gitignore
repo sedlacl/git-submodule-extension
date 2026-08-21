@@ -4,6 +4,7 @@ out/
 *.vsix
 .vscode-test/
 fixtures/
+temp/
 coverage/
 *.log
 .DS_Store

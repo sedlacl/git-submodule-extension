@@ -11,6 +11,7 @@ import {
   treeCollapsibleMode,
   treeItemCommand,
   usesThemeFileIcon,
+  type AdoptedTreeNode,
 } from "../../../src/views/adoptedViewModel.js";
 import { COMMANDS, CONTEXT } from "../../../src/views/constants.js";
 
@@ -78,8 +79,16 @@ function workspaceRoot(rootPath: string, children: SubmoduleNode[]): WorkspaceRo
   };
 }
 
+function byKind(nodes: readonly AdoptedTreeNode[] | undefined, kind: AdoptedTreeNode["kind"]): AdoptedTreeNode[] {
+  return (nodes ?? []).filter((node) => node.kind === kind);
+}
+
+function byLabel(nodes: readonly AdoptedTreeNode[] | undefined, label: string): AdoptedTreeNode | undefined {
+  return nodes?.find((node) => node.label === label);
+}
+
 describe("buildAdoptedTree", () => {
-  it("nests workspace repos, direct/nested submodules, and Adopted Changes groups", () => {
+  it("attaches Adopted Changes to the parent that owns the gitlink, not the child checkout", () => {
     const nested = submodule({
       rootPath: "/ws/http/common/data",
       parentRootPath: "/ws/http/common",
@@ -91,7 +100,8 @@ describe("buildAdoptedTree", () => {
       rootPath: "/ws/http/common",
       parentRootPath: "/ws/http",
       relativePath: "submodules/usy_idsmari_commong01",
-      pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: HEAD },
+      pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: INDEX },
+      workingState: { pointerMismatch: true },
       branchName: "development/AFLEX",
       children: [nested],
     });
@@ -107,34 +117,76 @@ describe("buildAdoptedTree", () => {
 
     expect(tree.map((node) => node.label)).toEqual(["http", "plain"]);
     expect(tree[0]?.kind).toBe("workspace-root");
-    expect(tree[0]?.children.map((child) => child.kind)).toEqual(["submodule", "submodule"]);
+    expect(tree[0]?.children.map((child) => child.kind)).toEqual(["change-group", "adopted-group", "submodule", "submodule"]);
     expect(treeCollapsibleMode(tree[0]!)).toBe("expanded");
-    expect(treeCollapsibleMode(tree[1]!)).toBe("none");
+    expect(treeCollapsibleMode(tree[1]!)).toBe("expanded");
+    expect(byKind(tree[1]?.children, "adopted-group")).toEqual([]);
+    expect(tree[1]?.children.map((child) => child.kind)).toEqual(["change-group"]);
 
-    const [libNode, commonNode] = tree[0]!.children;
-    expect(libNode?.children[0]?.kind).toBe("adopted-group");
-    expect(libNode?.children[0]?.description).toBe("staged");
-    expect(libNode?.children[0]?.children.map((child) => child.kind)).toEqual(["staged"]);
-    expect(libNode?.children[0]?.children[0]?.diffSpec).toEqual({
+    const httpGroup = byKind(tree[0]?.children, "adopted-group")[0];
+    expect(httpGroup).toMatchObject({
+      id: "adopted:/ws/http",
+      label: "Adopted Changes",
+      contextValue: CONTEXT.adoptedGroup,
+    });
+    expect(httpGroup?.description).toContain("2 pointers");
+    expect(httpGroup?.children.map((child) => child.kind)).toEqual(["pointer", "pointer"]);
+    expect(httpGroup?.children.map((child) => child.label)).toEqual([
+      "uu_energygateway_httpendpointg01",
+      "usy_idsmari_commong01",
+    ]);
+
+    const libPointer = httpGroup?.children[0];
+    expect(libPointer).toMatchObject({
+      kind: "pointer",
+      contextValue: CONTEXT.adoptedPointer,
+      description: "staged",
+    });
+    expect(libPointer?.children.map((child) => child.kind)).toEqual(["staged"]);
+    expect(libPointer?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/httplib",
       fromSha: HEAD,
       toSha: INDEX,
       kind: "staged",
     });
 
-    expect(commonNode?.children.map((child) => child.kind)).toEqual(["adopted-group", "submodule"]);
-    expect(commonNode?.children[0]?.description).toBe("none");
-    expect(treeCollapsibleMode(commonNode!.children[0]!)).toBe("none");
+    const commonPointer = httpGroup?.children[1];
+    expect(commonPointer?.description).toBe("unstaged");
+    expect(commonPointer?.children.map((child) => child.kind)).toEqual(["unstaged"]);
+    expect(commonPointer?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/common",
+      fromSha: HEAD,
+      toSha: INDEX,
+      kind: "unstaged",
+    });
 
-    const nestedNode = commonNode?.children[1];
-    expect(nestedNode?.label).toBe("uu_energygateway_datagatewayg01");
-    expect(nestedNode?.children[0]?.description).toBe("unstaged");
-    expect(nestedNode?.children[0]?.children[0]?.kind).toBe("unstaged");
-    expect(nestedNode?.children[0]?.children[0]?.diffSpec?.kind).toBe("unstaged");
+    const libNode = byLabel(tree[0]?.children, "uu_energygateway_httpendpointg01");
+    const commonNode = byLabel(tree[0]?.children, "usy_idsmari_commong01");
+    expect(libNode?.kind).toBe("submodule");
+    expect(byKind(libNode?.children, "adopted-group")).toEqual([]);
+    expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
+    expect(treeCollapsibleMode(libNode!)).toBe("collapsed");
+
+    const commonGroup = byKind(commonNode?.children, "adopted-group")[0];
+    expect(commonGroup?.id).toBe("adopted:/ws/http/common");
+    expect(commonGroup?.children.map((child) => child.label)).toEqual(["uu_energygateway_datagatewayg01"]);
+    expect(commonGroup?.children[0]?.kind).toBe("pointer");
+    expect(commonGroup?.children[0]?.children.map((child) => child.kind)).toEqual(["unstaged"]);
+    expect(commonGroup?.children[0]?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/common/data",
+      fromSha: NESTED_HEAD,
+      toSha: CHECKOUT,
+      kind: "unstaged",
+    });
+
+    const nestedNode = byLabel(commonNode?.children, "uu_energygateway_datagatewayg01");
+    expect(nestedNode?.kind).toBe("submodule");
     expect(nestedNode?.description).toContain("detached");
+    expect(byKind(nestedNode?.children, "adopted-group")).toEqual([]);
+    expect(nestedNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
   });
 
-  it("keeps Adopted Changes on every submodule even when both pointers match", () => {
+  it("omits empty Adopted Changes when the parent has no pointer diffs", () => {
     const child = submodule({
       rootPath: "/ws/app/mod",
       parentRootPath: "/ws/app",
@@ -142,12 +194,10 @@ describe("buildAdoptedTree", () => {
       pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: HEAD },
     });
     const [root] = buildAdoptedTree({ roots: [workspaceRoot("/ws/app", [child])] });
-    expect(root?.children[0]?.children[0]).toMatchObject({
-      kind: "adopted-group",
-      label: "Adopted Changes",
-      description: "none",
-      contextValue: CONTEXT.adoptedGroup,
-    });
+    expect(byKind(root?.children, "adopted-group")).toEqual([]);
+    expect(root?.children.map((node) => node.kind)).toEqual(["change-group", "submodule"]);
+    expect(byKind(root?.children[1]?.children, "adopted-group")).toEqual([]);
+    expect(root?.children[1]?.children.map((node) => node.kind)).toEqual(["change-group"]);
   });
 });
 
@@ -168,7 +218,8 @@ describe("fileNodesFromNameStatus", () => {
     ]);
 
     expect(nodes.map((node) => node.label)).toEqual(["src/new.ts", "src/index.ts", "gone.md", "old/name.ts → new/name.ts"]);
-    expect(nodes.map((node) => node.description)).toEqual(["A", "M", "D", "R"]);
+    expect(nodes.map((node) => node.decoration?.badge)).toEqual(["A", "M", "D", "R"]);
+    expect(nodes.map((node) => node.description)).toEqual([undefined, undefined, undefined, undefined]);
     expect(nodes[3]?.fileDiff).toEqual({
       repoRoot: spec.repoRoot,
       kind: "staged",
@@ -180,8 +231,8 @@ describe("fileNodesFromNameStatus", () => {
       similarity: 100,
     });
     expect(treeItemCommand(nodes[0]!)).toEqual({
-      command: COMMANDS.openDiff,
-      title: "Open Diff",
+      command: COMMANDS.openChange,
+      title: "Open Changes",
       arguments: [nodes[0]],
     });
     expect(treeCollapsibleMode(nodes[0]!)).toBe("none");
@@ -230,7 +281,7 @@ describe("restore overlay", () => {
           }
         : undefined,
     );
-    const submoduleNode = overlaid[0]?.children[0];
+    const submoduleNode = overlaid[0]?.children.find((child) => child.kind === "submodule");
     expect(submoduleNode?.contextValue).toBe(`${CONTEXT.submodule}.restoreBlocked`);
     expect(submoduleNode?.description).toContain("restore blocked");
     expect(submoduleNode?.tooltip).toContain("working tree is dirty");

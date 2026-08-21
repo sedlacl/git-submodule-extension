@@ -6,7 +6,7 @@ import { registerBranchRestore } from "./restore/registerBranchRestore.js";
 import { registerAdoptedView } from "./views/registerAdoptedView.js";
 
 /**
- * Activates the git model, SCM Adopted Changes tree, and fail-closed branch restore.
+ * Activates the git model, hierarchical SCM Changes tree, and fail-closed branch restore.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   let gitApi;

@@ -100,30 +100,39 @@ describe("AdoptedTreeController", () => {
 
     const roots = await controller.getChildren();
     expect(fake.nameStatusCalls).toEqual([]);
-    const lib = roots[0]?.children[0];
-    const group = lib?.children.find((node) => node.kind === "adopted-group");
-    expect(group?.children.map((node) => node.kind)).toEqual(["staged", "unstaged"]);
+    const group = roots[0]?.children.find((node) => node.kind === "adopted-group");
+    const pointer = group?.children.find((node) => node.kind === "pointer");
+    const lib = roots[0]?.children.find((node) => node.kind === "submodule");
+    expect(group?.id).toBe("adopted:/ws/http");
+    expect(pointer?.label).toBe("lib");
+    expect(pointer?.children.map((node) => node.kind)).toEqual(["staged", "unstaged"]);
+    expect(lib?.children.map((node) => node.kind)).toEqual(["change-group"]);
 
-    const stagedFiles = await controller.getChildren(group!.children[0]);
-    const unstagedFiles = await controller.getChildren(group!.children[1]);
+    const stagedFiles = await controller.getChildren(pointer!.children[0]);
+    const unstagedFiles = await controller.getChildren(pointer!.children[1]);
     expect(fake.nameStatusCalls.map((call) => call.kind)).toEqual(["staged", "unstaged"]);
     expect(stagedFiles.map((node) => node.fileDiff?.path)).toEqual(["src/index.ts"]);
     expect(unstagedFiles.map((node) => node.fileDiff?.path)).toEqual(["src/new.ts", "legacy.ts"]);
-    expect(treeItemCommand(stagedFiles[0]!)?.command).toBe(COMMANDS.openDiff);
+    expect(treeItemCommand(stagedFiles[0]!)?.command).toBe(COMMANDS.openChange);
 
     const openAll = await controller.filesForOpenAll(group!);
     expect(openAll.map((file) => file.path)).toEqual(["src/index.ts", "src/new.ts", "legacy.ts"]);
     expect(fake.nameStatusCalls).toHaveLength(2);
 
+    const fromPointer = await controller.filesForOpenAll(pointer!);
+    expect(fromPointer).toHaveLength(3);
+    const fromParent = await controller.filesForOpenAll(roots[0]!);
+    expect(fromParent).toHaveLength(3);
     const fromSubmodule = await controller.filesForOpenAll(lib!);
-    expect(fromSubmodule).toHaveLength(3);
+    expect(fromSubmodule).toHaveLength(0);
   });
 
   it("refreshes by dropping the snapshot and file cache", async () => {
     const fake = new FakeModel(modelWith(child), [{ status: "modified", path: "once.ts" }]);
     const controller = new AdoptedTreeController(fake);
     const first = await controller.getRootNodes();
-    const staged = first[0]?.children[0]?.children[0]?.children[0];
+    const staged = first[0]?.children.find((node) => node.kind === "adopted-group")?.children[0]?.children[0];
+    expect(staged?.kind).toBe("staged");
     await controller.getChildren(staged);
     expect(fake.snapshotCount).toBe(1);
     expect(fake.nameStatusCalls).toHaveLength(1);
@@ -131,7 +140,8 @@ describe("AdoptedTreeController", () => {
     fake.nameStatusImpl = async () => [{ status: "added", path: "after-refresh.ts" }];
     await controller.refresh();
     const second = await controller.getRootNodes();
-    const stagedAfter = second[0]?.children[0]?.children[0]?.children[0];
+    const stagedAfter = second[0]?.children.find((node) => node.kind === "adopted-group")?.children[0]?.children[0];
+    expect(stagedAfter?.kind).toBe("staged");
     const files = await controller.getChildren(stagedAfter);
     expect(fake.snapshotCount).toBe(2);
     expect(files[0]?.fileDiff?.path).toBe("after-refresh.ts");
@@ -145,7 +155,7 @@ describe("AdoptedTreeController", () => {
     const controller = new AdoptedTreeController(fake);
     const roots = await controller.getRootNodes();
     expect(roots[0]?.kind).toBe("message");
-    expect(roots[0]?.label).toBe("Failed to load submodule tree");
+    expect(roots[0]?.label).toBe("Failed to load changes");
     expect(roots[0]?.tooltip).toContain("git unavailable");
 
     const ok = new FakeModel(modelWith(child));
@@ -154,7 +164,8 @@ describe("AdoptedTreeController", () => {
     };
     const filesController = new AdoptedTreeController(ok);
     const tree = await filesController.getRootNodes();
-    const staged = tree[0]?.children[0]?.children[0]?.children[0];
+    const staged = tree[0]?.children.find((node) => node.kind === "adopted-group")?.children[0]?.children[0];
+    expect(staged?.kind).toBe("staged");
     const files = await filesController.getChildren(staged);
     expect(files[0]?.kind).toBe("message");
     expect(files[0]?.label).toBe("Failed to list changes");

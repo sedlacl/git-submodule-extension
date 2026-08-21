@@ -3,6 +3,8 @@ export { AdoptedTreeController } from "./adoptedTreeController.js";
 export {
   applyRestoreOverlay,
   buildAdoptedTree,
+  buildChangesTree,
+  collectChangeRefs,
   collectDiffSpecs,
   fileDecoration,
   fileNodesFromNameStatus,
@@ -12,7 +14,9 @@ export {
   treeItemCommand,
   usesThemeFileIcon,
 } from "./adoptedViewModel.js";
-export type { AdoptedFileDiff, AdoptedTreeNode } from "./adoptedViewModel.js";
+export type { AdoptedFileDiff, AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";
 export { openPreparedChanges, prepareFileDiff, prepareOpenAll } from "./adoptedDiffPrep.js";
 export { registerAdoptedView } from "./registerAdoptedView.js";
 export { SubmoduleTreeProvider } from "./submoduleTree.js";
+export { DEFAULT_CHANGES_TREE_SETTINGS, readChangesTreeSettings } from "./changesTreeSettings.js";
+export { BUILTIN_COMMAND_TITLES, BUILTIN_GIT_DEVIATIONS, BUILTIN_GROUP_LABELS } from "./builtinGitParity.js";

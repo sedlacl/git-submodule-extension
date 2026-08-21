@@ -1,11 +1,19 @@
 import type { AdoptedDiffReader, AdoptedDiffSpec, GitModelProvider } from "../git/interfaces.js";
 import { toSubmoduleViewModel } from "../git/interfaces.js";
+import type { RepositoryStateSnapshot } from "../git/repositoryState.js";
 import type { RestoreResult } from "../restore/branchRestoreService.js";
+import {
+  DEFAULT_CHANGES_TREE_SETTINGS,
+  repositoryCountBadge,
+  type ChangesTreeSettings,
+} from "./changesTreeSettings.js";
 import {
   type AdoptedFileDiff,
   type AdoptedTreeNode,
+  type ChangeFileRef,
   applyRestoreOverlay,
   buildAdoptedTree,
+  collectChangeRefs,
   collectDiffSpecs,
   errorMessageNode,
   fileNodesFromNameStatus,
@@ -20,6 +28,8 @@ export class AdoptedTreeController {
   constructor(
     private readonly model: GitModelProvider & AdoptedDiffReader,
     private readonly restoreStatus: (childRootPath: string) => RestoreResult | undefined = () => undefined,
+    private readonly repositorySnapshots: () => readonly RepositoryStateSnapshot[] = () => [],
+    private readonly settings: () => ChangesTreeSettings = () => DEFAULT_CHANGES_TREE_SETTINGS,
   ) {}
 
   async refresh(): Promise<void> {
@@ -76,20 +86,32 @@ export class AdoptedTreeController {
     return files;
   }
 
+  changesForOpenAll(node: AdoptedTreeNode): ChangeFileRef[] {
+    return collectChangeRefs(node);
+  }
+
+  countBadge(): number {
+    const settings = this.settings();
+    return this.repositorySnapshots().reduce((total, snapshot) => total + repositoryCountBadge(snapshot.groups, settings), 0);
+  }
+
   private async loadRoots(generation: number): Promise<AdoptedTreeNode[]> {
     try {
       const snapshot = await this.model.snapshot();
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
-      const roots = applyRestoreOverlay(buildAdoptedTree(toSubmoduleViewModel(snapshot)), this.restoreStatus);
+      const roots = applyRestoreOverlay(
+        buildAdoptedTree(toSubmoduleViewModel(snapshot), this.repositorySnapshots(), this.settings()),
+        this.restoreStatus,
+      );
       this.roots = roots;
       return roots;
     } catch (error) {
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
-      const roots = [errorMessageNode("root:error", error, "Failed to load submodule tree")];
+      const roots = [errorMessageNode("root:error", error, "Failed to load changes")];
       this.roots = roots;
       return roots;
     }

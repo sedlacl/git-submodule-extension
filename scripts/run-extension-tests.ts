@@ -48,7 +48,6 @@ export async function runExtensionHostTests(): Promise<number> {
       extensionTestsPath,
       launchArgs: [
         manifest.workspaceFile,
-        "--disable-extensions",
         "--disable-workspace-trust",
         "--skip-welcome",
         "--skip-release-notes",

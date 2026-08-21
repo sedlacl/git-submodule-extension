@@ -1,7 +1,7 @@
 {
   "name": "git-submodule-extension",
   "displayName": "Git Submodule Extension",
-  "description": "Recursive submodule hierarchy and adopted changes in Source Control, with safe branch restore after Git operations.",
+  "description": "Hierarchical Changes view for Git repositories and submodules, with parent-level Adopted Changes and safe branch restore.",
   "version": "0.0.1",
   "publisher": "qjohn",
   "license": "MIT",
@@ -56,9 +56,9 @@
       "scm": [
         {
           "id": "gitSubmodule.repos",
-          "name": "Submodules",
-          "icon": "$(repo)",
-          "contextualTitle": "Submodules"
+          "name": "Changes",
+          "icon": "$(git-commit)",
+          "contextualTitle": "Changes"
         }
       ]
     },
@@ -70,8 +70,38 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "gitSubmodule.commit",
+        "title": "Commit",
+        "category": "Git Submodule",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitSubmodule.generateSubmoduleChore",
+        "title": "Generate Submodule Chore",
+        "category": "Git Submodule",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitSubmodule.sync",
+        "title": "Sync",
+        "category": "Git Submodule",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "gitSubmodule.publish",
+        "title": "Publish Branch...",
+        "category": "Git Submodule",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "gitSubmodule.openDiff",
-        "title": "Open Diff",
+        "title": "Open Changes",
+        "category": "Git Submodule",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "gitSubmodule.openChange",
+        "title": "Open Changes",
         "category": "Git Submodule",
         "icon": "$(diff)"
       },
@@ -80,6 +110,83 @@
         "title": "Open All Changes",
         "category": "Git Submodule",
         "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "gitSubmodule.openFile",
+        "title": "Open File",
+        "category": "Git Submodule",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "gitSubmodule.openHEADFile",
+        "title": "Open File (HEAD)",
+        "category": "Git Submodule"
+      },
+      {
+        "command": "gitSubmodule.stage",
+        "title": "Stage Changes",
+        "category": "Git Submodule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSubmodule.stageAll",
+        "title": "Stage All Changes",
+        "category": "Git Submodule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSubmodule.stageAllTracked",
+        "title": "Stage All Tracked Changes",
+        "category": "Git Submodule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSubmodule.stageAllUntracked",
+        "title": "Stage All Untracked Changes",
+        "category": "Git Submodule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSubmodule.stageAllMerge",
+        "title": "Stage All Merge Changes",
+        "category": "Git Submodule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitSubmodule.unstage",
+        "title": "Unstage Changes",
+        "category": "Git Submodule",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "gitSubmodule.unstageAll",
+        "title": "Unstage All Changes",
+        "category": "Git Submodule",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "gitSubmodule.clean",
+        "title": "Discard Changes",
+        "category": "Git Submodule",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitSubmodule.cleanAll",
+        "title": "Discard All Changes",
+        "category": "Git Submodule",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitSubmodule.cleanAllTracked",
+        "title": "Discard All Tracked Changes",
+        "category": "Git Submodule",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitSubmodule.cleanAllUntracked",
+        "title": "Discard All Untracked Changes",
+        "category": "Git Submodule",
+        "icon": "$(discard)"
       },
       {
         "command": "gitSubmodule.retryRestore",
@@ -101,37 +208,279 @@
           "when": "false"
         },
         {
+          "command": "gitSubmodule.openChange",
+          "when": "false"
+        },
+        {
           "command": "gitSubmodule.openAllChanges",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.openFile",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.openHEADFile",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.stage",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.stageAll",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.stageAllTracked",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.stageAllUntracked",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.stageAllMerge",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.unstage",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.unstageAll",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.clean",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.cleanAll",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.cleanAllTracked",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.cleanAllUntracked",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.commit",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.generateSubmoduleChore",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.sync",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.publish",
           "when": "false"
         }
       ],
       "view/title": [
         {
-          "command": "gitSubmodule.refresh",
+          "command": "gitSubmodule.commit",
           "when": "view == gitSubmodule.repos",
           "group": "navigation@1"
         },
         {
-          "command": "gitSubmodule.retryRestore",
+          "command": "gitSubmodule.refresh",
           "when": "view == gitSubmodule.repos",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitSubmodule.retryRestore",
+          "when": "view == gitSubmodule.repos",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
-          "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(adoptedGroup|staged|unstaged|submodule)/",
+          "command": "gitSubmodule.generateSubmoduleChore",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
           "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(adoptedGroup|adoptedPointer|staged|unstaged|changeGroup)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.openFile",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./ && config.git.showInlineOpenFileAction && config.git.openDiffOnClick",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.openChange",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./ && config.git.showInlineOpenFileAction && !config.git.openDiffOnClick",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitSubmodule.stageAllMerge",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.merge",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.unstageAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.index",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.stageAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.cleanAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.stageAllTracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.cleanAllTracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.stageAllUntracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.cleanAllUntracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.stage",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(merge|workingTree|untracked)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.unstage",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.index/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitSubmodule.clean",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(workingTree|untracked)/",
+          "group": "inline@2"
         },
         {
           "command": "gitSubmodule.retryRestore",
           "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.submodule/",
-          "group": "inline@2"
+          "group": "inline@3"
         },
         {
           "command": "gitSubmodule.fetchRemote",
           "when": "view == gitSubmodule.repos && viewItem =~ /restoreBlocked/",
-          "group": "inline@3"
+          "group": "inline@4"
+        },
+        {
+          "command": "gitSubmodule.commit",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "gitSubmodule.sync",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "gitSubmodule.publish",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.noUpstream/",
+          "group": "1_modification@3"
+        },
+        {
+          "command": "gitSubmodule.refresh",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
+          "group": "1_modification@4"
+        },
+        {
+          "command": "gitSubmodule.stageAllMerge",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.merge",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.unstageAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.index",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.stageAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.cleanAll",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.stageAllTracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.cleanAllTracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.stageAllUntracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.cleanAllUntracked",
+          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.openChange",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\.(index|workingTree|untracked)/",
+          "group": "navigation"
+        },
+        {
+          "command": "gitSubmodule.openFile",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./",
+          "group": "navigation"
+        },
+        {
+          "command": "gitSubmodule.openHEADFile",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\.(index|workingTree|untracked)/",
+          "group": "navigation"
+        },
+        {
+          "command": "gitSubmodule.stage",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(merge|workingTree|untracked)/",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.unstage",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.index/",
+          "group": "1_modification"
+        },
+        {
+          "command": "gitSubmodule.clean",
+          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(workingTree|untracked)/",
+          "group": "1_modification"
         }
       ]
     },

@@ -10,7 +10,7 @@ describe("dev-ui launch config", () => {
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("builds isolated launch args with only the development extension", () => {
+  it("builds isolated launch args without disabling development extensions", () => {
     const projectRoot = getProjectRoot();
     const workspaceFile = path.join(projectRoot, "fixtures", "ui", "ui-dev.code-workspace");
     const config = buildDevUiLaunchConfig({
@@ -20,7 +20,7 @@ describe("dev-ui launch config", () => {
     });
 
     expect(config.launchArgs[0]).toBe(workspaceFile);
-    expect(config.launchArgs).toContain("--disable-extensions");
+    expect(config.launchArgs).not.toContain("--disable-extensions");
     expect(config.launchArgs.some((arg) => arg.startsWith("--extensionDevelopmentPath="))).toBe(true);
     expect(config.launchArgs.some((arg) => arg.startsWith("--user-data-dir="))).toBe(true);
     expect(config.launchArgs.some((arg) => arg.startsWith("--extensions-dir="))).toBe(true);

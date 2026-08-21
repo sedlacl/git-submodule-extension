@@ -1,14 +1,22 @@
 import * as vscode from "vscode";
 import type { API, GitExtension, Repository } from "./git.js";
+import { overlayHierarchicalRepositoryState, type HierarchicalRepositoryView } from "./hierarchicalRepositoryState.js";
+import { sameRepoPath } from "./pathUtils.js";
+import {
+  bindRepositoryOperations,
+  snapshotRepository,
+  type GitRepositoryHandle,
+  type RepositoryStateSnapshot,
+} from "./repositoryState.js";
+import type { WorkspaceGitModel } from "./types.js";
 
-export interface GitRepositoryHandle {
-  rootPath: string;
-}
+export type { GitRepositoryHandle } from "./repositoryState.js";
 
 export interface GitApiListener {
   onOpenRepository?(rootPath: string): void;
   onCloseRepository?(rootPath: string): void;
   onDidChangeRepository?(rootPath: string): void;
+  onDidChangeRepositoryState?(snapshot: RepositoryStateSnapshot): void;
 }
 
 /**
@@ -28,6 +36,10 @@ export class VsCodeGitApiAdapter {
     return this.api.git.path;
   }
 
+  toGitUri(filePath: string, ref: string): vscode.Uri {
+    return this.api.toGitUri(vscode.Uri.file(filePath), ref);
+  }
+
   getWorkspaceFolderPaths(): string[] {
     return this.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
   }
@@ -37,7 +49,25 @@ export class VsCodeGitApiAdapter {
   }
 
   getOpenRepositories(): GitRepositoryHandle[] {
-    return this.getOpenRepositoryPaths().map((rootPath) => ({ rootPath }));
+    return this.api.repositories.map((repository) => this.toHandle(repository));
+  }
+
+  getRepositoryHandle(rootPath: string): GitRepositoryHandle | undefined {
+    const repository = this.findRepository(rootPath);
+    return repository ? this.toHandle(repository) : undefined;
+  }
+
+  snapshotAll(): RepositoryStateSnapshot[] {
+    return this.api.repositories.map((repository) => snapshotRepository(repository));
+  }
+
+  snapshotRepository(rootPath: string): RepositoryStateSnapshot | undefined {
+    const repository = this.findRepository(rootPath);
+    return repository ? snapshotRepository(repository) : undefined;
+  }
+
+  overlayHierarchicalState(model: WorkspaceGitModel): HierarchicalRepositoryView[] {
+    return overlayHierarchicalRepositoryState(model, this.snapshotAll());
   }
 
   subscribe(listener: GitApiListener): vscode.Disposable {
@@ -48,7 +78,11 @@ export class VsCodeGitApiAdapter {
       this.repoDisposables.get(rootPath)?.dispose();
       this.repoDisposables.set(
         rootPath,
-        repository.state.onDidChange(() => listener.onDidChangeRepository?.(rootPath)),
+        repository.state.onDidChange(() => {
+          const snapshot = snapshotRepository(repository);
+          listener.onDidChangeRepository?.(rootPath);
+          listener.onDidChangeRepositoryState?.(snapshot);
+        }),
       );
     };
 
@@ -60,6 +94,7 @@ export class VsCodeGitApiAdapter {
       this.api.onDidOpenRepository((repository) => {
         attachRepo(repository);
         listener.onOpenRepository?.(repository.rootUri.fsPath);
+        listener.onDidChangeRepositoryState?.(snapshotRepository(repository));
       }),
     );
     disposables.push(
@@ -80,6 +115,24 @@ export class VsCodeGitApiAdapter {
       }
       this.repoDisposables.clear();
     });
+  }
+
+  private findRepository(rootPath: string): Repository | undefined {
+    return this.api.repositories.find((repository) => sameRepoPath(repository.rootUri.fsPath, rootPath));
+  }
+
+  private toHandle(repository: Repository): GitRepositoryHandle {
+    return {
+      rootPath: repository.rootUri.fsPath,
+      get inputBoxValue() {
+        return repository.inputBox.value;
+      },
+      set inputBoxValue(value: string) {
+        repository.inputBox.value = value;
+      },
+      snapshot: () => snapshotRepository(repository),
+      operations: () => bindRepositoryOperations(repository),
+    };
   }
 }
 

@@ -12,3 +12,5 @@ export * from "./declaredSubmodules.js";
 export * from "./gitRepositoryReader.js";
 export * from "./workspaceDiscovery.js";
 export * from "./gitModelService.js";
+export * from "./repositoryState.js";
+export * from "./hierarchicalRepositoryState.js";

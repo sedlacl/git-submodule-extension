@@ -29,7 +29,6 @@ export function buildDevUiLaunchConfig(options: {
   const extensionDevelopmentPath = options.projectRoot;
   const launchArgs = [
     options.workspaceFile,
-    "--disable-extensions",
     `--extensionDevelopmentPath=${extensionDevelopmentPath}`,
     "--no-sandbox",
     "--disable-gpu-sandbox",
