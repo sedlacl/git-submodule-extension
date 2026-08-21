@@ -34,8 +34,9 @@ function menu(command: string, groupPrefix: string, whenIncludes: string): boole
 }
 
 describe("built-in Git parity", () => {
-  it("names the SCM pane Changes", () => {
+  it("names the SCM pane CHANGES with submodules", () => {
     const view = pkg.contributes.views.scm.find((entry) => entry.id === VIEW_ID);
+    expect(BUILTIN_PANE_NAME).toBe("CHANGES with submodules");
     expect(view?.name).toBe(BUILTIN_PANE_NAME);
     expect(view?.contextualTitle).toBe(BUILTIN_PANE_NAME);
   });

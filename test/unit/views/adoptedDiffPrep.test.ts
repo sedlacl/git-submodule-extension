@@ -65,6 +65,27 @@ describe("prepareFileDiff", () => {
       status: "modified",
     });
   });
+
+  it("encodes # % and spaces in the repo-root query so they are not URI fragments", () => {
+    const repoRoot =
+      "R:\\External\\git-submodule-extension\\fixtures\\ui\\infra-deploy\\submodules\\usy_aflex_initdatag01#t1";
+    const parts = gitShowUriParts({
+      repoRoot,
+      sha: FROM,
+      gitPath: "local/t1-wip.txt",
+      status: "modified",
+    });
+    expect(parts.query).toContain("%23t1");
+    expect(parts.query).not.toMatch(/#t1/);
+    expect(parts.query).toContain("100%25done");
+    expect(parseGitShowUri(gitShowUriParts({
+      repoRoot: `${repoRoot}\\100%done`,
+      sha: FROM,
+      gitPath: "my file.txt",
+    })).repoRoot).toBe(`${repoRoot}\\100%done`);
+    expect(parseGitShowUri(parts).repoRoot).toBe(repoRoot);
+    expect(parseGitShowUri(parts).gitPath).toBe("local/t1-wip.txt");
+  });
 });
 
 describe("openPreparedChanges", () => {

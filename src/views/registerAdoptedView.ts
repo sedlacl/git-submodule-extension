@@ -13,7 +13,7 @@ import {
   prepareOpenAll,
 } from "./adoptedDiffPrep.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";
-import { changeOpenPlan } from "./changeOpenPlan.js";
+import { changeOpenTarget } from "./changeOpenPlan.js";
 import { readChangesTreeSettings } from "./changesTreeSettings.js";
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
@@ -207,24 +207,22 @@ async function openAll(
 }
 
 async function openChangeResource(gitApi: VsCodeGitApiAdapter, change: ChangeFileRef): Promise<void> {
-  const plan = changeOpenPlan(change);
-  const fileUri = vscode.Uri.file(change.resource.uri);
-  const rightRef =
-    plan.right === "index"
-      ? ""
-      : plan.right === "ours"
-        ? "~2"
-        : plan.right === "theirs"
-          ? "~3"
-          : "HEAD";
-  const right = plan.right === "file" ? fileUri : gitApi.toGitUri(change.resource.uri, rightRef);
-  if (!plan.leftRef) {
-    await vscode.commands.executeCommand("vscode.open", right);
+  const target = changeOpenTarget(change);
+  const right = toVscodeChangeUri(gitApi, target.right);
+  if (target.command === "vscode.open" || !target.left) {
+    await vscode.commands.executeCommand("vscode.open", right, { preview: true }, target.title);
     return;
   }
-  const leftPath = plan.leftPath === "original" ? change.resource.originalUri : change.resource.uri;
-  const left = gitApi.toGitUri(leftPath, plan.leftRef);
-  await vscode.commands.executeCommand("vscode.diff", left, right, plan.title);
+  const left = toVscodeChangeUri(gitApi, target.left);
+  await vscode.commands.executeCommand("vscode.diff", left, right, target.title);
+}
+
+function toVscodeChangeUri(
+  gitApi: VsCodeGitApiAdapter,
+  side: { kind: "file" | "git"; fsPath: string; ref?: string },
+): vscode.Uri {
+  // Uri.file keeps `#` / `?` in the path; Uri.parse('file://' + fsPath) would treat them as fragment/query.
+  return side.kind === "file" ? vscode.Uri.file(side.fsPath) : gitApi.toGitUri(side.fsPath, side.ref ?? "");
 }
 
 async function commandExists(command: string): Promise<boolean> {

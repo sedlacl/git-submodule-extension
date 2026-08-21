@@ -5,7 +5,15 @@ const EXTENSION_ID = "qjohn.git-submodule-extension";
 const REQUIRED_COMMANDS = [
   "gitSubmodule.refresh",
   "gitSubmodule.openDiff",
+  "gitSubmodule.openChange",
   "gitSubmodule.openAllChanges",
+  "gitSubmodule.stage",
+  "gitSubmodule.unstage",
+  "gitSubmodule.clean",
+  "gitSubmodule.commit",
+  "gitSubmodule.generateSubmoduleChore",
+  "gitSubmodule.sync",
+  "gitSubmodule.publish",
   "gitSubmodule.retryRestore",
   "gitSubmodule.fetchRemote",
 ];

@@ -5,7 +5,7 @@
 
 # Built-in Git parity
 
-This extension’s **Changes** pane is a native SCM `TreeView`, not a
+This extension’s **CHANGES with submodules** pane is a native SCM `TreeView`, not a
 `SourceControl` provider. It copies everyday built-in Git vocabulary and
 layout from microsoft/vscode `extensions/git` tag **1.96.0**
 (`src/repository.ts`, `package.nls.json`, `package.json` menus) while using
@@ -33,7 +33,7 @@ are the machine-checked source for labels and the deviation list below.
 
 | id | Deviation |
 | --- | --- |
-| `treeview-not-sourcecontrol` | Hierarchy uses a native SCM TreeView named Changes; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
+| `treeview-not-sourcecontrol` | Hierarchy uses a native SCM TreeView named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
 | `no-proposed-scm-api` | No `scmActionButton`, `scmMultiDiffEditor`, `scmValidation`, merge editor, or internal `git.*` command/resource contracts. |
 | `command-ids` | Commands are `gitSubmodule.*` contributed on this view, not built-in `git.*` IDs. |
 | `adopted-changes-group` | Adopted Changes is an extra parent-level group that explains gitlink pointer diffs; the gitlink resource also stays in Staged/Changes. |

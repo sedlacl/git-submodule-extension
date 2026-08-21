@@ -14,7 +14,7 @@ Publisher: `qjohn`. Identifier: `git-submodule-extension`.
 
 The built-in Git **Changes** panel cannot be replaced or hidden through a stable API — hide it manually from the SCM view title menu if you want this pane to be the daily driver.
 
-This extension contributes a native SCM `TreeView` named **Changes** that lists:
+This extension contributes a native SCM `TreeView` named **CHANGES with submodules** that lists:
 
 - workspace folders as sibling repositories (including multi-root workspaces), each with a branch/upstream description (`main*+! ↔ origin/main`)
 - **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations

@@ -37,7 +37,7 @@ export const BUILTIN_COMMAND_TITLES = {
   publish: "Publish Branch...",
 } as const;
 
-export const BUILTIN_PANE_NAME = "Changes";
+export const BUILTIN_PANE_NAME = "CHANGES with submodules";
 
 /**
  * Intentional deviations from built-in Git SCM. Keep this list in sync with
@@ -47,7 +47,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "treeview-not-sourcecontrol",
     summary:
-      "Hierarchy uses a native SCM TreeView named Changes; the built-in Git Changes panel is not replaced or hidden (no stable API).",
+      "Hierarchy uses a native SCM TreeView named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API).",
   },
   {
     id: "no-proposed-scm-api",

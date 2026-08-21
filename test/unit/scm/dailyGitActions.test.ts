@@ -13,6 +13,7 @@ import {
 } from "../../../src/scm/dailyGitActions.js";
 import type { SubmoduleChoreReadService } from "../../../src/scm/submoduleChoreTypes.js";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
+import { sameRepoPath } from "../../../src/git/pathUtils.js";
 
 interface Call {
   operation: string;
@@ -147,11 +148,13 @@ function containerNode(
 }
 
 function harness(repositories: FakeRepository[], ui = new FakeUi(), chore?: SubmoduleChoreReadService) {
-  const byRoot = new Map(repositories.map((repository) => [repository.rootPath, repository]));
   return {
     ui,
     actions: new DailyGitActions(
-      { getRepositoryHandle: (rootPath) => byRoot.get(rootPath) },
+      {
+        getRepositoryHandle: (rootPath) =>
+          repositories.find((repository) => sameRepoPath(repository.rootPath, rootPath)),
+      },
       ui,
       chore,
     ),
@@ -413,5 +416,17 @@ describe("DailyGitActions repository commands", () => {
       args: [preparedMessage, undefined],
     });
     expect(repository.inputBoxValue).toBe("");
+  });
+
+  it("stages through a handle whose rootPath separators differ from the tree node", async () => {
+    const modelRoot = process.cwd();
+    const handleRoot = modelRoot.replace(/\\/g, "/");
+    const dirty = resource(modelRoot, "src/a.ts", ResourceStatus.MODIFIED);
+    const repository = new FakeRepository(handleRoot, snapshot(handleRoot, { workingTree: [dirty] }));
+    const { actions } = harness([repository]);
+
+    await actions.stage([changeNode(modelRoot, "workingTree", dirty)]);
+
+    expect(repository.calls).toEqual([{ operation: "add", args: [[dirty.uri]] }]);
   });
 });

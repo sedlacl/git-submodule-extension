@@ -56,9 +56,9 @@
       "scm": [
         {
           "id": "gitSubmodule.repos",
-          "name": "Changes",
+          "name": "CHANGES with submodules",
           "icon": "$(git-commit)",
-          "contextualTitle": "Changes"
+          "contextualTitle": "CHANGES with submodules"
         }
       ]
     },

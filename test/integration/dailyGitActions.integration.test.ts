@@ -16,6 +16,7 @@ import {
 } from "../../src/scm/dailyGitActions.js";
 import { SubmoduleChoreReadService } from "../../src/scm/submoduleChoreService.js";
 import type { AdoptedTreeNode } from "../../src/views/adoptedViewModel.js";
+import { buildAdoptedTree } from "../../src/views/adoptedViewModel.js";
 import { createGitCli, createRestoreRepos, makeTempRoot, removeTempRoot, snapshotRepositoryFromGit } from "./helpers.js";
 
 const roots: string[] = [];
@@ -65,11 +66,16 @@ describe("DailyGitActions temporary repository fixture", () => {
     const a = change(root, "src/a.ts");
     const b = change(root, "src/b.ts");
     const folder: AdoptedTreeNode = {
-      ...node(root, a),
       id: `${root}:folder:src`,
       kind: "folder",
+      repositoryRoot: root,
+      changeGroup: "workingTree",
       label: "src",
+      tooltip: "src",
       collapsible: true,
+      expandByDefault: true,
+      contextValue: "test.folder",
+      iconId: "folder",
       children: [node(root, a), node(root, b)],
     };
     const repository = new GitBackedRepository(root);
@@ -107,9 +113,8 @@ describe("DailyGitActions temporary repository fixture", () => {
 
     await actions.discard([node(root, renamed, "workingTree")]);
     expect(fs.existsSync(path.join(root, "new-name.ts"))).toBe(true);
-    ui.nextConfirmation = "Discard Changes";
-    await actions.discard([node(root, renamed, "workingTree")]);
     expect(ui.confirmations[0]?.message).toContain("restore the original file name");
+    expect(ui.confirmations[0]?.actions).toEqual(["Discard Changes"]);
 
     ui.nextConfirmation = "Restore file";
     await actions.discard([node(root, deleted, "workingTree")]);
@@ -142,10 +147,11 @@ describe("DailyGitActions temporary repository fixture", () => {
     const actions = actionsFor([repository], ui);
 
     await actions.stage([node(root, conflict, "merge")]);
-    expect(runGit(root, ["diff", "--cached", "--name-only"]).trim()).toBe("");
+    expect(runGit(root, ["ls-files", "-u"]).trim().length).toBeGreaterThan(0);
 
     ui.nextConfirmation = "Yes";
     await actions.stage([node(root, conflict, "merge")]);
+    expect(runGit(root, ["ls-files", "-u"]).trim()).toBe("");
     expect(runGit(root, ["diff", "--cached", "--name-only"]).trim()).toBe("conflict.ts");
     expect(ui.confirmations[0]?.message).toContain("merge conflicts");
   });
@@ -156,11 +162,10 @@ describe("DailyGitActions temporary repository fixture", () => {
     const root = path.join(fixture, "repo");
     initRepo(root, "main");
     commitFile(root, "a.ts", "a\n", "init");
+    commitFile(root, "b.ts", "b\n", "add b");
     fs.writeFileSync(path.join(root, "a.ts"), "staged\n");
     runGit(root, ["add", "--", "a.ts"]);
     fs.writeFileSync(path.join(root, "b.ts"), "unstaged\n");
-    runGit(root, ["add", "--", "b.ts"]);
-    runGit(root, ["restore", "--staged", "--", "b.ts"]);
 
     const repository = new GitBackedRepository(root);
     const ui = new RecordingUi();
@@ -247,6 +252,60 @@ describe("DailyGitActions temporary repository fixture", () => {
     const actions = actionsFor([repository], NO_PROMPT_UI);
     await actions.stage([node(root, dirty)]);
     expect(runGit(root, ["diff", "--cached", "--name-only"]).trim()).toBe("a.ts");
+  });
+
+  it("puts rename, delete, untracked, and conflict into built-in groups on a temporary repo", async () => {
+    const fixture = makeTempRoot("git-submodule-groups-");
+    roots.push(fixture);
+    const root = path.join(fixture, "repo");
+    initRepo(root, "main");
+    commitFile(root, "keep.ts", "keep\n", "init");
+    commitFile(root, "old.ts", "old\n", "add old");
+    commitFile(root, "gone.ts", "gone\n", "add gone");
+    commitFile(root, "conflict.ts", "base\n", "conflict base");
+    runGit(root, ["checkout", "-b", "other"]);
+    commitFile(root, "conflict.ts", "theirs\n", "theirs");
+    runGit(root, ["checkout", "main"]);
+    commitFile(root, "conflict.ts", "ours\n", "ours");
+    try {
+      runGit(root, ["merge", "other"]);
+    } catch {
+      // Merge conflict is the setup.
+    }
+    runGit(root, ["mv", "old.ts", "renamed.ts"]);
+    fs.unlinkSync(path.join(root, "gone.ts"));
+    fs.writeFileSync(path.join(root, "fresh.ts"), "new\n");
+
+    const snapshot = snapshotRepositoryFromGit(root);
+    const tree = buildAdoptedTree(
+      {
+        roots: [
+          {
+            id: root,
+            kind: "workspace-root",
+            rootPath: root,
+            workspaceFolderPath: root,
+            displayName: "httpendpoint-like",
+            children: [],
+          },
+        ],
+      },
+      [snapshot],
+    );
+    const repo = tree[0];
+    expect(repo?.children.map((child) => child.label)).toEqual([
+      "Merge Changes",
+      "Staged Changes",
+      "Changes",
+    ]);
+    expect(repo?.children.find((child) => child.label === "Merge Changes")?.children.map((child) => child.label)).toContain(
+      "conflict.ts",
+    );
+    expect(repo?.children.find((child) => child.label === "Staged Changes")?.children.map((child) => child.label)).toContain(
+      "renamed.ts",
+    );
+    const working = repo?.children.find((child) => child.label === "Changes")?.children.map((child) => child.label) ?? [];
+    expect(working).toEqual(expect.arrayContaining(["gone.ts", "fresh.ts"]));
   });
 });
 
