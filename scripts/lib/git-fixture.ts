@@ -17,7 +17,15 @@ export class GitCommandError extends Error {
 export function runGit(cwd: string, args: string[], env?: NodeJS.ProcessEnv): string {
   const result = spawnSync(
     "git",
-    ["-c", "protocol.file.allow=always", ...args],
+    [
+      "-c",
+      "protocol.file.allow=always",
+      "-c",
+      "user.email=fixture@example.local",
+      "-c",
+      "user.name=UI Fixture Generator",
+      ...args,
+    ],
     {
       cwd,
       encoding: "utf8",
