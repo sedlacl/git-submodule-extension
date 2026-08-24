@@ -4,7 +4,7 @@
   <img src="media/icon.png" width="128" height="128" alt="Git Submodule Extension icon"/>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![Open VSX](https://img.shields.io/open-vsx/v/qjohn/git-submodule-extension?label=open%20vsx&color=blue)](https://open-vsx.org/extension/qjohn/git-submodule-extension)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 VS Code extension for **hierarchical Git changes with submodules**: one SCM webview lists workspace repos and nested submodule checkouts, nests gitlink pointer diffs under the matching change row, and optionally restores submodule branches after parent Git operations (fail-closed).
