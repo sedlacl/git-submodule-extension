@@ -53,6 +53,8 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<AdoptedTre
       item.resourceUri = toVscodeUri(prepareFileDiff(element.fileDiff).reveal);
     } else if (element.change && element.decoration) {
       item.resourceUri = changeDecorationUri(element);
+    } else if ((element.kind === "workspace-root" || element.kind === "submodule") && element.decoration) {
+      item.resourceUri = repoDecorationUri(element);
     } else if (element.kind === "folder" && element.resourceUri) {
       item.resourceUri = vscode.Uri.file(element.resourceUri);
     }
@@ -83,8 +85,9 @@ export class AdoptedFileDecorationProvider implements vscode.FileDecorationProvi
       return undefined;
     }
     const query = new URLSearchParams(uri.query);
-    const badge = query.get("badge");
-    if (badge) {
+    const kind = query.get("kind");
+    if (kind === "change" || kind === "repo") {
+      const badge = query.get("badge") ?? undefined;
       const colorId = query.get("color");
       return new vscode.FileDecoration(
         badge,
@@ -106,7 +109,9 @@ export function changeDecorationUri(node: AdoptedTreeNode): vscode.Uri {
   const query = new URLSearchParams();
   query.set("kind", "change");
   if (node.decoration) {
-    query.set("badge", node.decoration.badge);
+    if (node.decoration.badge) {
+      query.set("badge", node.decoration.badge);
+    }
     query.set("tooltip", node.decoration.tooltip);
     query.set("color", node.decoration.themeColorId);
   }
@@ -117,6 +122,27 @@ export function changeDecorationUri(node: AdoptedTreeNode): vscode.Uri {
   return vscode.Uri.from({
     scheme: GIT_SHOW_SCHEME,
     path: `/${relativePath.replace(/^\/+/, "")}`,
+    query: query.toString(),
+  });
+}
+
+export function repoDecorationUri(node: AdoptedTreeNode): vscode.Uri {
+  const query = new URLSearchParams();
+  query.set("kind", "repo");
+  if (node.decoration?.badge) {
+    query.set("badge", node.decoration.badge);
+  }
+  if (node.decoration) {
+    query.set("tooltip", node.decoration.tooltip);
+    query.set("color", node.decoration.themeColorId);
+  }
+  if (node.repositoryRoot) {
+    query.set("root", node.repositoryRoot);
+  }
+  const path = node.repositoryRoot?.replace(/^\/+/, "") || node.label;
+  return vscode.Uri.from({
+    scheme: GIT_SHOW_SCHEME,
+    path: `/${path}`,
     query: query.toString(),
   });
 }

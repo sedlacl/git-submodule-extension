@@ -24,6 +24,7 @@ are the machine-checked source for labels and the deviation list below.
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
 - Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
+- Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
 - File theme icons when `git.decorations.enabled` is true (default)
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`

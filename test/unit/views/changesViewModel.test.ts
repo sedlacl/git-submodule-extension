@@ -181,6 +181,10 @@ describe("buildAdoptedTree change groups", () => {
     const http = tree[0];
     expect(http?.label).toBe("httpendpoint");
     expect(http?.description).toContain("main");
+    expect(http?.decoration).toEqual({
+      tooltip: "Submodule changes",
+      themeColorId: "gitDecoration.submoduleResourceForeground",
+    });
     expect(groupLabels(http?.children)).toEqual([
       BUILTIN_GROUP_LABELS.merge,
       BUILTIN_GROUP_LABELS.index,
@@ -265,6 +269,28 @@ describe("buildAdoptedTree change groups", () => {
     expect(root?.children[0]?.label).toBe(BUILTIN_GROUP_LABELS.workingTree);
     expect(root?.children[0]?.description).toBe("0");
     expect(root?.children[0]?.children).toEqual([]);
+    expect(root?.decoration).toBeUndefined();
+  });
+
+  it("colors a parent repo when a child checkout has local changes and the parent gitlinks are clean", () => {
+    const child = submodule({
+      rootPath: "/ws/app/mod",
+      parentRootPath: "/ws/app",
+      relativePath: "mod",
+      pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: HEAD },
+    });
+    const [root] = buildAdoptedTree(
+      { roots: [workspaceRoot("/ws/app", [child])] },
+      [
+        snapshot("/ws/app", {}),
+        snapshot("/ws/app/mod", {
+          index: [resource("/ws/app/mod", "notes.txt", ResourceStatus.INDEX_ADDED)],
+        }),
+      ],
+    );
+    expect(root?.decoration?.themeColorId).toBe("gitDecoration.submoduleResourceForeground");
+    expect(root?.decoration?.badge).toBeUndefined();
+    expect(byLabel(root?.children, "mod")?.decoration?.themeColorId).toBeUndefined();
   });
 
   it("shows Untracked Changes separately and empty Staged when settings require it", () => {
@@ -309,6 +335,7 @@ describe("buildAdoptedTree change groups", () => {
     );
     expect(groupLabels(root?.children)).toEqual([BUILTIN_GROUP_LABELS.workingTree]);
     expect(root?.children[0]?.children.map((child) => child.label)).toEqual(["dirty.ts"]);
+    expect(root?.decoration).toBeUndefined();
   });
 
   it("nests pointer diffs under the matching gitlink row, not on the child checkout", () => {

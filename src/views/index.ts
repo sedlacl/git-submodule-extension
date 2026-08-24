@@ -9,6 +9,8 @@ export {
   collectDiffSpecs,
   fileDecoration,
   fileNodesFromNameStatus,
+  hasPropagatedSubmoduleChanges,
+  propagatedSubmoduleDecoration,
   submoduleIcon,
   submoduleStatusSummary,
   treeCollapsibleMode,

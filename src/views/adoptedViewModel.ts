@@ -63,7 +63,7 @@ export interface ChangeFileRef {
 }
 
 export interface FileDecorationSpec {
-  badge: string;
+  badge?: string;
   tooltip: string;
   themeColorId: string;
 }
@@ -110,6 +110,11 @@ const SUBMODULE_DECORATION: FileDecorationSpec = {
   badge: "S",
   tooltip: "Submodule",
   themeColorId: "gitDecoration.submoduleResourceForeground",
+};
+
+const PROPAGATED_SUBMODULE_DECORATION: FileDecorationSpec = {
+  tooltip: "Submodule changes",
+  themeColorId: SUBMODULE_DECORATION.themeColorId,
 };
 
 const FILE_ICON: Record<NameStatusKind, { iconId: string; themeColorId: string }> = {
@@ -276,6 +281,7 @@ function buildWorkspaceRootNode(
     expandByDefault: children.length > 0,
     contextValue: repositoryContextValue(CONTEXT.workspaceRoot, snapshot),
     iconId: "repo",
+    decoration: propagatedSubmoduleDecoration(children),
     clickCommand: { command: COMMANDS.checkoutBranch, title: "Checkout Branch…" },
     children,
   };
@@ -303,6 +309,7 @@ function buildSubmoduleTreeNode(
     contextValue: repositoryContextValue(CONTEXT.submodule, snapshot),
     iconId: icon.iconId,
     themeColorId: icon.themeColorId,
+    decoration: propagatedSubmoduleDecoration(children),
     clickCommand: { command: COMMANDS.checkoutBranch, title: "Checkout Branch…" },
     restoreTarget: {
       parentRootPath: node.parentRootPath,
@@ -733,6 +740,36 @@ function fileTooltip(entry: NameStatusEntry, spec: AdoptedDiffSpec): string {
   const rename = entry.oldPath ? `\n${entry.oldPath} → ${entry.path}` : `\n${entry.path}`;
   const similarity = entry.similarity !== undefined ? `\nsimilarity ${entry.similarity}%` : "";
   return `${fileDecoration(entry.status).tooltip} (${spec.kind})${rename}\n${shortSha(spec.fromSha)} → ${shortSha(spec.toSha)}${similarity}`;
+}
+
+export function propagatedSubmoduleDecoration(
+  children: readonly AdoptedTreeNode[],
+): FileDecorationSpec | undefined {
+  return hasPropagatedSubmoduleChanges(children) ? PROPAGATED_SUBMODULE_DECORATION : undefined;
+}
+
+export function hasPropagatedSubmoduleChanges(nodes: readonly AdoptedTreeNode[]): boolean {
+  for (const node of nodes) {
+    if (node.kind === "change" && node.contextValue?.includes(CONTEXT.gitlink)) {
+      return true;
+    }
+    if (node.kind === "submodule" && (submoduleRepoHasLocalChanges(node) || hasPropagatedSubmoduleChanges(node.children))) {
+      return true;
+    }
+    if (
+      (node.kind === "change-group" || node.kind === "folder" || node.kind === "change") &&
+      hasPropagatedSubmoduleChanges(node.children)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function submoduleRepoHasLocalChanges(node: AdoptedTreeNode): boolean {
+  return node.children.some(
+    (child) => child.kind === "change-group" && child.description !== "0" && child.children.length > 0,
+  );
 }
 
 export function usesThemeFileIcon(node: AdoptedTreeNode): boolean {

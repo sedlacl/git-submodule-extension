@@ -139,6 +139,8 @@ describe("buildAdoptedTree", () => {
     expect(tree[0]?.kind).toBe("workspace-root");
     expect(treeItemCodicon(tree[0]!)).toEqual({ id: "repo", colorId: "foreground" });
     expect(treeItemFileKindIcon(tree[0]!)).toBeUndefined();
+    expect(tree[0]?.decoration?.themeColorId).toBe("gitDecoration.submoduleResourceForeground");
+    expect(tree[1]?.decoration).toBeUndefined();
     expect(tree[0]?.children.map((child) => child.kind)).toEqual([
       "change-group",
       "change-group",
