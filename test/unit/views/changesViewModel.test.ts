@@ -18,6 +18,7 @@ import {
   buildAdoptedTree,
   treeCollapsibleMode,
   treeItemCommand,
+  treeItemFileKindIcon,
   usesThemeFileIcon,
   type AdoptedTreeNode,
 } from "../../../src/views/adoptedViewModel.js";
@@ -228,6 +229,7 @@ describe("buildAdoptedTree change groups", () => {
       kind: "staged",
     });
     expect(usesThemeFileIcon(gitlinkChange!)).toBe(true);
+    expect(treeItemFileKindIcon(gitlinkChange!)).toBe("file");
     expect(treeItemCommand(gitlinkChange!)?.title).toBe(BUILTIN_COMMAND_TITLES.openChange);
     expect(treeItemCommand(gitlinkChange!)?.command).toBe(COMMANDS.openChange);
 
@@ -406,5 +408,28 @@ describe("buildAdoptedTree change groups", () => {
     expect(stagedFile?.decoration?.badge).toBe("R");
     expect(byLabel(changes?.children, "gone.ts")?.decoration?.badge).toBe("D");
     expect(byLabel(changes?.children, "fresh.ts")?.decoration?.badge).toBe("A");
+  });
+
+  it("marks a dirty checkout with + on the gitlink pointer and the child repo row", () => {
+    const child = submodule({
+      rootPath: "/ws/app/mod",
+      parentRootPath: "/ws/app",
+      relativePath: "mod",
+      pins: { headGitlinkSha: HEAD, indexGitlinkSha: INDEX, checkoutHeadSha: INDEX },
+      workingState: { detached: true },
+    });
+    const [root] = buildAdoptedTree(
+      { roots: [workspaceRoot("/ws/app", [child])] },
+      [
+        snapshot("/ws/app", { index: [resource("/ws/app", "mod", ResourceStatus.INDEX_MODIFIED)] }),
+        snapshot("/ws/app/mod", { index: [resource("/ws/app/mod", "notes.txt", ResourceStatus.INDEX_ADDED)] }, {
+          commit: INDEX,
+          detached: true,
+        }),
+      ],
+    );
+    const gitlink = findByRelativePath(byLabel(root?.children, BUILTIN_GROUP_LABELS.index)?.children, "mod");
+    expect(gitlink?.description).toBe(`${HEAD.slice(0, 7)} → ${INDEX.slice(0, 7)}+`);
+    expect(byLabel(root?.children, "mod")?.description).toBe(`${INDEX.slice(0, 8)}+`);
   });
 });

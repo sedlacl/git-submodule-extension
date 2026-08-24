@@ -98,7 +98,7 @@ describe("visibleTreeGroups", () => {
 });
 
 describe("repositoryBranchDescription", () => {
-  it("shows only the local branch and a dirty working-tree marker", () => {
+  it("shows only the local branch and built-in dirty suffixes", () => {
     const head = {
       name: "main",
       detached: false,
@@ -106,12 +106,30 @@ describe("repositoryBranchDescription", () => {
       behind: 1,
       upstream: { remote: "origin", name: "main" },
     };
-    expect(repositoryBranchDescription(head, mixedWorking)).toBe("main*");
+    expect(repositoryBranchDescription(head, mixedWorking)).toBe("main*+!");
+    expect(
+      repositoryBranchDescription(head, {
+        ...emptyChangeGroups(),
+        workingTree: [change("dirty.ts", ResourceStatus.MODIFIED)],
+      }),
+    ).toBe("main*");
+    expect(
+      repositoryBranchDescription(head, {
+        ...emptyChangeGroups(),
+        index: [change("staged.ts", ResourceStatus.INDEX_ADDED)],
+      }),
+    ).toBe("main+");
   });
 
-  it("uses an 8-character SHA when detached", () => {
+  it("uses an 8-character SHA when detached and + when the index has changes", () => {
     const head = { commit: "cccccccccccccccccccccccccccccccccccccccc", detached: true };
     expect(repositoryBranchDescription(head, emptyChangeGroups())).toBe("cccccccc");
+    expect(
+      repositoryBranchDescription(head, {
+        ...emptyChangeGroups(),
+        index: [change("staged.ts", ResourceStatus.INDEX_ADDED)],
+      }),
+    ).toBe("cccccccc+");
   });
 });
 

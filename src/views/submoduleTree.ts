@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { AdoptedTreeController } from "./adoptedTreeController.js";
 import { parseGitShowUri, prepareFileDiff, type GitShowUriParts } from "./adoptedDiffPrep.js";
-import { treeCollapsibleMode, treeItemCommand, tryFileDecoration, usesThemeFileIcon, type AdoptedTreeNode } from "./adoptedViewModel.js";
+import { treeCollapsibleMode, treeItemCodicon, treeItemCommand, treeItemFileKindIcon, tryFileDecoration, type AdoptedTreeNode } from "./adoptedViewModel.js";
 import { GIT_SHOW_SCHEME } from "./constants.js";
 
 export function toVscodeUri(parts: GitShowUriParts): vscode.Uri {
@@ -37,11 +37,16 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<AdoptedTre
     item.contextValue = element.contextValue;
     item.description = element.description;
 
-    if (!usesThemeFileIcon(element) && element.iconId) {
-      item.iconPath = new vscode.ThemeIcon(
-        element.iconId,
-        element.themeColorId ? new vscode.ThemeColor(element.themeColorId) : undefined,
-      );
+    const fileKind = treeItemFileKindIcon(element);
+    if (fileKind === "folder") {
+      item.iconPath = vscode.ThemeIcon.Folder;
+    } else if (fileKind === "file") {
+      item.iconPath = vscode.ThemeIcon.File;
+    } else {
+      const codicon = treeItemCodicon(element);
+      if (codicon) {
+        item.iconPath = new vscode.ThemeIcon(codicon.id, new vscode.ThemeColor(codicon.colorId));
+      }
     }
 
     if (element.fileDiff) {

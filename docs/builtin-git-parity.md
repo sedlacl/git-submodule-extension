@@ -23,7 +23,7 @@ are the machine-checked source for labels and the deviation list below.
 - Status letters, tooltip text, and `gitDecoration.*` colors from
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
-- Compact clickable branch description (`name*` when dirty); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
+- Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
 - File theme icons when `git.decorations.enabled` is true (default)
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`

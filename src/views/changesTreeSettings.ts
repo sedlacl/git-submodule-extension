@@ -139,11 +139,22 @@ export function repositoryBranchDescription(
   if (!name) {
     return "";
   }
-  const dirty =
-    groups.workingTree.length + groups.untracked.length > 0
-      ? "*"
-      : "";
-  return `${name}${dirty}`;
+  return `${name}${headDirtySuffix(groups)}`;
+}
+
+/**
+ * Built-in `Repository.headLabel` suffixes from microsoft/vscode Git tag 1.96.0:
+ * `*` working tree / untracked, `+` staged, `!` merge.
+ */
+export function headDirtySuffix(groups: RepositoryChangeGroups | undefined): string {
+  if (!groups) {
+    return "";
+  }
+  return (
+    (groups.workingTree.length + groups.untracked.length > 0 ? "*" : "") +
+    (groups.index.length > 0 ? "+" : "") +
+    (groups.merge.length > 0 ? "!" : "")
+  );
 }
 
 /**

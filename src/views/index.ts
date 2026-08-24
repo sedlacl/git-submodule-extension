@@ -12,7 +12,9 @@ export {
   submoduleIcon,
   submoduleStatusSummary,
   treeCollapsibleMode,
+  treeItemCodicon,
   treeItemCommand,
+  treeItemFileKindIcon,
   usesThemeFileIcon,
 } from "./adoptedViewModel.js";
 export type { AdoptedFileDiff, AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";

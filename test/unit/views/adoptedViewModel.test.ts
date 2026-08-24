@@ -9,7 +9,9 @@ import {
   submoduleIcon,
   submoduleStatusSummary,
   treeCollapsibleMode,
+  treeItemCodicon,
   treeItemCommand,
+  treeItemFileKindIcon,
   usesThemeFileIcon,
   type AdoptedTreeNode,
 } from "../../../src/views/adoptedViewModel.js";
@@ -135,6 +137,8 @@ describe("buildAdoptedTree", () => {
 
     expect(tree.map((node) => node.label)).toEqual(["http", "plain"]);
     expect(tree[0]?.kind).toBe("workspace-root");
+    expect(treeItemCodicon(tree[0]!)).toEqual({ id: "repo", colorId: "foreground" });
+    expect(treeItemFileKindIcon(tree[0]!)).toBeUndefined();
     expect(tree[0]?.children.map((child) => child.kind)).toEqual([
       "change-group",
       "change-group",
@@ -162,6 +166,8 @@ describe("buildAdoptedTree", () => {
       description: "0",
       contextValue: CONTEXT.adoptedGroup,
     });
+    expect(treeItemFileKindIcon(libGitlink!)).toBe("file");
+    expect(treeItemCodicon(libGitlink!)).toBeUndefined();
     expect(libGitlink?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/httplib",
       fromSha: HEAD,
@@ -183,6 +189,7 @@ describe("buildAdoptedTree", () => {
     const libNode = byLabel(tree[0]?.children, "uu_energygateway_httpendpointg01");
     const commonNode = byLabel(tree[0]?.children, "usy_idsmari_commong01");
     expect(libNode?.kind).toBe("submodule");
+    expect(treeItemCodicon(libNode!)).toEqual({ id: "file-submodule", colorId: "foreground" });
     expect(byKind(libNode?.children, "adopted-group")).toEqual([]);
     expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
     expect(treeCollapsibleMode(libNode!)).toBe("collapsed");
@@ -278,6 +285,8 @@ describe("fileNodesFromNameStatus", () => {
     ]);
     expect(nodes.map((node) => node.label)).toEqual(["gone.md", "src"]);
     expect(nodes[1]?.kind).toBe("folder");
+    expect(treeItemFileKindIcon(nodes[1]!)).toBe("folder");
+    expect(treeItemFileKindIcon(nodes[1]!.children[0]!)).toBe("file");
     expect(nodes[1]?.children.map((child) => child.label)).toEqual(["index.ts", "new.ts"]);
   });
 });

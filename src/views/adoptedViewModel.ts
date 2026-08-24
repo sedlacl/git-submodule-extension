@@ -25,6 +25,7 @@ import type { RestoreCommandContext } from "../restore/settings.js";
 import {
   DEFAULT_CHANGES_TREE_SETTINGS,
   emptyChangeGroups,
+  headDirtySuffix,
   repositoryBranchDescription,
   visibleTreeGroups,
   type ChangesTreeSettings,
@@ -341,7 +342,7 @@ function repoChildNodes(
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode[] {
   const changeGroups = visibleTreeGroups(withAdoptedGitlinks(groups, node.rootPath, node.children), settings).map(
-    (group) => buildChangeGroupNode(node.rootPath, group, node.children, settings),
+    (group) => buildChangeGroupNode(node.rootPath, group, node.children, snapshots, settings),
   );
   const childRepos = node.children.map((child) => buildSubmoduleTreeNode(child, snapshots, settings));
   return [...changeGroups, ...childRepos];
@@ -351,12 +352,15 @@ function buildChangeGroupNode(
   rootPath: string,
   group: ChangeGroupViewModel,
   children: readonly SubmoduleNode[],
+  snapshots: ReadonlyMap<string, RepositoryStateSnapshot>,
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode {
   const gitlinks = gitlinkByPath(children);
   const files = [...group.resources]
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath))
-    .map((resource) => toChangeNode(rootPath, group.kind, resource, gitlinks.get(resource.relativePath), settings));
+    .map((resource) =>
+      toChangeNode(rootPath, group.kind, resource, gitlinks.get(resource.relativePath), snapshots, settings),
+    );
   const nested =
     settings.viewMode === "tree"
       ? nestNodesByPath(files, settings.compactFolders, (relativePath, children) =>
@@ -384,6 +388,7 @@ function toChangeNode(
   group: ChangeGroupKind,
   resource: ResourceChange,
   gitlink: SubmoduleNode | undefined,
+  snapshots: ReadonlyMap<string, RepositoryStateSnapshot>,
   settings: ChangesTreeSettings,
 ): AdoptedTreeNode {
   const pointer = gitlinkPointer(group, gitlink);
@@ -400,6 +405,7 @@ function toChangeNode(
         kind: pointer.kind,
       }
     : undefined;
+  const childGroups = gitlink ? lookupSnapshot(gitlink.rootPath, snapshots)?.groups : undefined;
   const adopted = gitlink ? [buildGitlinkAdoptedGroup(rootPath, group, gitlink, spec)] : [];
   return {
     id: `change:${rootPath}:${group}:${resource.relativePath}`,
@@ -407,7 +413,7 @@ function toChangeNode(
     repositoryRoot: rootPath,
     changeGroup: group,
     label: resource.relativePath,
-    description: spec && gitlink ? gitlinkPointerDescription(gitlink, spec) : undefined,
+    description: spec && gitlink ? gitlinkPointerDescription(gitlink, spec, childGroups) : undefined,
     tooltip: gitlinkTooltip(resource.relativePath, decoration.tooltip, gitlink, spec),
     collapsible: adopted.length > 0,
     expandByDefault: adopted.length > 0,
@@ -623,15 +629,20 @@ function gitlinkPointer(
   return undefined;
 }
 
-function gitlinkPointerDescription(gitlink: SubmoduleNode, spec: AdoptedDiffSpec): string {
-  return `${gitlinkSideLabel(spec.fromSha, gitlink)} → ${gitlinkSideLabel(spec.toSha, gitlink)}`;
+function gitlinkPointerDescription(
+  gitlink: SubmoduleNode,
+  spec: AdoptedDiffSpec,
+  groups?: RepositoryChangeGroups,
+): string {
+  return `${gitlinkSideLabel(spec.fromSha, gitlink, groups)} → ${gitlinkSideLabel(spec.toSha, gitlink, groups)}`;
 }
 
-function gitlinkSideLabel(sha: string, gitlink: SubmoduleNode): string {
+function gitlinkSideLabel(sha: string, gitlink: SubmoduleNode, groups?: RepositoryChangeGroups): string {
+  const suffix = sha === gitlink.pins.checkoutHeadSha ? headDirtySuffix(groups) : "";
   if (sha === gitlink.pins.checkoutHeadSha && gitlink.branch.name && !gitlink.workingState.detached) {
-    return gitlink.branch.name;
+    return `${gitlink.branch.name}${suffix}`;
   }
-  return shortSha(sha);
+  return `${shortSha(sha)}${suffix}`;
 }
 
 function gitlinkTooltip(
@@ -729,6 +740,22 @@ export function usesThemeFileIcon(node: AdoptedTreeNode): boolean {
     return true;
   }
   return node.kind === "change" && node.iconId === "file";
+}
+
+/** Theme file/folder icon so collapsible gitlinks stay FileKind.FILE, not inferred folders. */
+export function treeItemFileKindIcon(node: AdoptedTreeNode): "file" | "folder" | undefined {
+  if (!usesThemeFileIcon(node)) {
+    return undefined;
+  }
+  return node.kind === "folder" ? "folder" : "file";
+}
+
+/** Codicon for repo rows. Always pass a color so VS Code does not add `codicon-colored`. */
+export function treeItemCodicon(node: AdoptedTreeNode): { id: string; colorId: string } | undefined {
+  if (usesThemeFileIcon(node) || !node.iconId) {
+    return undefined;
+  }
+  return { id: node.iconId, colorId: node.themeColorId ?? "foreground" };
 }
 
 export function applyRestoreOverlay(
