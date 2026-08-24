@@ -77,6 +77,9 @@ export class AdoptedTreeController {
   private readonly runFileDiff = createLimiter(AdoptedTreeController.FILE_DIFF_CONCURRENCY);
   private inflight: Promise<AdoptedTreeNode[]> | undefined;
   private lastRootTiming: Extract<AdoptedTreeTiming, { phase: "roots" }> | undefined;
+  private materialStateVersion = 0;
+  private discoveredMaterialStateVersion = -1;
+  private discoveredWorkspaceRootsSignature: string | undefined;
 
   constructor(
     private readonly model: GitModelProvider & AdoptedDiffReader,
@@ -84,6 +87,7 @@ export class AdoptedTreeController {
     private readonly repositorySnapshots: () => readonly RepositoryStateSnapshot[] = () => [],
     private readonly settings: () => ChangesTreeSettings = () => DEFAULT_CHANGES_TREE_SETTINGS,
     private readonly onTiming?: (timing: AdoptedTreeTiming) => void,
+    private readonly workspaceRootPaths: () => readonly string[] = () => [],
   ) {}
 
   invalidateModel(): void {
@@ -96,13 +100,20 @@ export class AdoptedTreeController {
     const key = normalizeRepoPath(snapshot.rootPath);
     const previous = this.lastStates.get(key);
     this.lastStates.set(key, snapshot);
-    if (!this.cachedModel) {
-      return (
-        previous !== undefined &&
-        (previous.head?.commit ?? "") !== (snapshot.head?.commit ?? "")
-      );
+    if (!previous) {
+      return false;
     }
-    return gitModelNeedsRediscovery(this.cachedModel, previous, snapshot);
+    const material = this.cachedModel
+      ? gitModelNeedsRediscovery(this.cachedModel, previous, snapshot)
+      : repositoryHeadChanged(previous, snapshot);
+    if (material) {
+      this.materialStateVersion += 1;
+    }
+    return material;
+  }
+
+  repositoryStateNeedsRediscovery(): boolean {
+    return this.materialStateVersion !== this.discoveredMaterialStateVersion;
   }
 
   repositoryOpenNeedsRediscovery(rootPath: string): boolean {
@@ -118,7 +129,14 @@ export class AdoptedTreeController {
     return true;
   }
 
-  async refresh(reason: ChangesLoadReason = "manual refresh"): Promise<void> {
+  workspaceFoldersNeedRediscovery(): boolean {
+    if (this.discoveredWorkspaceRootsSignature === undefined) {
+      return false;
+    }
+    return pathSetSignature(this.workspaceRootPaths()) !== this.discoveredWorkspaceRootsSignature;
+  }
+
+  async refresh(reason: ChangesLoadReason = "explicit refresh"): Promise<void> {
     this.generation += 1;
     this.reason = reason;
     this.roots = undefined;
@@ -254,6 +272,10 @@ export class AdoptedTreeController {
   private async loadRoots(generation: number): Promise<AdoptedTreeNode[]> {
     const started = performance.now();
     const usedCachedModel = this.cachedModel !== undefined;
+    const discovering = !usedCachedModel;
+    const discoveryWorkspaceRootsSignature = discovering
+      ? pathSetSignature(this.workspaceRootPaths())
+      : this.discoveredWorkspaceRootsSignature;
     let modelDiscoveryMs = 0;
     let treeBuildMs = 0;
     try {
@@ -265,6 +287,10 @@ export class AdoptedTreeController {
       }
       this.cachedModel = snapshot;
       const repositorySnapshots = this.repositorySnapshots();
+      if (discovering) {
+        this.discoveredMaterialStateVersion = this.materialStateVersion;
+        this.discoveredWorkspaceRootsSignature = discoveryWorkspaceRootsSignature;
+      }
       this.rememberSnapshots(repositorySnapshots);
       const buildStarted = performance.now();
       const roots = applyRestoreOverlay(
@@ -456,6 +482,21 @@ function nodesFromCache(spec: AdoptedDiffSpec, cached: CachedFileList, settings:
 function collectAdoptedGroups(nodes: readonly AdoptedTreeNode[]): AdoptedTreeNode[] {
   return nodes.flatMap((node) =>
     node.kind === "adopted-group" ? [node, ...collectAdoptedGroups(node.children)] : collectAdoptedGroups(node.children),
+  );
+}
+
+function pathSetSignature(paths: readonly string[]): string {
+  return [...new Set(paths.map(normalizeRepoPath))].sort().join("|");
+}
+
+function repositoryHeadChanged(
+  previous: RepositoryStateSnapshot,
+  next: RepositoryStateSnapshot,
+): boolean {
+  return (
+    (previous.head?.commit ?? "") !== (next.head?.commit ?? "") ||
+    (previous.head?.name ?? "") !== (next.head?.name ?? "") ||
+    Boolean(previous.head?.detached) !== Boolean(next.head?.detached)
   );
 }
 

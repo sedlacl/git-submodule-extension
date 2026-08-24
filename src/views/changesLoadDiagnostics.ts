@@ -3,9 +3,12 @@ export type ChangesLoadReason =
   | "view resolve"
   | "view visible"
   | "Git state event"
-  | "manual refresh"
+  | "post-action overlay"
+  | "explicit refresh"
+  | "repository opened"
+  | "repository closed"
+  | "workspace folders changed"
   | "config change"
-  | "workspace change"
   | "restore update"
   | "retry";
 

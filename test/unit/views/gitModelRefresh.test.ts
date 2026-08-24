@@ -125,6 +125,14 @@ describe("gitModelNeedsRediscovery", () => {
     expect(gitModelNeedsRediscovery(model, previous, next)).toBe(false);
   });
 
+  it("treats a newly hydrated known repository HEAD as part of the cached discovery", () => {
+    const model = modelWithChild();
+    const previous = { ...snapshot("/ws/http/lib"), head: undefined };
+    const next = snapshot("/ws/http/lib", {}, INDEX);
+
+    expect(gitModelNeedsRediscovery(model, previous, next)).toBe(false);
+  });
+
   it("rediscovers when a gitlink moves between groups or HEAD commit changes", () => {
     const model = modelWithChild();
     const unstaged = snapshot("/ws/http", {

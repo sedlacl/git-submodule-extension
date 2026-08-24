@@ -27,6 +27,7 @@ export interface ChangesWebviewRow {
   showCommitChrome: boolean;
   commitPlaceholder: string;
   commitDraft: string;
+  generateCommitMessageSupported: boolean;
   repositoryRoot?: string;
   inlineActions: RowAction[];
   children: ChangesWebviewRow[];
@@ -37,8 +38,12 @@ export interface ChangesWebviewTreeState {
   selected: ReadonlySet<string>;
   drafts: ReadonlyMap<string, string>;
   placeholders: ReadonlyMap<string, string>;
+  generateCommitMessageSupportedRoots?: ReadonlySet<string>;
   config: RowActionConfig;
 }
+
+export const UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP =
+  "Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.";
 
 export function toChangesWebviewRows(
   nodes: readonly AdoptedTreeNode[],
@@ -89,6 +94,9 @@ export function toChangesWebviewRows(
       showCommitChrome,
       commitPlaceholder: repositoryRoot ? (state.placeholders.get(repositoryRoot) ?? "Commit message") : "Commit message",
       commitDraft: repositoryRoot ? (state.drafts.get(repositoryRoot) ?? "") : "",
+      generateCommitMessageSupported: repositoryRoot
+        ? (state.generateCommitMessageSupportedRoots?.has(repositoryRoot) ?? true)
+        : false,
       repositoryRoot,
       inlineActions: inlineActions(node.contextValue, state.config),
       children,
@@ -193,6 +201,7 @@ function lazyLoadingRow(parentId: string, depth: number): ChangesWebviewRow {
     showCommitChrome: false,
     commitPlaceholder: "Commit message",
     commitDraft: "",
+    generateCommitMessageSupported: false,
     inlineActions: [],
     dirtyDot: false,
     children: [],
@@ -237,11 +246,14 @@ function renderRow(row: ChangesWebviewRow): string {
         `<button type="button" class="inline-btn" data-act="command" data-command="${escapeHtml(action.command)}" title="${escapeHtml(action.title)}"><i class="codicon ${codiconClass(action.icon)}"></i></button>`,
     )
     .join("");
+  const generate = row.generateCommitMessageSupported
+    ? `<button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>`
+    : `<button type="button" class="sparkle-btn generate-info-btn" data-act="explain-generate" title="${escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP)}" aria-label="Cursor AI commit message unavailable"><i class="codicon codicon-info"></i></button>`;
   const chrome = row.showCommitChrome
     ? `<div class="commit-chrome" style="padding-left:${pad}px">
            <div class="commit-input-wrap">
              <textarea class="commit-input" data-act="draft" data-root="${escapeHtml(row.repositoryRoot ?? "")}" rows="2" placeholder="${escapeHtml(row.commitPlaceholder)}">${escapeHtml(row.commitDraft)}</textarea>
-             <button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>
+             ${generate}
            </div>
            <button type="button" class="commit-btn" data-act="commit"><i class="codicon codicon-check"></i><span>Commit</span></button>
          </div>`
@@ -596,6 +608,11 @@ root.addEventListener("click", (event) => {
   if (act === "generate") {
     event.stopPropagation();
     vscode.postMessage({ type: "generate", id });
+    return;
+  }
+  if (act === "explain-generate") {
+    event.stopPropagation();
+    vscode.postMessage({ type: "explainGenerate", id });
     return;
   }
   if (act === "commit") {

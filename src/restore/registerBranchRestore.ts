@@ -1,4 +1,11 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
+import {
+  ActionDiagnostics,
+  safeError,
+  type ActionDetails,
+  type ActionWriter,
+} from "../actionDiagnostics.js";
 import type { GitCli } from "../git/gitCli.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { BranchReconciler } from "./branchReconciler.js";
@@ -16,6 +23,9 @@ import {
 export interface RegisterBranchRestoreOptions {
   cli: GitCli;
   gitApi: VsCodeGitApiAdapter;
+  output: vscode.OutputChannel;
+  writeDiagnostic: ActionWriter;
+  actionDiagnostics: ActionDiagnostics;
 }
 
 export interface BranchRestoreRegistration extends vscode.Disposable {
@@ -29,7 +39,6 @@ export interface BranchRestoreRegistration extends vscode.Disposable {
 
 export function registerBranchRestore(options: RegisterBranchRestoreOptions): BranchRestoreRegistration {
   const status = new RestoreStatusStore();
-  const output = vscode.window.createOutputChannel("Git Submodule");
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
   statusBar.command = RESTORE_COMMANDS.retry;
   statusBar.tooltip = "Git Submodule restore";
@@ -40,7 +49,7 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
     debounceMs: () => readDebounceMs(),
     onResult: (result) => {
       status.put(result);
-      output.appendLine(restoreOutputLine(result));
+      options.writeDiagnostic(restoreOutputLine({ ...result, detail: safeError(result.detail) }));
     },
     onRunStart: () => status.beginRun(),
     onRunEnd: () => status.endRun(),
@@ -69,7 +78,6 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
   };
 
   const disposables: vscode.Disposable[] = [
-    output,
     statusBar,
     status.subscribe(renderStatusBar),
     new vscode.Disposable(() => reconciler.dispose()),
@@ -82,18 +90,19 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
       onOpenRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
       onDidChangeRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
     }),
-    vscode.commands.registerCommand(RESTORE_COMMANDS.retry, (arg?: unknown) => {
-      const target = asRestoreContext(arg);
-      return target ? coordinator.retry(target.parentRootPath) : coordinator.retryMany(options.gitApi.getWorkspaceFolderPaths());
-    }),
-    vscode.commands.registerCommand(RESTORE_COMMANDS.fetch, (arg?: unknown) => fetchWithConfirmation(coordinator, arg)),
+    vscode.commands.registerCommand(RESTORE_COMMANDS.retry, (arg?: unknown) =>
+      retryRestore(options.actionDiagnostics, coordinator, options.gitApi, arg),
+    ),
+    vscode.commands.registerCommand(RESTORE_COMMANDS.fetch, (arg?: unknown) =>
+      fetchWithConfirmation(options.actionDiagnostics, coordinator, arg),
+    ),
   ];
 
   renderStatusBar();
 
   return {
     status,
-    output,
+    output: options.output,
     retry: (parentRootPath) => coordinator.retry(parentRootPath),
     retryAll: () => coordinator.retryMany(options.gitApi.getWorkspaceFolderPaths()),
     fetch: (request) => coordinator.fetch(request),
@@ -118,9 +127,55 @@ function readDebounceMs(): number {
   return Math.min(10_000, Math.max(0, Math.floor(value)));
 }
 
-async function fetchWithConfirmation(coordinator: RestoreCoordinator, arg: unknown): Promise<void> {
+async function retryRestore(
+  diagnostics: ActionDiagnostics,
+  coordinator: RestoreCoordinator,
+  gitApi: VsCodeGitApiAdapter,
+  arg: unknown,
+): Promise<void> {
   const target = asRestoreContext(arg);
+  const roots = target ? [target.parentRootPath] : gitApi.getWorkspaceFolderPaths();
+  await runRetry(diagnostics, coordinator, roots, Boolean(target));
+}
+
+async function runRetry(
+  diagnostics: ActionDiagnostics,
+  coordinator: RestoreCoordinator,
+  roots: readonly string[],
+  single: boolean,
+): Promise<void> {
+  const action = diagnostics.start("retry restore", repositoryDetails(roots));
+  try {
+    if (single && roots[0]) {
+      await coordinator.retry(roots[0]);
+    } else {
+      await coordinator.retryMany(roots);
+    }
+    action.completed({ repositories: roots.length });
+  } catch (error) {
+    action.failed(error);
+    throw error;
+  }
+}
+
+async function fetchWithConfirmation(
+  diagnostics: ActionDiagnostics,
+  coordinator: RestoreCoordinator,
+  arg: unknown,
+): Promise<void> {
+  const target = asRestoreContext(arg);
+  const action = diagnostics.start(
+    "fetch submodule remote",
+    target
+      ? {
+          repository: path.basename(target.parentRootPath),
+          resource: path.basename(target.relativePath),
+          branch: target.branch ?? undefined,
+        }
+      : {},
+  );
   if (!target?.branch || !target.pin) {
+    action.cancelled("invalid restore target");
     void vscode.window.showWarningMessage("Select a submodule with a committed branch and parent gitlink to fetch its remote.");
     return;
   }
@@ -129,6 +184,7 @@ async function fetchWithConfirmation(coordinator: RestoreCoordinator, arg: unkno
     modal: true,
   }, "Fetch");
   if (confirmed !== "Fetch") {
+    action.cancelled("confirmation dismissed", { branch: target.branch });
     return;
   }
 
@@ -142,18 +198,26 @@ async function fetchWithConfirmation(coordinator: RestoreCoordinator, arg: unkno
   try {
     await coordinator.fetch(request);
   } catch (error) {
+    action.failed(error, { branch: target.branch });
     const detail = error instanceof Error ? error.message : String(error);
     void vscode.window.showErrorMessage(`Fetch failed for ${target.relativePath}: ${detail}`);
     return;
   }
+  action.completed({ branch: target.branch, remote: "origin" });
 
   const next = await vscode.window.showInformationMessage(
     `Fetched origin/${target.branch} for '${target.relativePath}'.`,
     "Retry restore",
   );
   if (next === "Retry restore") {
-    await coordinator.retry(target.parentRootPath);
+    await runRetry(diagnostics, coordinator, [target.parentRootPath], true);
   }
+}
+
+function repositoryDetails(roots: readonly string[]): ActionDetails {
+  return roots.length === 1
+    ? { repository: path.basename(roots[0]!) }
+    : { repositories: roots.length };
 }
 
 function asRestoreContext(arg: unknown): RestoreCommandContext | undefined {

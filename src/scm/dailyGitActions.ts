@@ -1,4 +1,10 @@
 import * as path from "node:path";
+import {
+  safeError,
+  type ActionDetails,
+  type ActionOutcome,
+  type ActionRun,
+} from "../actionDiagnostics.js";
 import { sameRepoPath } from "../git/pathUtils.js";
 import {
   ResourceStatus,
@@ -8,7 +14,11 @@ import {
   type RepositoryRemote,
   type ResourceChange,
 } from "../git/repositoryState.js";
-import { firstCommitLine, mergeCommitDraftWithChore } from "./generateCommitMessage.js";
+import {
+  firstCommitLine,
+  mergeCommitDraftWithChore,
+  type GenerateCommitSubjectResult,
+} from "./generateCommitMessage.js";
 import { buildSubmoduleChoreMessage } from "./submoduleChoreMessage.js";
 import type { SubmoduleChoreReadService } from "./submoduleChoreTypes.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "../views/adoptedViewModel.js";
@@ -24,7 +34,7 @@ export interface DailyGitActionsUi {
     branches: readonly { name: string; description?: string; current?: boolean }[],
   ): Promise<string | undefined>;
   info(message: string): void;
-  generateCommitSubject?(rootPath: string): Promise<string | undefined>;
+  generateCommitSubject?(rootPath: string): Promise<GenerateCommitSubjectResult>;
 }
 
 export class BusyRepositoryError extends Error {
@@ -67,7 +77,7 @@ export class DailyGitActions {
     private readonly choreService?: SubmoduleChoreReadService,
   ) {}
 
-  async stage(nodes: readonly AdoptedTreeNode[]): Promise<void> {
+  async stage(nodes: readonly AdoptedTreeNode[]): Promise<ActionOutcome> {
     const changes = actionChanges(nodes, new Set(["merge", "workingTree", "untracked"]));
     const conflicts = changes.filter((change) => CONFLICT_STATUSES.has(change.resource.status));
     if (conflicts.length > 0) {
@@ -76,42 +86,53 @@ export class DailyGitActions {
           ? `Are you sure you want to stage ${path.basename(conflicts[0]!.resource.uri)} with merge conflicts?`
           : `Are you sure you want to stage ${conflicts.length} files with merge conflicts?`;
       if ((await this.ui.confirm(message, ["Yes"])) !== "Yes") {
-        return;
+        return cancelled("confirmation dismissed", { resources: changes.length });
       }
     }
     await this.mutate("stage", changes);
+    return completed(changeDetails(changes));
   }
 
-  async unstage(nodes: readonly AdoptedTreeNode[]): Promise<void> {
-    await this.mutate("unstage", actionChanges(nodes, new Set(["index"])));
+  async unstage(nodes: readonly AdoptedTreeNode[]): Promise<ActionOutcome> {
+    const changes = actionChanges(nodes, new Set(["index"]));
+    await this.mutate("unstage", changes);
+    return completed(changeDetails(changes));
   }
 
-  async discard(nodes: readonly AdoptedTreeNode[]): Promise<void> {
+  async discard(nodes: readonly AdoptedTreeNode[]): Promise<ActionOutcome> {
     const changes = actionChanges(nodes, new Set(["workingTree", "untracked"]));
     if (changes.length === 0) {
-      return;
+      return completed({ resources: 0 });
     }
     const confirmation = discardConfirmation(changes.map((change) => change.resource));
     if ((await this.ui.confirm(confirmation.message, [confirmation.action])) !== confirmation.action) {
-      return;
+      return cancelled("confirmation dismissed", { resources: changes.length });
     }
     await this.mutate("discard", changes);
+    return completed(changeDetails(changes));
   }
 
-  async refresh(rootPaths: readonly string[]): Promise<void> {
+  async refresh(rootPaths: readonly string[]): Promise<ActionOutcome> {
     const targets = unique(rootPaths).map((rootPath) => this.requireRepository(rootPath));
     await this.runBusy(targets, async (repository) => repository.operations().status());
+    return completed({ repositories: targets.length });
   }
 
-  async commit(rootPath: string): Promise<void> {
+  async commit(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
       const state = target.snapshot();
       const noStagedChanges = state.groups.index.length === 0;
       const unstagedCount = state.groups.workingTree.length + state.groups.untracked.length;
+      const baseDetails = {
+        staged: state.groups.index.length,
+        unstaged: unstagedCount,
+      };
 
       if (noStagedChanges && state.groups.merge.length > 0) {
         this.ui.info("Resolve and stage merge conflicts before committing.");
+        outcome = cancelled("unresolved merge conflicts", { ...baseDetails, "smart commit": "no" });
         return;
       }
 
@@ -119,11 +140,13 @@ export class DailyGitActions {
       if (noStagedChanges) {
         if (unstagedCount === 0) {
           this.ui.info("There are no changes to commit.");
+          outcome = cancelled("no changes", { ...baseDetails, "smart commit": "no" });
           return;
         }
         const message =
           "There are no staged changes to commit.\n\nWould you like to stage all your changes and commit them directly?";
         if ((await this.ui.confirm(message, ["Yes"])) !== "Yes") {
+          outcome = cancelled("smart commit dismissed", { ...baseDetails, "smart commit": "yes" });
           return;
         }
         commitAll = true;
@@ -139,6 +162,7 @@ export class DailyGitActions {
             prompt: "Please provide a commit message",
           });
       if (!message?.trim()) {
+        outcome = cancelled("empty message", { ...baseDetails, "smart commit": commitAll ? "yes" : "no" });
         return;
       }
 
@@ -149,6 +173,10 @@ export class DailyGitActions {
           ["Commit"],
         );
         if (confirmation !== "Commit") {
+          outcome = cancelled("prepared chore dismissed", {
+            ...baseDetails,
+            "smart commit": commitAll ? "yes" : "no",
+          });
           return;
         }
       }
@@ -156,19 +184,39 @@ export class DailyGitActions {
       await target.operations().commit(message, commitAll ? { all: true } : undefined);
       target.inputBoxValue = "";
       this.preparedChoreMessages.delete(rootPath);
+      outcome = completed({ ...baseDetails, "smart commit": commitAll ? "yes" : "no", branch });
     });
+    return outcome;
   }
 
-  async prepareSubmoduleChore(rootPath: string): Promise<void> {
+  async prepareSubmoduleChore(rootPath: string, action?: ActionRun): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
       const existing = target.inputBoxValue;
       let aiSubject: string | undefined;
+      let aiResult: GenerateCommitSubjectResult = { result: "unavailable" };
       if (!existing.trim() && this.ui.generateCommitSubject) {
-        aiSubject = (await this.ui.generateCommitSubject(rootPath))?.trim() || undefined;
+        const aiStartedAt = action?.mark();
+        aiResult = await this.ui.generateCommitSubject(rootPath);
+        aiSubject = aiResult.result === "generated" ? aiResult.subject.trim() || undefined : undefined;
+        if (aiStartedAt !== undefined) {
+          action?.phase("generate message AI", aiStartedAt, {
+            provider: aiResult.command ?? "none",
+            result: aiResult.result,
+            error: aiResult.result === "failed" ? safeError(aiResult.error) : undefined,
+          });
+        }
       }
 
+      const choreStartedAt = action?.mark();
       const preview = this.choreService ? await this.choreService.preview(rootPath) : null;
+      if (choreStartedAt !== undefined) {
+        action?.phase("submodule chore preview", choreStartedAt, {
+          "pointer updates": preview?.updates.length ?? 0,
+          result: preview ? "generated" : "empty",
+        });
+      }
       if (preview) {
         const seed = existing.trim() ? existing : (aiSubject ?? "");
         const chore = buildSubmoduleChoreMessage({
@@ -178,41 +226,92 @@ export class DailyGitActions {
         const message = mergeCommitDraftWithChore(seed, chore);
         target.inputBoxValue = message;
         this.preparedChoreMessages.set(rootPath, message);
+        const merge = existing.trim()
+          ? message === existing
+            ? "unchanged"
+            : "appended to existing draft"
+          : aiSubject
+            ? "AI subject + appended chore"
+            : "replaced empty draft";
+        outcome = completed({
+          merge,
+          "pointer updates": preview.updates.length,
+          "draft changed": message !== existing,
+        });
         return;
       }
 
       if (aiSubject && !target.inputBoxValue.trim()) {
         target.inputBoxValue = aiSubject;
+        outcome = completed({ merge: "replaced empty draft", "pointer updates": 0, "draft changed": true });
         return;
       }
       if (aiSubject || target.inputBoxValue.trim()) {
+        outcome = completed({
+          merge: "unchanged",
+          "pointer updates": 0,
+          "draft changed": target.inputBoxValue !== existing,
+        });
         return;
       }
-      this.ui.info("No submodule pointer changes");
+      const details = {
+        merge: "unchanged",
+        "pointer updates": 0,
+        "draft changed": false,
+        "AI result": aiResult.result,
+      };
+      if (aiResult.result === "failed") {
+        this.ui.info("No submodule pointer changes; AI commit message generation failed.");
+        outcome = { result: "failed", error: aiResult.error, details };
+      } else if (aiResult.result === "cancelled") {
+        this.ui.info("No submodule pointer changes; AI commit message generation was cancelled.");
+        outcome = cancelled("AI generation cancelled", details);
+      } else if (aiResult.result === "unsupported target") {
+        this.ui.info(
+          "No submodule pointer changes. Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.",
+        );
+        outcome = unavailable("AI target unsupported", details);
+      } else if (aiResult.result === "unavailable") {
+        this.ui.info("No submodule pointer changes; no supported AI commit-message provider is available.");
+        outcome = unavailable("AI provider unavailable", details);
+      } else {
+        this.ui.info("No submodule pointer changes; AI did not generate a commit message.");
+        outcome = completed({ reason: "no changes", ...details });
+      }
     });
+    return outcome;
   }
 
-  async sync(rootPath: string): Promise<void> {
+  async sync(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
       const head = target.snapshot().head;
       if (!head?.upstream) {
         this.ui.info("The current branch has no upstream. Publish the branch first.");
+        outcome = cancelled("no upstream");
         return;
       }
 
       const message = `This action will pull and push commits from and to "${head.upstream.remote}/${head.upstream.name}".`;
       if ((await this.ui.confirm(message, ["OK"])) !== "OK") {
+        outcome = cancelled("confirmation dismissed", {
+          branch: head.upstream.name,
+          remote: head.upstream.remote,
+        });
         return;
       }
 
       await target.operations().pull();
       await target.operations().push(head.upstream.remote, head.upstream.name, false);
+      outcome = completed({ branch: head.upstream.name, remote: head.upstream.remote });
     });
+    return outcome;
   }
 
-  async checkoutBranch(rootPath: string): Promise<void> {
+  async checkoutBranch(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
       const current = target.snapshot().head?.name;
       const branches = await target.operations().getBranches();
@@ -224,43 +323,55 @@ export class DailyGitActions {
         })),
       );
       if (!selected || selected === current) {
+        outcome = cancelled(selected ? "branch unchanged" : "branch picker dismissed");
         return;
       }
       await target.operations().checkout(selected);
+      outcome = completed({ branch: selected });
     });
+    return outcome;
   }
 
-  async fetch(rootPath: string): Promise<void> {
+  async fetch(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
     await this.runBusy([repository], async (target) => {
       await target.operations().fetch();
     });
+    return completed();
   }
 
-  async pull(rootPath: string): Promise<void> {
+  async pull(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
-      if (!target.snapshot().head?.upstream) {
+      const upstream = target.snapshot().head?.upstream;
+      if (!upstream) {
         this.ui.info("The current branch has no upstream to pull from.");
+        outcome = cancelled("no upstream");
         return;
       }
       await target.operations().pull();
+      outcome = completed({ branch: upstream.name, remote: upstream.remote });
     });
+    return outcome;
   }
 
-  async publish(rootPath: string): Promise<void> {
+  async publish(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
       const state = target.snapshot();
       const branch = state.head?.name;
       if (!branch) {
         this.ui.info("Check out a branch before publishing.");
+        outcome = cancelled("no branch");
         return;
       }
 
       const remotes = writableRemotes(state.remotes);
       if (remotes.length === 0) {
         this.ui.info("Your repository has no writable remotes configured to publish to.");
+        outcome = cancelled("no writable remote", { branch });
         return;
       }
 
@@ -271,10 +382,13 @@ export class DailyGitActions {
               remotes.map((item) => ({ name: item.name, description: item.pushUrl })),
             );
       if (!remote) {
+        outcome = cancelled("remote picker dismissed", { branch });
         return;
       }
       await target.operations().push(remote, branch, true);
+      outcome = completed({ branch, remote });
     });
+    return outcome;
   }
 
   private async mutate(kind: MutationKind, changes: readonly ChangeFileRef[]): Promise<void> {
@@ -422,4 +536,23 @@ function writableRemotes(remotes: readonly RepositoryRemote[]): RepositoryRemote
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function changeDetails(changes: readonly ChangeFileRef[]): ActionDetails {
+  return {
+    resources: changes.length,
+    repositories: new Set(changes.map((change) => change.rootPath)).size,
+  };
+}
+
+function completed(details?: ActionDetails): ActionOutcome {
+  return { result: "completed", details };
+}
+
+function cancelled(reason: string, details?: ActionDetails): ActionOutcome {
+  return { result: "cancelled", reason, details };
+}
+
+function unavailable(reason: string, details?: ActionDetails): ActionOutcome {
+  return { result: "unavailable", reason, details };
 }

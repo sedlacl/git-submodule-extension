@@ -49,9 +49,23 @@ Stage, unstage, discard, commit, refresh, sync, and publish use the owning repos
 
 Blocked restore cases appear on the submodule row, in the **Git Submodule** output channel, and on the status bar.
 
-## Load diagnostics
+## Output diagnostics
 
-Open **View → Output**, then select **Git Submodule**. Each load diagnostic starts with a local wall-clock timestamp, for example `[15:25:41.382] [changes #25] final ...`. The `[changes #N]` segment identifies one load generation and its trigger, bootstrap work, recursive discovery, tree build, serialization/post/render acknowledgement, total usable-tree time, result, and slowest phase. A separate `adopted counts` line reports background count hydration, including cache hits, Git diff calls, and the four-call concurrency bound. `stale/cancelled` means a newer generation replaced the load; it never represents a final tree.
+Open **View → Output**, then select **Git Submodule**. Every line uses one local wall-clock timestamp. Load lines retain `[changes #N]`: they identify one load generation and its trigger, bootstrap work, recursive discovery, tree build, serialization/post/render acknowledgement, total usable-tree time, result, and slowest phase. A separate `adopted counts` line reports background count hydration, including cache hits, Git diff calls, and the four-call concurrency bound. `stale/cancelled` means a newer generation replaced the load; it never represents a final tree.
+
+User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text.
+
+```text
+[15:57:12.184] [action #14] generate message started (repository: httpendpoint)
+[15:57:12.612] [action #14] generate message AI 428ms (provider: git.generateCommitMessage; result: generated)
+[15:57:12.640] [action #14] submodule chore preview 28ms (pointer updates: 2; result: generated)
+[15:57:12.642] [action #14] generate message completed 458ms (merge: AI subject + appended chore; pointer updates: 2)
+[15:59:00.100] [action #15] commit cancelled 1.20s (reason: empty message; staged: 2; unstaged: 0; smart commit: no)
+```
+
+Action coverage includes Generate Message/Submodule Chore, every stage/unstage/discard variant, commit, checkout, fetch, pull, sync, publish, refresh, retry restore, and explicit submodule-remote fetch. Open diff/file commands are omitted because they are high-frequency navigation and would add noise.
+
+Action diagnostics include only repository basenames, counts, operation outcomes, smart-commit state, and useful branch/remote names. They never include commit-message text, file contents, authentication data, full remote URLs, environment values, or absolute repository paths. Error text is flattened, length-limited, and redacts credentials, authorization headers, and URLs.
 
 ## Security guarantees
 

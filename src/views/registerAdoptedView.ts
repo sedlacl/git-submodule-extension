@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
+import type { ActionDiagnostics } from "../actionDiagnostics.js";
 import type { GitCli } from "../git/gitCli.js";
 import type { AdoptedDiffReader, GitModelProvider } from "../git/interfaces.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import type { RestoreStatusStore } from "../restore/restoreStatusStore.js";
 import { registerDailyGitActions } from "../scm/registerDailyGitActions.js";
+import { pickPublicGenerateCommitMessageCommand } from "../scm/generateCommitMessage.js";
 import { SubmoduleChoreReadService } from "../scm/submoduleChoreService.js";
 import { AdoptedTreeController } from "./adoptedTreeController.js";
 import {
@@ -28,6 +30,7 @@ export interface RegisterAdoptedViewOptions {
   restoreStatus?: RestoreStatusStore;
   extensionUri: vscode.Uri;
   writeDiagnostic: ChangesDiagnosticWriter;
+  actionDiagnostics: ActionDiagnostics;
 }
 
 export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode.Disposable {
@@ -49,17 +52,29 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         );
       }
     },
+    () => options.gitApi.getWorkspaceFolderPaths(),
   );
   const contentProvider = new GitShowContentProvider(options.cli);
+  let generateCommitMessageCommand: string | undefined;
   const webviewProvider = new ChangesWebviewProvider({
     controller,
     gitApi: options.gitApi,
     extensionUri: options.extensionUri,
     writeDiagnostic: options.writeDiagnostic,
+    getGenerateCommitMessageCommand: () => generateCommitMessageCommand,
   });
 
-  const refresh = (reason: ChangesLoadReason, rediscover: boolean): void => {
+  const refresh = (reason: ChangesLoadReason, rediscover: boolean | (() => boolean)): void => {
     webviewProvider.refresh(reason, rediscover);
+  };
+  void vscode.commands.getCommands(true).then((commands) => {
+    generateCommitMessageCommand = pickPublicGenerateCommitMessageCommand(commands);
+    refresh("config change", false);
+  });
+  const consumeLatestRepositoryStates = (): void => {
+    for (const snapshot of options.gitApi.snapshotAll()) {
+      controller.consumeRepositoryState(snapshot);
+    }
   };
 
   const disposables: vscode.Disposable[] = [
@@ -70,10 +85,12 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     registerDailyGitActions({
       gitApi: options.gitApi,
       choreService: new SubmoduleChoreReadService(options.cli),
-      refreshTree: () => {
-        refresh("manual refresh", true);
+      actionDiagnostics: options.actionDiagnostics,
+      postActionRefresh: () => {
+        consumeLatestRepositoryStates();
+        refresh("post-action overlay", () => controller.repositoryStateNeedsRediscovery());
       },
-      beforeRefreshCommand: () => undefined,
+      explicitRefresh: () => refresh("explicit refresh", true),
     }),
     vscode.commands.registerCommand(
       COMMANDS.openDiff,
@@ -98,13 +115,16 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     vscode.commands.registerCommand(COMMANDS.viewAsList, () => setScmViewMode("list")),
     options.gitApi.subscribe({
       onOpenRepository: (rootPath) =>
-        refresh("workspace change", controller.repositoryOpenNeedsRediscovery(rootPath)),
-      onCloseRepository: () => refresh("workspace change", false),
+        refresh("repository opened", () => controller.repositoryOpenNeedsRediscovery(rootPath)),
+      onCloseRepository: () => refresh("repository closed", false),
       onDidChangeRepositoryState: (snapshot) => {
-        refresh("Git state event", controller.consumeRepositoryState(snapshot));
+        controller.consumeRepositoryState(snapshot);
+        refresh("Git state event", () => controller.repositoryStateNeedsRediscovery());
       },
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => refresh("workspace change", true)),
+    vscode.workspace.onDidChangeWorkspaceFolders(() =>
+      refresh("workspace folders changed", () => controller.workspaceFoldersNeedRediscovery()),
+    ),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration("git.untrackedChanges") ||

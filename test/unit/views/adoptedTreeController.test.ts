@@ -271,6 +271,7 @@ describe("AdoptedTreeController", () => {
     const staged = second[0]?.children.find((node) => node.kind === "change-group" && node.changeGroup === "index");
     expect(staged?.children.map((node) => node.label)).toEqual(["app.js", "lib"]);
     expect(controller.consumeRepositoryState(snapshots[0]!)).toBe(false);
+    expect(controller.repositoryStateNeedsRediscovery()).toBe(false);
   });
 
   it("invalidates the cached git graph only when rediscovery is requested", async () => {
@@ -397,7 +398,7 @@ describe("AdoptedTreeController", () => {
     expect(controller.peekRoots()?.[0]?.id).toBe(first[0]?.id);
   });
 
-  it("detects a material HEAD change while initial discovery is in flight", async () => {
+  it("reconciles in-flight HEAD events into the completed discovery baseline", async () => {
     const fake = new FakeModel(modelWith(child));
     let resolveSnapshot!: (model: WorkspaceGitModel) => void;
     fake.snapshotImpl = () =>
@@ -423,6 +424,7 @@ describe("AdoptedTreeController", () => {
 
     resolveSnapshot(modelWith(child));
     await loading;
+    expect(controller.repositoryStateNeedsRediscovery()).toBe(false);
   });
 
   it("rediscovers only when vscode.git opens a repository absent from the cached topology", async () => {
@@ -433,5 +435,50 @@ describe("AdoptedTreeController", () => {
     expect(controller.repositoryOpenNeedsRediscovery("/ws/http")).toBe(false);
     expect(controller.repositoryOpenNeedsRediscovery("/ws/http/lib")).toBe(false);
     expect(controller.repositoryOpenNeedsRediscovery("/ws/new")).toBe(true);
+  });
+
+  it("detects branch identity changes even when the commit is unchanged", async () => {
+    const initial = {
+      rootPath: "/ws/http",
+      head: { name: "main", commit: "c1", detached: false },
+      remotes: [],
+      groups: emptyChangeGroups(),
+    } satisfies RepositoryStateSnapshot;
+    let snapshots: RepositoryStateSnapshot[] = [initial];
+    const controller = new AdoptedTreeController(
+      new FakeModel(modelWith(child)),
+      () => undefined,
+      () => snapshots,
+    );
+    await controller.getRootNodes();
+
+    const next = {
+      ...initial,
+      head: { name: "release", commit: "c1", detached: false },
+    } satisfies RepositoryStateSnapshot;
+    snapshots = [next];
+    expect(controller.consumeRepositoryState(next)).toBe(true);
+    expect(controller.repositoryStateNeedsRediscovery()).toBe(true);
+  });
+
+  it("rediscovers only when workspace root identity differs from the completed discovery", async () => {
+    let workspaceRoots = ["/ws/http"];
+    const controller = new AdoptedTreeController(
+      new FakeModel(modelWith(child)),
+      () => undefined,
+      () => [],
+      () => DEFAULT_CHANGES_TREE_SETTINGS,
+      undefined,
+      () => workspaceRoots,
+    );
+    await controller.getRootNodes();
+    expect(controller.workspaceFoldersNeedRediscovery()).toBe(false);
+
+    workspaceRoots = ["/ws/http", "/ws/new"];
+    expect(controller.workspaceFoldersNeedRediscovery()).toBe(true);
+
+    controller.invalidateModel();
+    await controller.refresh("workspace folders changed");
+    expect(controller.workspaceFoldersNeedRediscovery()).toBe(false);
   });
 });

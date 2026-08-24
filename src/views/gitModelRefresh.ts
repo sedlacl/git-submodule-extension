@@ -15,7 +15,14 @@ export function gitModelNeedsRediscovery(
   if (!model || !previous) {
     return true;
   }
-  if ((previous.head?.commit ?? "") !== (next.head?.commit ?? "")) {
+  const headChanged =
+    (previous.head?.commit ?? "") !== (next.head?.commit ?? "") ||
+    (previous.head?.name ?? "") !== (next.head?.name ?? "") ||
+    Boolean(previous.head?.detached) !== Boolean(next.head?.detached);
+  if (
+    headChanged &&
+    !(!previous.head?.commit && repositoryHeadMatchesModel(model, next))
+  ) {
     return true;
   }
   const childPaths = childRelativePaths(model, next.rootPath);
@@ -23,6 +30,21 @@ export function gitModelNeedsRediscovery(
     return false;
   }
   return gitlinkSignature(previous, childPaths) !== gitlinkSignature(next, childPaths);
+}
+
+function repositoryHeadMatchesModel(
+  model: WorkspaceGitModel,
+  snapshot: RepositoryStateSnapshot,
+): boolean {
+  const node = lookupNode(model, snapshot.rootPath);
+  if (node?.kind !== "submodule") {
+    return false;
+  }
+  return (
+    (snapshot.head?.commit ?? null) === node.pins.checkoutHeadSha &&
+    (snapshot.head?.name ?? null) === node.branch.name &&
+    Boolean(snapshot.head?.detached) === node.branch.detached
+  );
 }
 
 export function childRelativePaths(model: WorkspaceGitModel, rootPath: string): Set<string> {

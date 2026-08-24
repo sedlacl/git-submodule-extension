@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
+import { runGenerateCommitMessageProbe, verifyUriTargetingSafety } from "./probeGenerateCommitMessage.js";
 
 const EXTENSION_ID = "qjohn.git-submodule-extension";
 const REQUIRED_COMMANDS = [
@@ -45,6 +46,18 @@ export async function run(): Promise<void> {
     "UI fixture workspace must keep restore disabled so detached/dirty scenarios stay inspectable.",
   );
 
+  const verifyTargeting = process.env.GIT_SUBMODULE_VERIFY_GENERATE_TARGET?.trim();
+  if (verifyTargeting) {
+    await verifyUriTargetingSafety();
+    return;
+  }
+
+  const probeReportPath = process.env.GIT_SUBMODULE_PROBE_GENERATE_COMMIT?.trim();
+  if (probeReportPath) {
+    await runGenerateCommitMessageProbe(probeReportPath);
+    return;
+  }
+
   await vscode.commands.executeCommand("workbench.view.scm");
   if (process.env.GIT_SUBMODULE_TIMING_FILE) {
     await vscode.commands.executeCommand("gitSubmodule.repos.focus");
@@ -82,7 +95,7 @@ async function runProfileRefreshes(): Promise<void> {
     for (let attempt = 0; attempt < 5 && !measured; attempt += 1) {
       const before = readTimingFile(timingFile);
       const finalsBefore = countMatches(before, /\[changes #\d+\] final .*\)/g);
-      const manualBefore = countMatches(before, /\[changes #\d+\] final .*reason: [^;]*manual refresh/g);
+      const explicitBefore = countMatches(before, /\[changes #\d+\] final .*reason: [^;]*explicit refresh/g);
       const batchesBefore = countMatches(before, /adopted counts .*\)/g);
       await vscode.commands.executeCommand("gitSubmodule.refresh");
       await waitForTimingFile(timingFile, (content) => {
@@ -93,11 +106,11 @@ async function runProfileRefreshes(): Promise<void> {
       });
       const after = readTimingFile(timingFile);
       measured =
-        countMatches(after, /\[changes #\d+\] final .*reason: [^;]*manual refresh/g) > manualBefore;
+        countMatches(after, /\[changes #\d+\] final .*reason: [^;]*explicit refresh/g) > explicitBefore;
       completedBatches = countMatches(after, /adopted counts .*\)/g);
     }
     if (!measured) {
-      throw new Error(`Could not obtain warm manual refresh ${index + 1}/${refreshCount}`);
+      throw new Error(`Could not obtain warm explicit refresh ${index + 1}/${refreshCount}`);
     }
   }
 }

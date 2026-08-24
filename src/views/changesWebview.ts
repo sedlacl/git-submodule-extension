@@ -2,6 +2,7 @@ import * as crypto from "node:crypto";
 import * as vscode from "vscode";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { commitMessagePlaceholder } from "../scm/dailyGitActions.js";
+import { isPublicCommitMessageTargetSupported } from "../scm/generateCommitMessage.js";
 import type { AdoptedCountPatch, AdoptedTreeController } from "./adoptedTreeController.js";
 import { buildBootstrapRepoNodes, treeItemCommand, type AdoptedTreeNode } from "./adoptedViewModel.js";
 import { type RowActionConfig, contextActions } from "./changesRowActions.js";
@@ -12,6 +13,7 @@ import {
   changesWebviewPage,
   renderChangesTree,
   toChangesWebviewRows,
+  UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP,
 } from "./changesWebviewHtml.js";
 import {
   ChangesRenderProtocol,
@@ -39,6 +41,7 @@ export interface ChangesWebviewProviderOptions {
   gitApi: VsCodeGitApiAdapter;
   extensionUri: vscode.Uri;
   writeDiagnostic: ChangesDiagnosticWriter;
+  getGenerateCommitMessageCommand?(): string | undefined;
 }
 
 type WebviewMessage =
@@ -52,6 +55,7 @@ type WebviewMessage =
   | { type: "command"; command: string; id: string; additive?: boolean }
   | { type: "commit"; id: string; message: string }
   | { type: "generate"; id: string }
+  | { type: "explainGenerate"; id: string }
   | { type: "draft"; rootPath: string; value: string }
   | { type: "context"; id: string };
 
@@ -132,11 +136,15 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     this.refresh("view resolve", false);
   }
 
-  refresh(reason: ChangesLoadReason = "manual refresh", rediscover = reason === "manual refresh"): void {
+  refresh(
+    reason: ChangesLoadReason = "explicit refresh",
+    rediscover: boolean | (() => boolean) = reason === "explicit refresh",
+  ): void {
     this.refreshCoordinator.request({
       reason,
-      rediscover,
-      immediate: reason === "manual refresh" || reason === "retry",
+      rediscover: typeof rediscover === "boolean" ? rediscover : false,
+      shouldRediscover: typeof rediscover === "function" ? rediscover : undefined,
+      immediate: reason === "explicit refresh" || reason === "retry",
     });
   }
 
@@ -184,6 +192,9 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         return;
       case "generate":
         await this.runCommand(COMMANDS.generateSubmoduleChore, message.id, false);
+        return;
+      case "explainGenerate":
+        void vscode.window.showInformationMessage(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP);
         return;
       case "draft":
         this.writeDraft(message.rootPath, message.value);
@@ -438,6 +449,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         selected: this.selected,
         drafts: this.readDrafts(),
         placeholders: this.readPlaceholders(),
+        generateCommitMessageSupportedRoots: this.generateCommitMessageSupportedRoots(),
         config: this.rowConfig(),
       }),
     );
@@ -756,6 +768,18 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     return placeholders;
   }
 
+  private generateCommitMessageSupportedRoots(): Set<string> {
+    const repositories = this.options.gitApi.getOpenRepositories();
+    const command = this.options.getGenerateCommitMessageCommand?.();
+    return new Set(
+      repositories
+        .filter((repository) =>
+          isPublicCommitMessageTargetSupported(repositories, repository.rootPath, command),
+        )
+        .map((repository) => repository.rootPath),
+    );
+  }
+
   private rowConfig(): RowActionConfig {
     const settings = this.treeSettings();
     return {
@@ -825,7 +849,7 @@ function emptyBootstrapTiming(): BootstrapTiming {
 }
 
 function primaryReason(counts: ReadonlyMap<ChangesLoadReason, number>): ChangesLoadReason {
-  return counts.keys().next().value ?? "manual refresh";
+  return counts.keys().next().value ?? "explicit refresh";
 }
 
 function applyAdoptedCountPatch(nodes: readonly AdoptedTreeNode[], patch: AdoptedCountPatch): boolean {

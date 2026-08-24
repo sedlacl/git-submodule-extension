@@ -5,8 +5,10 @@ import {
   changesWebviewErrorHtml,
   changesWebviewLoadingHtml,
   changesWebviewPage,
+  escapeHtml,
   renderChangesTree,
   toChangesWebviewRows,
+  UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP,
   webviewPagePaintsBeforeModel,
 } from "../../../src/views/changesWebviewHtml.js";
 import { CONTEXT } from "../../../src/views/constants.js";
@@ -146,6 +148,58 @@ describe("changes webview HTML", () => {
     expect(expanded).toContain("draft survives collapse");
     expect(expanded).toContain('data-act="generate"');
     expect(expanded).toContain(">Commit<");
+  });
+
+  it("replaces the misleading AI sparkle for an unsupported multi-repository target", () => {
+    const child = repo({
+      id: "sub:/ws/parent/usy_aflex_initdatag01#t1",
+      kind: "submodule",
+      label: "usy_aflex_initdatag01#t1",
+      repositoryRoot: "/ws/parent/usy_aflex_initdatag01#t1",
+      contextValue: CONTEXT.submodule,
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([child], {
+        expanded: new Set([child.id]),
+        selected: new Set(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        generateCommitMessageSupportedRoots: new Set(),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+
+    expect(html).toContain('data-act="explain-generate"');
+    expect(html).toContain("codicon-info");
+    expect(html).toContain(escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP));
+    expect(html).not.toContain('data-act="generate"');
+    expect(html).not.toContain("codicon-sparkle");
+  });
+
+  it("shows the sparkle when cursor uri targeting supports the repository root", () => {
+    const child = repo({
+      id: "sub:/ws/parent/usy_aflex_initdatag01#t1",
+      kind: "submodule",
+      label: "usy_aflex_initdatag01#t1",
+      repositoryRoot: "/ws/parent/usy_aflex_initdatag01#t1",
+      contextValue: CONTEXT.submodule,
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([child], {
+        expanded: new Set([child.id]),
+        selected: new Set(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        generateCommitMessageSupportedRoots: new Set(["/ws/parent/usy_aflex_initdatag01#t1"]),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+
+    expect(html).toContain('data-act="generate"');
+    expect(html).toContain("codicon-sparkle");
+    expect(html).not.toContain('data-act="explain-generate"');
   });
 
   it("renders group counts as pills, folder dirty dots, and file status letters", () => {

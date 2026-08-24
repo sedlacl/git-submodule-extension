@@ -2,7 +2,8 @@ import type { ChangesLoadReason } from "./changesLoadDiagnostics.js";
 
 export interface ChangesRefreshRequest {
   reason: ChangesLoadReason;
-  rediscover: boolean;
+  rediscover?: boolean;
+  shouldRediscover?: () => boolean;
   immediate?: boolean;
 }
 
@@ -71,13 +72,17 @@ export class ChangesRefreshCoordinator {
         inFlightWaitMs: 0,
         followUp: this.running && !this.runningFollowUp,
         explicit: Boolean(request.immediate),
-        rediscover: request.rediscover,
+        rediscover: Boolean(request.rediscover),
+        rediscoveryPredicates: [],
         eventCounts: new Map(),
       };
     }
     this.pending.lastAt = now;
     this.pending.explicit ||= Boolean(request.immediate);
-    this.pending.rediscover ||= request.rediscover;
+    this.pending.rediscover ||= Boolean(request.rediscover);
+    if (request.shouldRediscover) {
+      this.pending.rediscoveryPredicates.push(request.shouldRediscover);
+    }
     increment(this.pending.eventCounts, request.reason);
 
     if (this.running) {
@@ -141,7 +146,15 @@ export class ChangesRefreshCoordinator {
       requestedAt: pending.firstAt,
       startedAt,
       inFlightWaitMs: pending.inFlightWaitMs,
-      rediscover: pending.rediscover,
+      rediscover:
+        pending.rediscover ||
+        pending.rediscoveryPredicates.some((predicate) => {
+          try {
+            return predicate();
+          } catch {
+            return true;
+          }
+        }),
       eventCounts: new Map(pending.eventCounts),
       reason: formatChangesRefreshReason(pending.eventCounts),
       hasFollowUp: () =>
@@ -217,6 +230,7 @@ interface PendingRefresh {
   followUp: boolean;
   explicit: boolean;
   rediscover: boolean;
+  rediscoveryPredicates: Array<() => boolean>;
   eventCounts: Map<ChangesLoadReason, number>;
 }
 
@@ -239,8 +253,12 @@ function formatReasonCount(reason: ChangesLoadReason, count: number): string {
   switch (reason) {
     case "Git state event":
       return `${count} Git state events`;
-    case "workspace change":
-      return `${count} workspace changes`;
+    case "repository opened":
+      return `${count} repositories opened`;
+    case "repository closed":
+      return `${count} repositories closed`;
+    case "workspace folders changed":
+      return `${count} workspace folder changes`;
     case "config change":
       return `${count} config changes`;
     case "restore update":
@@ -254,8 +272,12 @@ function eventLabel(reason: ChangesLoadReason): string {
   switch (reason) {
     case "Git state event":
       return "Git state";
-    case "workspace change":
-      return "workspace";
+    case "repository opened":
+      return "repository opened";
+    case "repository closed":
+      return "repository closed";
+    case "workspace folders changed":
+      return "workspace folders";
     case "config change":
       return "config";
     case "restore update":

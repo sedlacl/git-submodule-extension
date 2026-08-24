@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ActionDiagnostics, type ActionOutcome, type ActionRun } from "../../../src/actionDiagnostics.js";
 import {
   ResourceStatus,
   type GitRepositoryOperations,
@@ -11,9 +12,22 @@ import {
   type DailyGitActionsUi,
   type DailyGitRepositoryHandle,
 } from "../../../src/scm/dailyGitActions.js";
+import type { GenerateCommitSubjectResult } from "../../../src/scm/generateCommitMessage.js";
 import type { SubmoduleChoreReadService } from "../../../src/scm/submoduleChoreTypes.js";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
 import { sameRepoPath } from "../../../src/git/pathUtils.js";
+
+function finish(action: ActionRun, outcome: ActionOutcome): void {
+  if (outcome.result === "completed") {
+    action.completed(outcome.details);
+  } else if (outcome.result === "unavailable") {
+    action.unavailable(outcome.reason ?? "unavailable", outcome.details);
+  } else if (outcome.result === "cancelled") {
+    action.cancelled(outcome.reason ?? "cancelled", outcome.details);
+  } else {
+    action.failed(outcome.error, outcome.details);
+  }
+}
 
 interface Call {
   operation: string;
@@ -96,6 +110,7 @@ class FakeUi implements DailyGitActionsUi {
   nextRemote: string | undefined;
   nextBranch: string | undefined;
   nextGeneratedSubject: string | undefined;
+  nextGenerateResult: GenerateCommitSubjectResult | undefined;
   generateCalls: string[] = [];
 
   async confirm(message: string, actions: readonly string[]): Promise<string | undefined> {
@@ -122,9 +137,14 @@ class FakeUi implements DailyGitActionsUi {
     this.infos.push(message);
   }
 
-  async generateCommitSubject(rootPath: string): Promise<string | undefined> {
+  async generateCommitSubject(rootPath: string): Promise<GenerateCommitSubjectResult> {
     this.generateCalls.push(rootPath);
-    return this.nextGeneratedSubject;
+    if (this.nextGenerateResult) {
+      return this.nextGenerateResult;
+    }
+    return this.nextGeneratedSubject
+      ? { result: "generated", command: "git.generateCommitMessage", subject: this.nextGeneratedSubject }
+      : { result: "unavailable" };
   }
 }
 
@@ -515,11 +535,110 @@ describe("DailyGitActions repository commands", () => {
     const chore: SubmoduleChoreReadService = { preview: async () => null };
     const { actions } = harness([repository], ui, chore);
 
-    await actions.prepareSubmoduleChore(root);
+    const outcome = await actions.prepareSubmoduleChore(root);
 
     expect(ui.generateCalls).toEqual([root]);
     expect(repository.inputBoxValue).toBe("");
-    expect(ui.infos).toEqual(["No submodule pointer changes"]);
+    expect(outcome).toMatchObject({ result: "unavailable", reason: "AI provider unavailable" });
+    expect(ui.infos).toEqual([
+      "No submodule pointer changes; no supported AI commit-message provider is available.",
+    ]);
+  });
+
+  it("reports an unsupported ordinary child target as unavailable, never cancelled", async () => {
+    const root = "/ws/infra-deploy/submodules/usy_aflex_initdatag01#t1";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGenerateResult = {
+      result: "unsupported target",
+      command: "cursor.generateGitCommitMessage",
+    };
+    const { actions } = harness([repository], ui, { preview: async () => null });
+    const lines: string[] = [];
+    const action = new ActionDiagnostics((line) => lines.push(line), () => 10).start(
+      "generate message",
+      { repository: "usy_aflex_initdatag01#t1" },
+    );
+
+    const outcome = await actions.prepareSubmoduleChore(root, action);
+    finish(action, outcome);
+
+    expect(outcome).toMatchObject({ result: "unavailable", reason: "AI target unsupported" });
+    expect(ui.infos).toEqual([
+      "No submodule pointer changes. Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.",
+    ]);
+    expect(lines).toEqual([
+      "[action #1] generate message started (repository: usy_aflex_initdatag01#t1)",
+      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
+      "[action #1] submodule chore preview 0ms (pointer updates: 0; result: empty)",
+      "[action #1] generate message unavailable 0ms (reason: AI target unsupported; merge: unchanged; pointer updates: 0; draft changed: false; AI result: unsupported target)",
+    ]);
+    expect(lines.join("\n")).not.toContain("cancelled");
+  });
+
+  it("uses a chore fallback when AI cannot target the clicked repository", async () => {
+    const root = "/ws/infra-deploy";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGenerateResult = {
+      result: "unsupported target",
+      command: "cursor.generateGitCommitMessage",
+    };
+    const relativePath = "submodules/usy_aflex_initdatag01#t1";
+    const chore: SubmoduleChoreReadService = {
+      preview: async () => ({
+        subject: "chore: update submodules",
+        body: `\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment) (not staged)`,
+        message: `chore: update submodules\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment) (not staged)`,
+        updates: [{
+          path: relativePath,
+          beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          branch: "feature/t1-deployment",
+          subjects: [],
+          staged: false,
+        }],
+        hasUnstagedUpdates: true,
+        unstagedNote: "not staged",
+      }),
+    };
+    const { actions } = harness([repository], ui, chore);
+    const lines: string[] = [];
+    const action = new ActionDiagnostics((line) => lines.push(line), () => 10).start(
+      "generate message",
+      { repository: "infra-deploy" },
+    );
+
+    const outcome = await actions.prepareSubmoduleChore(root, action);
+    finish(action, outcome);
+
+    expect(outcome).toMatchObject({
+      result: "completed",
+      details: { merge: "replaced empty draft", "pointer updates": 1, "draft changed": true },
+    });
+    expect(repository.inputBoxValue).toContain(relativePath);
+    expect(lines).toEqual([
+      "[action #1] generate message started (repository: infra-deploy)",
+      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
+      "[action #1] submodule chore preview 0ms (pointer updates: 1; result: generated)",
+      "[action #1] generate message completed 0ms (merge: replaced empty draft; pointer updates: 1; draft changed: true)",
+    ]);
+  });
+
+  it("treats a void provider result as no result, not cancellation", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGenerateResult = { result: "no result", command: "cursor.generateGitCommitMessage" };
+    const { actions } = harness([repository], ui, { preview: async () => null });
+
+    const outcome = await actions.prepareSubmoduleChore(root);
+
+    expect(outcome).toMatchObject({
+      result: "completed",
+      details: { reason: "no changes", "AI result": "no result", "draft changed": false },
+    });
+    expect(ui.infos).toEqual(["No submodule pointer changes; AI did not generate a commit message."]);
   });
 
   it("keeps a public AI subject when there are no pointer diffs", async () => {
@@ -546,5 +665,74 @@ describe("DailyGitActions repository commands", () => {
     await actions.stage([changeNode(modelRoot, "workingTree", dirty)]);
 
     expect(repository.calls).toEqual([{ operation: "add", args: [[dirty.uri]] }]);
+  });
+
+  it("logs AI and chore phases plus merge outcome without generated message content", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGeneratedSubject = "secret generated subject";
+    const chore: SubmoduleChoreReadService = {
+      preview: async () => ({
+        subject: "secret chore subject",
+        body: "\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- secret child subject",
+        message: "secret chore subject\n\nsecret child subject",
+        updates: [{
+          path: "submodule",
+          beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          branch: "main",
+          subjects: ["secret child subject"],
+          staged: true,
+        }],
+        hasUnstagedUpdates: false,
+        unstagedNote: null,
+      }),
+    };
+    const lines: string[] = [];
+    const diagnostics = new ActionDiagnostics((line) => lines.push(line), () => 10);
+    const action = diagnostics.start("generate message", { repository: "repo" });
+    const { actions } = harness([repository], ui, chore);
+
+    finish(action, await actions.prepareSubmoduleChore(root, action));
+
+    expect(lines).toEqual([
+      "[action #1] generate message started (repository: repo)",
+      "[action #1] generate message AI 0ms (provider: git.generateCommitMessage; result: generated)",
+      "[action #1] submodule chore preview 0ms (pointer updates: 1; result: generated)",
+      "[action #1] generate message completed 0ms (merge: AI subject + appended chore; pointer updates: 1; draft changed: true)",
+    ]);
+    expect(lines.join("\n")).not.toContain("secret generated subject");
+    expect(lines.join("\n")).not.toContain("secret chore subject");
+    expect(lines.join("\n")).not.toContain("secret child subject");
+  });
+
+  it("returns representative stage, commit, and sync diagnostics", async () => {
+    const root = "/ws/repo";
+    const staged = resource(root, "staged.ts", ResourceStatus.INDEX_MODIFIED);
+    const dirty = resource(root, "dirty.ts", ResourceStatus.MODIFIED);
+    const repository = new FakeRepository(root, snapshot(root, { index: [staged], workingTree: [dirty] }));
+    const ui = new FakeUi();
+    ui.nextConfirmation = "OK";
+    const { actions } = harness([repository], ui);
+    const lines: string[] = [];
+    let now = 0;
+    const diagnostics = new ActionDiagnostics((line) => lines.push(line), () => now);
+
+    let action = diagnostics.start("stage");
+    now = 4;
+    finish(action, await actions.stage([changeNode(root, "workingTree", dirty)]));
+    action = diagnostics.start("commit");
+    now = 9;
+    finish(action, await actions.commit(root));
+    action = diagnostics.start("sync");
+    now = 15;
+    finish(action, await actions.sync(root));
+
+    expect(lines).toContain("[action #1] stage completed 4ms (resources: 1; repositories: 1)");
+    expect(lines).toContain(
+      "[action #2] commit cancelled 5ms (reason: empty message; staged: 1; unstaged: 1; smart commit: no)",
+    );
+    expect(lines).toContain("[action #3] sync completed 6ms (branch: main; remote: origin)");
   });
 });

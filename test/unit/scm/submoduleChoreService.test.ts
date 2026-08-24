@@ -160,6 +160,57 @@ describe("SubmoduleChoreReadService", () => {
     expect(preview!.message).toContain("(not staged)");
   });
 
+  it("keeps a # path pointer update when its old and new commits have identical trees", async () => {
+    const cli = new ScriptedGitCli();
+    const relativePath = "submodules/usy_aflex_initdatag01#t1";
+    const childRoot = path.join(parent, relativePath);
+    const modules = gitmodules([{ name: "aflex-t1", path: relativePath, branch: "feature/t1-deployment" }]);
+    cli.on(parent, ["show", ":.gitmodules"], modules);
+    cli.on(parent, ["show", "HEAD:.gitmodules"], modules);
+    cli.on(parent, ["ls-tree", "-r", "-z", "HEAD"], lsTree([{ path: relativePath, sha: HEAD_A }]));
+    cli.on(parent, ["ls-files", "--stage", "-z"], lsFiles([{ path: relativePath, sha: HEAD_A }]));
+    stubChildWorkTree(cli, childRoot);
+    cli.on(childRoot, ["rev-parse", "HEAD"], `${CHILD_NEW}\n`);
+    cli.on(childRoot, ["branch", "--show-current"], "feature/t1-deployment\n");
+    cli.on(childRoot, ["log", "--format=%s", `${HEAD_A}..${CHILD_NEW}`], "chore: pointer-only bump\n");
+
+    const preview = await new SubmoduleChoreReadService(cli).preview(parent);
+
+    expect(preview?.updates).toHaveLength(1);
+    expect(preview?.updates[0]).toMatchObject({
+      path: relativePath,
+      beforeHead: HEAD_A,
+      afterHead: CHILD_NEW,
+      staged: false,
+    });
+    expect(preview?.message).toContain(relativePath);
+    expect(preview?.message).toContain("chore: pointer-only bump");
+  });
+
+  it("reports staged HEAD-to-index and unstaged index-to-checkout ranges separately", async () => {
+    const cli = new ScriptedGitCli();
+    stubParent(cli);
+    cli.on(parent, ["ls-files", "--stage", "-z"], lsFiles([
+      { path: "submodules/foo", sha: HEAD_C },
+      { path: "submodules/bar", sha: HEAD_B },
+    ]));
+    stubChildWorkTree(cli, childA);
+    stubChildWorkTree(cli, childB);
+    cli.on(childA, ["rev-parse", "HEAD"], `${CHILD_NEW}\n`);
+    cli.on(childA, ["branch", "--show-current"], "feature/x\n");
+    cli.on(childA, ["log", "--format=%s", `${HEAD_A}..${HEAD_C}`], "staged bump\n");
+    cli.on(childA, ["log", "--format=%s", `${HEAD_C}..${CHILD_NEW}`], "unstaged bump\n");
+    cli.on(childB, ["rev-parse", "HEAD"], `${HEAD_B}\n`);
+    cli.on(childB, ["branch", "--show-current"], "develop\n");
+
+    const preview = await new SubmoduleChoreReadService(cli).preview(parent);
+
+    expect(preview?.updates.map(({ beforeHead, afterHead, staged }) => ({ beforeHead, afterHead, staged }))).toEqual([
+      { beforeHead: HEAD_A, afterHead: HEAD_C, staged: true },
+      { beforeHead: HEAD_C, afterHead: CHILD_NEW, staged: false },
+    ]);
+  });
+
   it("fail-softs missing commit log ranges", async () => {
     const cli = new ScriptedGitCli();
     stubParent(cli);

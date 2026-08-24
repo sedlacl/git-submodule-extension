@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import * as vscode from "vscode";
+import { ActionDiagnostics } from "./actionDiagnostics.js";
 import { GitCliRunner } from "./git/gitCli.js";
 import { createGitModelService } from "./git/gitModelService.js";
 import { activateVsCodeGitApi } from "./git/vscodeGitApi.js";
@@ -27,15 +28,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getWorkspaceFolderPaths: () => gitApi.getWorkspaceFolderPaths(),
   });
 
-  const restore = registerBranchRestore({ cli, gitApi });
+  const output = vscode.window.createOutputChannel("Git Submodule");
   const timingFile = process.env.GIT_SUBMODULE_TIMING_FILE?.trim();
   const writeDiagnostic = createChangesDiagnosticWriter((line) => {
-    restore.output.appendLine(line);
+    output.appendLine(line);
     if (timingFile) {
       void fs.appendFile(timingFile, `${line}\n`, "utf8").catch(() => undefined);
     }
   });
+  const actionDiagnostics = new ActionDiagnostics(writeDiagnostic);
+  const restore = registerBranchRestore({
+    cli,
+    gitApi,
+    output,
+    writeDiagnostic,
+    actionDiagnostics,
+  });
   context.subscriptions.push(
+    output,
     restore,
     registerAdoptedView({
       model,
@@ -44,6 +54,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       restoreStatus: restore.status,
       extensionUri: context.extensionUri,
       writeDiagnostic,
+      actionDiagnostics,
     }),
   );
 }

@@ -254,12 +254,10 @@ function buildInfraDeployTopology(
   const t2Path = "submodules/usy_aflex_initdatag01#t2";
   const t1Abs = path.join(parent, t1Path);
   const t2Abs = path.join(parent, t2Path);
-  const pinnedT1Sha = runGit(parent, ["rev-parse", `HEAD:${t1Path}`]);
   const pinnedT2Sha = runGit(t2Abs, ["rev-parse", "HEAD"]);
 
   checkout(t1Abs, "feature/t1-deployment");
-  commitFile(t1Abs, "local/t1-diverged.txt", "ahead of pin\n", "t1 diverged");
-  checkout(t1Abs, pinnedT1Sha);
+  runGit(t1Abs, ["commit", "--allow-empty", "-m", "t1 pointer-only bump"]);
   writeFile(path.join(t1Abs, "local/t1-wip.txt"), "uncommitted t1 change\n");
 
   checkout(t2Abs, "feature/t2-deployment");

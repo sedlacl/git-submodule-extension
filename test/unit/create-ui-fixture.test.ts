@@ -10,6 +10,8 @@ import {
   WORKSPACE_FILE_NAME,
 } from "../../scripts/create-ui-fixture.js";
 import { runGit } from "../../scripts/lib/git-fixture.js";
+import { GitCliRunner } from "../../src/git/gitCli.js";
+import { SubmoduleChoreReadService } from "../../src/scm/submoduleChoreService.js";
 
 const tempRoots: string[] = [];
 
@@ -100,6 +102,25 @@ describe("create-ui-fixture", () => {
       ":0:submodules/uu_energygateway_httpendpointg01",
     ]);
     expect(indexSha).not.toBe(headSha);
+
+    const t1Path = "submodules/usy_aflex_initdatag01#t1";
+    const t1Root = path.join(manifest.topologies.infraDeploy, t1Path);
+    const t1PinnedSha = runGit(manifest.topologies.infraDeploy, ["rev-parse", `HEAD:${t1Path}`]);
+    const t1CheckoutSha = runGit(t1Root, ["rev-parse", "HEAD"]);
+    expect(t1CheckoutSha).not.toBe(t1PinnedSha);
+    expect(runGit(t1Root, ["diff", "--name-only", t1PinnedSha, t1CheckoutSha])).toBe("");
+
+    const preview = await new SubmoduleChoreReadService(new GitCliRunner("git")).preview(
+      manifest.topologies.infraDeploy,
+    );
+    expect(preview?.updates).toHaveLength(1);
+    expect(preview?.updates[0]).toMatchObject({
+      path: t1Path,
+      beforeHead: t1PinnedSha,
+      afterHead: t1CheckoutSha,
+      staged: false,
+    });
+    expect(preview?.message).toContain(t1Path);
   }, 120_000);
 
   it("branches deployment refs off main instead of chaining them", async () => {

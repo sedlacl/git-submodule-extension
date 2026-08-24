@@ -98,11 +98,11 @@ async function main(): Promise<void> {
 function validateTimingEvidence(timingFile: string, refreshes: number): void {
   const content = fs.readFileSync(timingFile, "utf8");
   const finals = [...content.matchAll(/\[changes #\d+\] final .*\)/g)].length;
-  const manualFinals = [...content.matchAll(/\[changes #\d+\] final .*reason: [^;]*manual refresh/g)].length;
+  const explicitFinals = [...content.matchAll(/\[changes #\d+\] final .*reason: [^;]*explicit refresh/g)].length;
   const adoptedBatches = [...content.matchAll(/adopted counts .*\)/g)].length;
-  if (finals < refreshes + 1 || manualFinals < refreshes || adoptedBatches < refreshes + 1) {
+  if (finals < refreshes + 1 || explicitFinals < refreshes || adoptedBatches < refreshes + 1) {
     throw new Error(
-      `Incomplete timing evidence: final=${finals}, manual=${manualFinals}, adopted=${adoptedBatches}`,
+      `Incomplete timing evidence: final=${finals}, explicit=${explicitFinals}, adopted=${adoptedBatches}`,
     );
   }
 }

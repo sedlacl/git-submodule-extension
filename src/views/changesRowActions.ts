@@ -119,7 +119,7 @@ export function contextActions(contextValue: string, config: RowActionConfig = D
     if (REPO_UPSTREAM.test(contextValue)) {
       push(actions, COMMANDS.pull, "Pull", "arrow-down", "context", 3);
     }
-    push(actions, COMMANDS.generateSubmoduleChore, "Generate Submodule Chore", "sparkle", "context", 4);
+    push(actions, COMMANDS.generateSubmoduleChore, "Generate Submodule Chore", "git-commit", "context", 4);
     push(actions, COMMANDS.openAllChanges, BUILTIN_COMMAND_TITLES.openAllChanges, "diff-multiple", "context", 5);
   }
 

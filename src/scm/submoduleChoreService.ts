@@ -83,18 +83,15 @@ export class SubmoduleChoreReadService implements SubmoduleChoreReadServiceInter
         );
       }
 
-      if (checkout.headSha && checkout.headSha !== headSha) {
-        const stagedOnly = indexSha !== headSha && checkout.headSha === indexSha;
-        if (!stagedOnly) {
-          updates.push(
-            await this.buildUpdate(parentRepoPath, entry.relativePath, {
-              beforeHead: headSha,
-              afterHead: checkout.headSha,
-              branch,
-              staged: false,
-            }),
-          );
-        }
+      if (checkout.headSha && checkout.headSha !== indexSha) {
+        updates.push(
+          await this.buildUpdate(parentRepoPath, entry.relativePath, {
+            beforeHead: indexSha,
+            afterHead: checkout.headSha,
+            branch,
+            staged: false,
+          }),
+        );
       }
     }
 
