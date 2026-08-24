@@ -1,14 +1,28 @@
 # Git Submodule Extension
 
-VS Code extension that shows a recursive submodule hierarchy in Source Control, nests gitlink pointer diffs under the matching change row, then safely restores submodule branches after Git operations.
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Publisher: `qjohn`. Identifier: `git-submodule-extension`.
+VS Code extension for **hierarchical Git changes with submodules**: one SCM webview lists workspace repos and nested submodule checkouts, nests gitlink pointer diffs under the matching change row, and optionally restores submodule branches after parent Git operations (fail-closed).
+
+Publisher: **`qjohn`**. Extension ID: **`qjohn.git-submodule-extension`**.
+
+![CHANGES with submodules webview](docs/changes-with-submodules.png)
+
+## Why
+
+Monorepos and deployment layouts with nested submodules are hard to read in the flat built-in **Changes** panel. This extension adds **CHANGES with submodules** — same everyday Git vocabulary, but repositories nest under their gitlink parent and pointer moves show **Adopted Changes** (inner commit diffs) inline.
 
 ## Requirements
 
-- VS Code `^1.85.0`
+- VS Code `^1.85.0` (or a compatible fork such as Cursor)
 - Built-in [Git extension](https://marketplace.visualstudio.com/items?itemName=vscode.git) (`vscode.git`)
-- A Git binary on the host (the path comes from `vscode.git`)
+- A Git binary on the host (path from `vscode.git`)
+
+## Install
+
+- **Open VSX** (after release): search *Git Submodule Extension* or install [`qjohn.git-submodule-extension`](https://open-vsx.org/extension/qjohn/git-submodule-extension).
+- **VSIX**: download from [GitHub Releases](https://github.com/sedlacl/git-submodule-extension/releases) or build locally (`npm run package`), then *Extensions → … → Install from VSIX…*.
 
 ## What it shows
 
@@ -85,6 +99,19 @@ A child is attached (`git switch -C <branch> <pin>` plus upstream) only when all
 
 If any check fails, the child is left untouched and the reason is shown. Retry repeats the same checks. Fetch is a separate, confirmed command.
 
+## Versioning
+
+Bump `package.json` before every release (no git tag from npm by default):
+
+```bash
+npm run version:patch    # 0.1.0 → 0.1.1
+npm run version:minor    # 0.1.0 → 0.2.0
+npm run version:major    # 0.1.0 → 1.0.0
+npm run version:set -- 0.1.0
+```
+
+Add a [CHANGELOG.md](CHANGELOG.md) entry, then tag `vX.Y.Z` and push. Open VSX publish runs in CI — see [`docs/publishing.md`](docs/publishing.md).
+
 ## Development
 
 ```bash
@@ -95,6 +122,12 @@ npm run lint
 npm test
 npm run test:extension-host
 npm run package
+```
+
+Regenerate the README screenshot from the webview HTML renderer (no signed-in IDE session):
+
+```bash
+npm run capture-readme-screenshot
 ```
 
 ### Isolated UI harness
@@ -129,6 +162,10 @@ To try auto-restore in the harness, set `gitSubmodule.restore.enabled` to `true`
 - Nested restore walks committed gitlinks only, with a depth cap of 32 and cycle guards.
 - Adopted file diffs compare commits inside the child repository; they are not a substitute for `git submodule update`.
 - Real application workspaces should keep restore disabled until you have reviewed the tree (`gitSubmodule.restore.enabled: false`).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Upstream Git API
 

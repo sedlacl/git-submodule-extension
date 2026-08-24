@@ -18,3 +18,8 @@ vitest.config.ts
 .gitignore
 .github/**
 temp/**
+!README.md
+!CHANGELOG.md
+!LICENSE
+!docs/**
+!docs/changes-with-submodules.png

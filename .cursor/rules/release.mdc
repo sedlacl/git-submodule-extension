@@ -1,0 +1,27 @@
+---
+description: Version bump, changelog, and OpenVSX release via GitHub CI
+alwaysApply: false
+---
+
+# Release a marketplace verzi
+
+`package.json` → pole `version` je jediný zdroj pravdy.
+
+## Před každým release / publish
+
+1. **Bump verze** — nikdy nepublikovat bez změny verze:
+   - `npm run version:patch` — opravy
+   - `npm run version:minor` — nové funkce (první veřejný release: `npm run version:set -- 0.1.0`)
+   - `npm run version:major` — breaking změny
+   - `npm run version:set -- X.Y.Z` — explicitní semver
+   Skripty volají `npm version --no-git-tag-version` — **bez** git tagu a commitu.
+2. **CHANGELOG.md** — povinný záznam pod `[X.Y.Z]` s datem (Keep a Changelog + semver). Žádné neexistující featury.
+3. Commit a tag dělá maintainer (`vX.Y.Z`), ne agent v chatu.
+
+## Publish
+
+- Open VSX **jen přes GitHub Actions** (`.github/workflows/release.yml`) po pushi tagu `v*`.
+- Secret `OVSX_PAT` v repo settings — token z https://open-vsx.org/user-settings/tokens.
+- **Nikdy** neposílat PAT do chatu, do kódu ani do logů. Lokální `ovsx publish` jen pro debug, ne jako release kanál.
+
+Podrobný checklist: [`docs/publishing.md`](../docs/publishing.md).

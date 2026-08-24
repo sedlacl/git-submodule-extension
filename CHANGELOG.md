@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-08-24
+
+First public release.
+
+### Added
+
+- **CHANGES with submodules** — SCM webview with hierarchical workspace folders and nested submodule repositories under their gitlink parents.
+- Built-in-like change groups (Merge, Staged, Changes, Untracked) with status letters, count pills, folder dirty dots, and tree/list layout driven by `scm.defaultViewMode` / `scm.compactFolders`.
+- **Adopted Changes** — gitlink pointer diffs nested under the matching Staged/Changes row, with inner commit file lists (`HEAD → index` staged, `index → checkout` unstaged).
+- Commit chrome on expanded dirty repositories: message textarea, Generate Commit Message sparkle, and Commit button wired to public `vscode.git` APIs.
+- **Generate Submodule Chore** — sparkle builds an editable commit message from pointer diffs; uses a public built-in/Copilot generate-commit-message command for the subject when available.
+- Stage, unstage, discard, sync, publish, checkout, fetch, and pull via `gitSubmodule.*` commands and HTML row actions.
+- Fail-closed **branch restore** after parent Git operations (`gitSubmodule.restore.enabled`, debounced).
+- **Git Submodule** output channel with load diagnostics (`[changes #N]`) and action logs (`[action #N]`) for generate message, stage/unstage/discard, commit, fetch, and related operations.
+
+### Known limitations
+
+- The pane is a sibling SCM webview, not a replacement for the built-in Git **Changes** TreeView — hide the built-in panel manually if you want this view as the daily driver.
+- Cursor AI commit-message generation cannot safely target every repository from a multi-root webview; unsupported roots show an info sparkle with guidance to use the built-in SCM input.
+- The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
+- Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
+
+[0.1.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.0.1...v0.1.0
