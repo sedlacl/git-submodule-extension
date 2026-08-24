@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Git Submodule Extension">
+  <defs>
+    <linearGradient id="tile" x1="8" y1="4" x2="120" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5E2E19"/>
+      <stop offset="1" stop-color="#1A1210"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="26" fill="url(#tile)"/>
+  <rect x="13" y="13" width="102" height="102" rx="19" fill="none" stroke="#E7CFA8" stroke-width="2" opacity="0.2"/>
+
+  <g fill="none" stroke="#EFE4D0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M38 42 V58 A26 26 0 0 0 90 58 V42"/>
+    <path d="M64 30 V92"/>
+  </g>
+
+  <path d="M55 92 H73 L64 110 Z" fill="#B3261E"/>
+
+  <g fill="#E8A33A">
+    <circle cx="38" cy="42" r="8.5"/>
+    <circle cx="64" cy="30" r="8.5"/>
+    <circle cx="90" cy="42" r="8.5"/>
+  </g>
+</svg>

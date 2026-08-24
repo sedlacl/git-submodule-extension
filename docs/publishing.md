@@ -6,7 +6,7 @@ First public release and every follow-up use the same flow. `package.json` `vers
 
 1. Create an [Open VSX access token](https://open-vsx.org/user-settings/tokens) for publisher **`qjohn`**.
 2. In GitHub → **Settings → Secrets and variables → Actions**, add repository secret **`OVSX_PAT`** with that token.
-3. Confirm `package.json` has valid `publisher`, `name`, `displayName`, `license`, and `repository` fields.
+3. Confirm `package.json` has valid `publisher`, `name`, `displayName`, `license`, `repository`, and `icon` fields.
 
 ## Release steps (maintainer)
 
@@ -30,6 +30,7 @@ Primary trigger: **git tag `v*`** (for example `v0.1.0`). Do not publish with to
 
 ```bash
 npm ci
+npm run build:icon   # ImageMagick convert: media/icon.svg -> media/icon.png (128x128)
 npm run typecheck
 npm run lint
 npm test

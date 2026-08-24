@@ -3,15 +3,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AdoptedTreeNode } from "../src/views/adoptedViewModel.js";
-import { BUILTIN_GROUP_LABELS, BUILTIN_PANE_NAME } from "../src/views/builtinGitParity.js";
+import { BUILTIN_PANE_NAME } from "../src/views/builtinGitParity.js";
 import { DEFAULT_ROW_ACTION_CONFIG } from "../src/views/changesRowActions.js";
 import {
   changesWebviewPage,
   renderChangesTree,
   toChangesWebviewRows,
 } from "../src/views/changesWebviewHtml.js";
-import { CONTEXT } from "../src/views/constants.js";
 import { getProjectRoot } from "./lib/paths.js";
+import {
+  buildReadmeScreenshotDemoTree,
+  README_SCREENSHOT_FORBIDDEN_NAMES,
+  readmeScreenshotDemoWebviewOptions,
+} from "./readmeScreenshotDemo.js";
 
 const OUTPUT = path.join(getProjectRoot(), "docs", "changes-with-submodules.png");
 
@@ -49,217 +53,37 @@ const VSCODE_DARK_THEME = `
 }
 `;
 
-function changeFile(id: string, label: string, badge: string, color: string, group: "index" | "workingTree"): AdoptedTreeNode {
-  const ctx = group === "index" ? CONTEXT.changeIndex : CONTEXT.changeWorkingTree;
-  return {
-    id,
-    kind: "change",
-    label,
-    tooltip: label,
-    collapsible: false,
-    expandByDefault: false,
-    contextValue: ctx,
-    iconId: "file",
-    decoration: { badge, tooltip: badge, themeColorId: color },
-    children: [],
+function collectExpandedIds(nodes: AdoptedTreeNode[]): Set<string> {
+  const expanded = new Set<string>();
+  const walk = (node: AdoptedTreeNode): void => {
+    expanded.add(node.id);
+    for (const child of node.children) {
+      walk(child);
+    }
   };
+  for (const node of nodes) {
+    walk(node);
+  }
+  return expanded;
 }
 
-function adoptedFile(id: string, label: string, badge: string): AdoptedTreeNode {
-  return {
-    id,
-    kind: "file",
-    label,
-    tooltip: label,
-    collapsible: false,
-    expandByDefault: false,
-    contextValue: CONTEXT.file,
-    iconId: "file",
-    decoration: { badge, tooltip: badge, themeColorId: "gitDecoration.modifiedResourceForeground" },
-    children: [],
-  };
-}
-
-function buildDemoTree(): AdoptedTreeNode[] {
-  const httpendpoint = "/fixture/httpendpoint";
-  const httpSub = `${httpendpoint}/submodules/uu_energygateway_httpendpointg01`;
-  const commonSub = `${httpendpoint}/submodules/usy_idsmari_commong01`;
-
-  return [
-    {
-      id: `root:${httpendpoint}`,
-      kind: "workspace-root",
-      label: "httpendpoint",
-      description: "main*+",
-      tooltip: "httpendpoint",
-      repositoryRoot: httpendpoint,
-      collapsible: true,
-      expandByDefault: true,
-      contextValue: CONTEXT.workspaceRoot,
-      iconId: "repo",
-      children: [
-        {
-          id: `group:${httpendpoint}:index`,
-          kind: "change-group",
-          changeGroup: "index",
-          label: BUILTIN_GROUP_LABELS.index,
-          description: "1",
-          tooltip: BUILTIN_GROUP_LABELS.index,
-          collapsible: true,
-          expandByDefault: true,
-          contextValue: CONTEXT.changeGroupIndex,
-          iconId: "",
-          children: [
-            {
-              id: `gitlink:${httpSub}:staged`,
-              kind: "change",
-              label: "submodules/uu_energygateway_httpendpointg01",
-              description: "a1b2c3d → feature/api",
-              tooltip: "gitlink",
-              collapsible: true,
-              expandByDefault: true,
-              contextValue: CONTEXT.gitlink,
-              iconId: "file-submodule",
-              decoration: { badge: "S", tooltip: "Submodule", themeColorId: "gitDecoration.submoduleResourceForeground" },
-              children: [
-                {
-                  id: `adopted:${httpSub}:staged`,
-                  kind: "adopted-group",
-                  label: "Adopted Changes",
-                  description: "3",
-                  tooltip: "Adopted Changes",
-                  collapsible: true,
-                  expandByDefault: true,
-                  contextValue: CONTEXT.adoptedGroup,
-                  iconId: "",
-                  children: [
-                    adoptedFile(`file:${httpSub}:1`, "src/HttpEndpoint.js", "M"),
-                    adoptedFile(`file:${httpSub}:2`, "package.json", "M"),
-                    adoptedFile(`file:${httpSub}:3`, "README.md", "A"),
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          id: `group:${httpendpoint}:workingTree`,
-          kind: "change-group",
-          changeGroup: "workingTree",
-          label: BUILTIN_GROUP_LABELS.workingTree,
-          description: "2",
-          tooltip: BUILTIN_GROUP_LABELS.workingTree,
-          collapsible: true,
-          expandByDefault: true,
-          contextValue: CONTEXT.changeGroupWorkingTree,
-          iconId: "",
-          children: [
-            {
-              id: `gitlink:${commonSub}:unstaged`,
-              kind: "change",
-              label: "submodules/usy_idsmari_commong01",
-              description: "e4f5a6b → main",
-              tooltip: "gitlink",
-              collapsible: true,
-              expandByDefault: true,
-              contextValue: CONTEXT.gitlink,
-              iconId: "file-submodule",
-              decoration: { badge: "S", tooltip: "Submodule", themeColorId: "gitDecoration.submoduleResourceForeground" },
-              children: [
-                {
-                  id: `sub:${commonSub}`,
-                  kind: "submodule",
-                  label: "usy_idsmari_commong01",
-                  description: "main*",
-                  repositoryRoot: commonSub,
-                  tooltip: "usy_idsmari_commong01",
-                  collapsible: true,
-                  expandByDefault: true,
-                  contextValue: CONTEXT.submodule,
-                  iconId: "repo",
-                  decoration: { themeColorId: "gitDecoration.submoduleResourceForeground", tooltip: "Submodule" },
-                  children: [
-                    {
-                      id: `group:${commonSub}:workingTree`,
-                      kind: "change-group",
-                      changeGroup: "workingTree",
-                      label: BUILTIN_GROUP_LABELS.workingTree,
-                      description: "1",
-                      tooltip: BUILTIN_GROUP_LABELS.workingTree,
-                      collapsible: true,
-                      expandByDefault: true,
-                      contextValue: CONTEXT.changeGroupWorkingTree,
-                      iconId: "",
-                      children: [
-                        changeFile(
-                          `file:${commonSub}:1`,
-                          "src/CommonService.js",
-                          "M",
-                          "gitDecoration.modifiedResourceForeground",
-                          "workingTree",
-                        ),
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-            changeFile(
-              `file:${httpendpoint}:1`,
-              ".gitmodules",
-              "M",
-              "gitDecoration.modifiedResourceForeground",
-              "workingTree",
-            ),
-          ],
-        },
-      ],
-    },
-    {
-      id: "root:/fixture/infra-deploy",
-      kind: "workspace-root",
-      label: "infra-deploy",
-      description: "deploy/prod",
-      tooltip: "infra-deploy",
-      repositoryRoot: "/fixture/infra-deploy",
-      collapsible: true,
-      expandByDefault: false,
-      contextValue: CONTEXT.workspaceRoot,
-      iconId: "repo",
-      decoration: { themeColorId: "gitDecoration.submoduleResourceForeground", tooltip: "Descendant changes" },
-      children: [],
-    },
-  ];
+function assertNoForbiddenNames(html: string): void {
+  const hits = README_SCREENSHOT_FORBIDDEN_NAMES.filter((name) => html.includes(name));
+  if (hits.length > 0) {
+    throw new Error(`Screenshot HTML contains forbidden repository names: ${hits.join(", ")}`);
+  }
 }
 
 function buildScreenshotHtml(): string {
-  const nodes = buildDemoTree();
-  const expanded = new Set<string>();
-  for (const node of nodes) {
-    expanded.add(node.id);
-    for (const child of node.children) {
-      expanded.add(child.id);
-      for (const grand of child.children) {
-        expanded.add(grand.id);
-        for (const great of grand.children) {
-          expanded.add(great.id);
-          for (const gg of great.children) {
-            expanded.add(gg.id);
-            for (const ggg of gg.children) {
-              expanded.add(ggg.id);
-            }
-          }
-        }
-      }
-    }
-  }
-
+  const nodes = buildReadmeScreenshotDemoTree();
+  const expanded = collectExpandedIds(nodes);
+  const { drafts, placeholders, generateCommitMessageSupportedRoots } = readmeScreenshotDemoWebviewOptions();
   const rows = toChangesWebviewRows(nodes, {
     expanded,
     selected: new Set<string>(),
-    drafts: new Map([[ "/fixture/httpendpoint", "feat(httpendpoint): bump energy gateway submodule" ]]),
-    placeholders: new Map([[ "/fixture/httpendpoint", 'Message (commit on "main")' ]]),
-    generateCommitMessageSupportedRoots: new Set(["/fixture/httpendpoint"]),
+    drafts,
+    placeholders,
+    generateCommitMessageSupportedRoots,
     config: DEFAULT_ROW_ACTION_CONFIG,
   });
   const treeHtml = renderChangesTree(rows);
@@ -274,7 +98,7 @@ function buildScreenshotHtml(): string {
     generation: 1,
     renderState: "final",
   });
-  return `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -316,6 +140,8 @@ function buildScreenshotHtml(): string {
   </div>
 </body>
 </html>`;
+  assertNoForbiddenNames(html);
+  return html;
 }
 
 function resolveChromium(): string {
@@ -357,8 +183,12 @@ function main(): void {
   if (!fs.existsSync(OUTPUT)) {
     throw new Error(`Screenshot was not written: ${OUTPUT}`);
   }
+  const stat = fs.statSync(OUTPUT);
+  if (stat.size === 0) {
+    throw new Error(`Screenshot is empty: ${OUTPUT}`);
+  }
   fs.rmSync(tempDir, { recursive: true, force: true });
-  console.log(`Wrote ${OUTPUT}`);
+  console.log(`Wrote ${OUTPUT} (${stat.size} bytes)`);
 }
 
 main();

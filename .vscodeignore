@@ -23,3 +23,6 @@ temp/**
 !LICENSE
 !docs/**
 !docs/changes-with-submodules.png
+!media/**
+!media/icon.png
+!media/icon.svg

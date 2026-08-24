@@ -1,5 +1,9 @@
 # Git Submodule Extension
 
+<p align="center">
+  <img src="media/icon.png" width="128" height="128" alt="Git Submodule Extension icon"/>
+</p>
+
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -70,7 +74,7 @@ Open **View → Output**, then select **Git Submodule**. Every line uses one loc
 User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text.
 
 ```text
-[15:57:12.184] [action #14] generate message started (repository: httpendpoint)
+[15:57:12.184] [action #14] generate message started (repository: web-app)
 [15:57:12.612] [action #14] generate message AI 428ms (provider: git.generateCommitMessage; result: generated)
 [15:57:12.640] [action #14] submodule chore preview 28ms (pointer updates: 2; result: generated)
 [15:57:12.642] [action #14] generate message completed 458ms (merge: AI subject + appended chore; pointer updates: 2)
@@ -141,11 +145,11 @@ npm run dev:ui              # VS Code engine from @vscode/test-electron
 npm run dev:cursor          # same harness in Cursor (Electron app, not the CLI shim)
 ```
 
-The harness opens `fixtures/ui/ui-dev.code-workspace`:
+The harness opens `fixtures/ui/ui-dev.code-workspace` with local demo repositories only:
 
-- `httpendpoint` — two direct submodules, one nested (staged/unstaged pointer, dirty, detached)
-- `infra-deploy` — repeated checkouts of the same sources under `#t1/#t2/#prod` on different branches
-- `plain-app` / `plain-lib` — top-level repos without submodules
+- a parent repo with two direct submodules and one nested checkout (staged/unstaged pointer, dirty, detached)
+- an infra-style layout with repeated checkouts of the same sources under different path suffixes and branches
+- plain top-level repos without submodules
 
 Fixture remotes are local `file://` paths. Nothing touches real application repositories.
 
