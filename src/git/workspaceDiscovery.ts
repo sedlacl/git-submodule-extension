@@ -32,9 +32,11 @@ export async function discoverWorkspaceGitModel(
 
   const parentByChild = new Map<string, string>();
   const childrenByParent = new Map<string, SubmoduleNode[]>();
-  const loadingParents = new Set<string>();
 
-  const loadChildren = async (parentRoot: string): Promise<SubmoduleNode[]> => {
+  const loadChildren = async (
+    parentRoot: string,
+    ancestors: ReadonlySet<string> = new Set(),
+  ): Promise<SubmoduleNode[]> => {
     const cached = childrenByParent.get(parentRoot);
     if (cached) {
       return cached;
@@ -42,33 +44,36 @@ export async function discoverWorkspaceGitModel(
 
     const children: SubmoduleNode[] = [];
     childrenByParent.set(parentRoot, children);
-    loadingParents.add(parentRoot);
-
-    try {
-      const declared = await readDeclared(reader, parentRoot, runGit);
-      const entries: Array<{ childRoot: string; entry: DeclaredSubmodule }> = [];
-      for (const entry of declared) {
-        const childRoot = canonicalizeRepoPath(joinRepoPath(parentRoot, entry.relativePath));
-        if (childRoot === parentRoot || loadingParents.has(childRoot)) {
-          continue;
-        }
-
-        const existingParent = parentByChild.get(childRoot);
-        if (existingParent && existingParent !== parentRoot) {
-          continue;
-        }
-        parentByChild.set(childRoot, parentRoot);
-        entries.push({ childRoot, entry });
+    const declared = await readDeclared(reader, parentRoot, runGit);
+    const entries: Array<{ childRoot: string; entry: DeclaredSubmodule }> = [];
+    for (const entry of declared) {
+      const childRoot = canonicalizeRepoPath(joinRepoPath(parentRoot, entry.relativePath));
+      if (childRoot === parentRoot || ancestors.has(childRoot)) {
+        continue;
       }
-      const loaded = await Promise.all(
-        entries.map(({ childRoot, entry }) =>
-          buildSubmoduleNode(reader, parentRoot, childRoot, entry, loadChildren, runGit),
-        ),
-      );
-      children.push(...loaded);
-    } finally {
-      loadingParents.delete(parentRoot);
+
+      const existingParent = parentByChild.get(childRoot);
+      if (existingParent && existingParent !== parentRoot) {
+        continue;
+      }
+      parentByChild.set(childRoot, parentRoot);
+      entries.push({ childRoot, entry });
     }
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(parentRoot);
+    const loaded = await Promise.all(
+      entries.map(({ childRoot, entry }) =>
+        buildSubmoduleNode(
+          reader,
+          parentRoot,
+          childRoot,
+          entry,
+          (root) => loadChildren(root, nextAncestors),
+          runGit,
+        ),
+      ),
+    );
+    children.push(...loaded);
 
     return children;
   };

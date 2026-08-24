@@ -40,9 +40,21 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       readChangesTreeSettings((section, key, fallback) =>
         vscode.workspace.getConfiguration(section).get(key, fallback),
       ),
-    (timings) => {
+    (timing) => {
+      if (timing.phase === "roots") {
+        console.debug(
+          `[git-submodule] tree ${timing.usedCachedModel ? "overlay" : "discovery"} model=${timing.modelDiscoveryMs}ms build=${timing.treeBuildMs}ms adoptedCounts=${timing.adoptedCountHydrationMs}ms deferred=${timing.deferredAdoptedGroups} total=${timing.durationMs}ms`,
+        );
+        return;
+      }
+      if (timing.phase === "adopted-count") {
+        console.debug(
+          `[git-submodule] adopted-count files=${timing.fileCount} hydrate=${timing.durationMs}ms`,
+        );
+        return;
+      }
       console.debug(
-        `[git-submodule] tree ${timings.usedCachedModel ? "overlay" : "discovery"} ${timings.durationMs}ms`,
+        `[git-submodule] adopted-files kind=${timing.kind} diff=${timing.durationMs}ms files=${timing.fileCount} ok=${timing.ok}`,
       );
     },
   );

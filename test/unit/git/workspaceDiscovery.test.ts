@@ -17,6 +17,10 @@ const UNINIT = "8888888888888888888888888888888888888888";
 
 class ScriptedGitCli implements GitCli {
   private readonly scripts = new Map<string, GitRunResult>();
+  private activeStatus = 0;
+  maxConcurrentStatus = 0;
+
+  constructor(private readonly delayMs = 0) {}
 
   on(cwd: string, args: readonly string[], result: string | GitRunResult): this {
     const resolved: GitRunResult = typeof result === "string" ? { stdout: result, stderr: "", exitCode: 0 } : result;
@@ -33,7 +37,21 @@ class ScriptedGitCli implements GitCli {
     if (!allowed.includes(found.exitCode)) {
       throw new GitCliError("git", options.args, options.cwd, found.exitCode, found.stdout, found.stderr);
     }
-    return found;
+    const isStatus = options.args[0] === "status";
+    if (isStatus) {
+      this.activeStatus += 1;
+      this.maxConcurrentStatus = Math.max(this.maxConcurrentStatus, this.activeStatus);
+    }
+    try {
+      if (this.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      }
+      return found;
+    } finally {
+      if (isStatus) {
+        this.activeStatus -= 1;
+      }
+    }
   }
 
   private key(cwd: string, args: readonly string[]): string {
@@ -288,6 +306,32 @@ describe("discoverWorkspaceGitModel", () => {
       "feature/t2-deployment",
     ]);
     expect(model.roots[0]?.children[0]?.rootPath).not.toBe(model.roots[0]?.children[1]?.rootPath);
+  });
+
+  it("probes sibling submodules concurrently", async () => {
+    const leftRel = "modules/left";
+    const rightRel = "modules/right";
+    const left = path.join(httpendpoint, leftRel);
+    const right = path.join(httpendpoint, rightRel);
+    const cli = new ScriptedGitCli(5);
+    stubWorkTree(cli, httpendpoint);
+    stubWorkTree(cli, left);
+    stubWorkTree(cli, right);
+    stubDeclared(cli, httpendpoint, {
+      modules: [{ name: leftRel, path: leftRel }, { name: rightRel, path: rightRel }],
+      links: [{ path: leftRel, sha: HEAD_T1 }, { path: rightRel, sha: HEAD_T2 }],
+    });
+    stubEmptyDeclared(cli, left);
+    stubEmptyDeclared(cli, right);
+    cli.on(left, ["status", "--porcelain=v2", "--branch", "--untracked-files=all", "--ignore-submodules=all"], porcelain({ oid: HEAD_T1, head: "main" }));
+    cli.on(right, ["status", "--porcelain=v2", "--branch", "--untracked-files=all", "--ignore-submodules=all"], porcelain({ oid: HEAD_T2, head: "main" }));
+
+    const model = await discoverWorkspaceGitModel(new GitRepositoryReader(cli, { exists: () => false }), {
+      workspaceFolderPaths: [httpendpoint],
+    });
+
+    expect(model.roots[0]?.children).toHaveLength(2);
+    expect(cli.maxConcurrentStatus).toBe(2);
   });
 
   it("ignores a gitlink whose path resolves to the parent itself", async () => {

@@ -421,14 +421,14 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private async hydrate(nodes: AdoptedTreeNode[]): Promise<AdoptedTreeNode[]> {
     return Promise.all(
       nodes.map(async (node) => {
-      let current = node;
-      if (
-        this.isExpanded(node) &&
-        node.diffSpec &&
-        (node.kind === "staged" || node.kind === "unstaged" || node.kind === "adopted-group")
-      ) {
-        current = { ...node, children: await this.options.controller.getChildren(node) };
-      }
+        let current = node;
+        if (
+          this.isExpanded(node) &&
+          node.diffSpec &&
+          (node.kind === "staged" || node.kind === "unstaged" || node.kind === "adopted-group")
+        ) {
+          current = { ...node, children: await this.options.controller.getChildren(node) };
+        }
         return { ...current, children: await this.hydrate(current.children) };
       }),
     );

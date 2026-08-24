@@ -202,6 +202,9 @@ function renderRow(row: ChangesWebviewRow): string {
     ? `<span class="badge"${row.decorationColor ? ` style="color:${themeVar(row.decorationColor)}"` : ""}>${escapeHtml(row.decorationBadge)}</span>`
     : "";
   const dirtyDot = row.dirtyDot ? `<span class="dirty-dot" aria-hidden="true"></span>` : "";
+  const status = countPill || badge || dirtyDot
+    ? `<span class="row-status">${countPill}${badge}${dirtyDot}</span>`
+    : "";
   const isRepo = row.kind === "workspace-root" || row.kind === "submodule";
   const isGroup = row.kind === "change-group" || row.kind === "adopted-group";
   const repoKind = isRepo ? `<span class="repo-kind">Git</span>` : "";
@@ -228,7 +231,7 @@ function renderRow(row: ChangesWebviewRow): string {
   const kids = row.children.map((child) => renderRow(child)).join("");
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
     <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
-      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(row.label)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${countPill}${badge}${dirtyDot}
+      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(row.label)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${status}
     </div>
     ${chrome}${kids}
   </div>`;
@@ -327,17 +330,57 @@ body {
   justify-content: center;
   flex: none;
 }
+.inline-btn {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border-radius: 5px;
+}
+.inline-btn > .codicon {
+  display: block;
+  line-height: 16px;
+}
+.inline-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+.twistie:focus-visible,
+.inline-btn:focus-visible,
+.branch:focus-visible,
+.sparkle-btn:focus-visible,
+.commit-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
 .label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repo-kind { flex: none; color: var(--vscode-descriptionForeground); font-size: 11px; }
 .grow { flex: 1 1 auto; min-width: 4px; margin-left: auto; }
 .desc, .branch {
-  flex: none;
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
   padding: 0 2px;
 }
+.desc { flex: none; }
+.branch {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .branch:hover { text-decoration: underline; color: var(--vscode-textLink-foreground); }
-.badge { flex: none; font-size: 11px; font-weight: 600; min-width: 12px; text-align: right; padding-right: 4px; }
+.row-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+  min-width: 16px;
+  margin-left: 2px;
+  padding-right: 6px;
+  box-sizing: border-box;
+}
+.badge { flex: none; font-size: 11px; font-weight: 600; min-width: 12px; text-align: right; }
 .count-pill {
   display: inline-flex;
   align-items: center;
@@ -345,9 +388,8 @@ body {
   flex: none;
   min-width: 16px;
   height: 16px;
-  margin-left: 4px;
-  margin-right: 4px;
   padding: 0 5px;
+  box-sizing: border-box;
   border-radius: 8px;
   font-size: 11px;
   font-weight: 600;
@@ -360,10 +402,15 @@ body {
   height: 6px;
   border-radius: 50%;
   flex: none;
-  margin-right: 8px;
   background: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
-.inline { display: inline-flex; gap: 0; flex: none; }
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: 20px;
+}
 .row:not(.repo-row) .inline { opacity: 0; }
 .row:not(.repo-row):hover .inline,
 .row:not(.repo-row):focus-within .inline,

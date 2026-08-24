@@ -225,7 +225,8 @@ describe("buildAdoptedTree change groups", () => {
     expect(gitlinkChange?.diffSpec).toBeUndefined();
     expect(gitlinkChange?.children.map((child) => child.kind)).toEqual(["adopted-group"]);
     expect(gitlinkChange?.children[0]?.label).toBe("Adopted Changes");
-    expect(gitlinkChange?.children[0]?.description).toBe("0");
+    expect(gitlinkChange?.children[0]?.description).toBeUndefined();
+    expect(gitlinkChange?.children[0]?.expandByDefault).toBe(false);
     expect(gitlinkChange?.children[0]?.diffSpec).toEqual({
       repoRoot: "/ws/http/httplib",
       fromSha: HEAD,
@@ -252,7 +253,7 @@ describe("buildAdoptedTree change groups", () => {
     expect(commonGitlink?.decoration?.badge).toBe("S");
     expect(commonGitlink?.description).toBe(`${HEAD.slice(0, 7)} → development/AFLEX`);
     expect(commonGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
-    expect(commonGitlink?.children[0]?.description).toBe("0");
+    expect(commonGitlink?.children[0]?.description).toBeUndefined();
     expect(byKind(http?.children, "adopted-group")).toEqual([]);
   });
 

@@ -87,7 +87,7 @@ describe("AdoptedTreeController", () => {
     checkoutHeadSha: CHECKOUT,
   });
 
-  it("loads adopted name-status for file counts and reuses the cache for Open All", async () => {
+  it("defers adopted file counts until expansion and reuses the cache for Open All", async () => {
     const fake = new FakeModel(modelWith(child), []);
     fake.nameStatusImpl = async (spec) => {
       if (spec.kind === "staged") {
@@ -111,15 +111,17 @@ describe("AdoptedTreeController", () => {
     expect(stagedGitlink?.description).toBe(`${HEAD.slice(0, 7)} → ${INDEX.slice(0, 7)}`);
     expect(stagedGitlink?.children[0]?.kind).toBe("adopted-group");
     expect(stagedGitlink?.children[0]?.diffSpec?.kind).toBe("staged");
-    expect(stagedGitlink?.children[0]?.description).toBe("1");
+    expect(stagedGitlink?.children[0]?.description).toBeUndefined();
     expect(unstagedGitlink?.description).toBe(`${INDEX.slice(0, 7)} → main`);
     expect(unstagedGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
-    expect(unstagedGitlink?.children[0]?.description).toBe("2");
+    expect(unstagedGitlink?.children[0]?.description).toBeUndefined();
     expect(lib?.children).toEqual([]);
-    expect(fake.nameStatusCalls.map((call) => call.kind).sort()).toEqual(["staged", "unstaged"]);
+    expect(fake.nameStatusCalls).toEqual([]);
 
     const stagedFiles = await controller.getChildren(stagedGitlink!.children[0]!);
     const unstagedFiles = await controller.getChildren(unstagedGitlink!.children[0]!);
+    expect(stagedGitlink?.children[0]?.description).toBe("1");
+    expect(unstagedGitlink?.children[0]?.description).toBe("2");
     expect(fake.nameStatusCalls).toHaveLength(2);
     expect(stagedFiles.map((node) => node.label)).toEqual(["src"]);
     expect(stagedFiles[0]?.children.map((node) => node.fileDiff?.path)).toEqual(["src/index.ts"]);
@@ -139,6 +141,32 @@ describe("AdoptedTreeController", () => {
     expect(fromSubmodule).toHaveLength(0);
   });
 
+  it("coalesces duplicate lazy loads and hydrates independent adopted groups in parallel", async () => {
+    const fake = new FakeModel(modelWith(child), [{ status: "modified", path: "src/index.ts" }]);
+    let active = 0;
+    let maxActive = 0;
+    fake.nameStatusImpl = async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      active -= 1;
+      return [{ status: "modified", path: "src/index.ts" }];
+    };
+    const controller = new AdoptedTreeController(fake);
+    const roots = await controller.getRootNodes();
+    const staged = roots[0]?.children.find((node) => node.changeGroup === "index")?.children[0]?.children[0];
+
+    await Promise.all([controller.getChildren(staged), controller.getChildren(staged)]);
+    expect(fake.nameStatusCalls).toHaveLength(1);
+
+    controller.invalidateModel();
+    await controller.refresh();
+    const refreshed = await controller.getRootNodes();
+    const files = await controller.filesForOpenAll(refreshed[0]!);
+    expect(files).toHaveLength(2);
+    expect(maxActive).toBe(2);
+  });
+
   it("re-nests adopted files when the SCM view mode changes without a second diff", async () => {
     const fake = new FakeModel(modelWith(child), [{ status: "modified", path: "src/index.ts" }]);
     let settings: ChangesTreeSettings = { ...DEFAULT_CHANGES_TREE_SETTINGS, viewMode: "list" };
@@ -151,9 +179,10 @@ describe("AdoptedTreeController", () => {
 
     const first = await controller.getRootNodes();
     const stagedList = first[0]?.children.find((node) => node.kind === "change-group" && node.changeGroup === "index")?.children[0];
-    expect(stagedList?.children[0]?.description).toBe("1");
+    expect(stagedList?.children[0]?.description).toBeUndefined();
     expect((await controller.getChildren(stagedList!.children[0]!)).map((node) => node.label)).toEqual(["src/index.ts"]);
-    expect(fake.nameStatusCalls).toHaveLength(2);
+    expect(stagedList?.children[0]?.description).toBe("1");
+    expect(fake.nameStatusCalls).toHaveLength(1);
 
     settings = { ...settings, viewMode: "tree" };
     await controller.refresh();
@@ -162,7 +191,7 @@ describe("AdoptedTreeController", () => {
     const nested = await controller.getChildren(stagedTree!.children[0]!);
     expect(nested.map((node) => node.label)).toEqual(["src"]);
     expect(nested[0]?.children.map((node) => node.label)).toEqual(["index.ts"]);
-    expect(fake.nameStatusCalls).toHaveLength(2);
+    expect(fake.nameStatusCalls).toHaveLength(1);
   });
 
   it("overlays staged file moves from repository state without a second git-model snapshot", async () => {
@@ -224,10 +253,10 @@ describe("AdoptedTreeController", () => {
     const staged = first[0]?.children.find((node) => node.kind === "change-group" && node.changeGroup === "index")?.children[0];
     expect(staged?.kind).toBe("change");
     expect(staged?.children[0]?.diffSpec?.kind).toBe("staged");
-    expect(staged?.children[0]?.description).toBe("1");
+    expect(staged?.children[0]?.description).toBeUndefined();
     await controller.getChildren(staged!.children[0]);
     expect(fake.snapshotCount).toBe(1);
-    expect(fake.nameStatusCalls).toHaveLength(2);
+    expect(fake.nameStatusCalls).toHaveLength(1);
 
     fake.nameStatusImpl = async () => [{ status: "added", path: "after-refresh.ts" }];
     await controller.refresh();
@@ -241,9 +270,10 @@ describe("AdoptedTreeController", () => {
     const files = await controller.getChildren(stagedAfter!.children[0]);
     expect(fake.snapshotCount).toBe(2);
     expect(files[0]?.fileDiff?.path).toBe("after-refresh.ts");
+    expect(fake.nameStatusCalls).toHaveLength(2);
   });
 
-  it("surfaces snapshot and adopted hydration failures as retryable root errors", async () => {
+  it("surfaces snapshot failures at root and adopted diff failures inside the lazy group", async () => {
     const fake = new FakeModel(modelWith(child));
     fake.snapshotImpl = async () => {
       throw new Error("git unavailable");
@@ -266,11 +296,13 @@ describe("AdoptedTreeController", () => {
     };
     const filesController = new AdoptedTreeController(ok);
     const tree = await filesController.getRootNodes();
-    expect(tree[0]?.kind).toBe("message");
-    expect(tree[0]?.label).toBe("Failed to load changes");
-    expect(tree[0]?.tooltip).toContain("diff failed");
-    expect(filesController.rootLoadError()).toContain("diff failed");
-    expect(treeItemCommand(tree[0]!)).toBeUndefined();
+    expect(tree[0]?.kind).toBe("workspace-root");
+    expect(filesController.rootLoadError()).toBeUndefined();
+    const adopted = tree[0]?.children.find((node) => node.changeGroup === "index")?.children[0]?.children[0];
+    const failure = await filesController.getChildren(adopted);
+    expect(failure[0]?.kind).toBe("message");
+    expect(failure[0]?.tooltip).toContain("diff failed");
+    expect(treeItemCommand(failure[0]!)).toBeUndefined();
   });
 
   it("peeks the last published tree while a refresh is in flight", async () => {

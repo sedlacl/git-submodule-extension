@@ -167,7 +167,8 @@ describe("buildAdoptedTree", () => {
     expect(libGitlink?.children[0]).toMatchObject({
       kind: "adopted-group",
       label: "Adopted Changes",
-      description: "0",
+      description: undefined,
+      expandByDefault: false,
       contextValue: CONTEXT.adoptedGroup,
     });
     expect(treeItemFileKindIcon(libGitlink!)).toBe("file");

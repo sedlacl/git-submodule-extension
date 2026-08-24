@@ -39,6 +39,11 @@ export type AdoptedTreeTiming =
       durationMs: number;
       fileCount: number;
       ok: boolean;
+    }
+  | {
+      phase: "adopted-count";
+      durationMs: number;
+      fileCount: number;
     };
 
 export class AdoptedTreeController {
@@ -210,8 +215,15 @@ export class AdoptedTreeController {
       return node.children;
     }
     const files = await this.loadFileNodes(node.diffSpec);
+    const countStarted = Date.now();
     if (!files.some((child) => child.kind === "message")) {
-      node.description = String(collectFileDiffs(files).length);
+      const fileCount = collectFileDiffs(files).length;
+      node.description = String(fileCount);
+      this.onTiming?.({
+        phase: "adopted-count",
+        durationMs: Date.now() - countStarted,
+        fileCount,
+      });
     }
     return files;
   }
