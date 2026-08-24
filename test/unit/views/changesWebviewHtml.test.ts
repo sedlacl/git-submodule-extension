@@ -209,7 +209,7 @@ describe("changes webview HTML", () => {
       }),
     );
     expect(html).toContain('class="count-pill">22<');
-    expect(html).toContain('class="count-pill">0<');
+    expect(html).toContain('class="count-pill" data-adopted-count>0<');
     expect(html).not.toMatch(/class="desc">22</);
     expect(html).toContain('class="dirty-dot"');
     expect(html).toContain('class="badge"');
@@ -348,9 +348,18 @@ describe("changes webview HTML", () => {
     const loading = renderChangesTree(toChangesWebviewRows([tinted, clean], state));
     expect(loading).toMatch(/class="label" style="color:var\(--vscode-gitDecoration-submoduleResourceForeground\)">app</);
     expect(loading).toContain("Loading adopted files");
+    expect(loading).toContain("adopted-count-loading");
+    expect(loading).not.toContain('class="count-pill">0<');
     expect(loading).toContain('class="badge" style="color:var(--vscode-gitDecoration-submoduleResourceForeground)">S');
     expect(loading).not.toMatch(/style="color:[^"]+">clean</);
 
+    adopted.adoptedCountError = "diff failed";
+    const failed = renderChangesTree(toChangesWebviewRows([tinted, clean], state));
+    expect(failed).toContain('data-act="retry-adopted"');
+    expect(failed).toContain("diff failed");
+    expect(failed).toContain("codicon-warning");
+
+    adopted.adoptedCountError = undefined;
     adopted.description = "1";
     adopted.children = [{
       id: "file:/ws/app/mod:unstaged:src/a.ts",
@@ -370,6 +379,7 @@ describe("changes webview HTML", () => {
     }];
     const hydrated = renderChangesTree(toChangesWebviewRows([tinted, clean], state));
     expect(hydrated).not.toContain("Loading adopted files");
+    expect(hydrated).toContain('class="count-pill" data-adopted-count>1<');
     expect(hydrated).toMatch(/style="color:var\(--vscode-gitDecoration-submoduleResourceForeground\)">app</);
     expect(hydrated).toContain('style="color:var(--vscode-gitDecoration-modifiedResourceForeground)">M');
   });

@@ -46,6 +46,11 @@ export type AdoptedTreeTiming =
       fileCount: number;
     };
 
+export type AdoptedCountPatch =
+  | { id: string; state: "loading" }
+  | { id: string; state: "resolved"; count: number }
+  | { id: string; state: "error"; message: string };
+
 export class AdoptedTreeController {
   private generation = 0;
   private roots: AdoptedTreeNode[] | undefined;
@@ -142,6 +147,35 @@ export class AdoptedTreeController {
     return collectChangeRefs(node);
   }
 
+  async hydrateAdoptedCounts(
+    roots: readonly AdoptedTreeNode[],
+    onPatch: (patch: AdoptedCountPatch) => void,
+  ): Promise<void> {
+    const generation = this.generation;
+    await Promise.all(
+      collectAdoptedGroups(roots).map(async (group) => {
+        if (!group.diffSpec) {
+          return;
+        }
+        const patch = await this.loadAdoptedCount(group, generation);
+        if (patch && generation === this.generation) {
+          onPatch(patch);
+        }
+      }),
+    );
+  }
+
+  async retryAdoptedCount(node: AdoptedTreeNode): Promise<AdoptedCountPatch | undefined> {
+    if (!node.diffSpec || node.kind !== "adopted-group") {
+      return undefined;
+    }
+    const generation = this.generation;
+    this.fileCache.delete(cacheKey(node.diffSpec));
+    node.description = undefined;
+    node.adoptedCountError = undefined;
+    return this.loadAdoptedCount(node, generation);
+  }
+
   countBadge(): number {
     const settings = this.settings();
     return this.repositorySnapshots().reduce((total, snapshot) => total + repositoryCountBadge(snapshot.groups, settings), 0);
@@ -214,18 +248,9 @@ export class AdoptedTreeController {
     if (!node.diffSpec) {
       return node.children;
     }
-    const files = await this.loadFileNodes(node.diffSpec);
-    const countStarted = Date.now();
-    if (!files.some((child) => child.kind === "message")) {
-      const fileCount = collectFileDiffs(files).length;
-      node.description = String(fileCount);
-      this.onTiming?.({
-        phase: "adopted-count",
-        durationMs: Date.now() - countStarted,
-        fileCount,
-      });
-    }
-    return files;
+    const cached = await this.loadFileList(node.diffSpec);
+    this.applyAdoptedCount(node, cached, Date.now());
+    return nodesFromCache(node.diffSpec, cached, this.settings());
   }
 
   private async loadFileNodes(spec: AdoptedDiffSpec): Promise<AdoptedTreeNode[]> {
@@ -291,6 +316,43 @@ export class AdoptedTreeController {
         this.fileInflight.delete(key);
       }
     }
+  }
+
+  private async loadAdoptedCount(
+    node: AdoptedTreeNode,
+    generation: number,
+  ): Promise<AdoptedCountPatch | undefined> {
+    if (!node.diffSpec) {
+      return undefined;
+    }
+    const started = Date.now();
+    const cached = await this.loadFileList(node.diffSpec);
+    if (generation !== this.generation) {
+      return undefined;
+    }
+    return this.applyAdoptedCount(node, cached, started);
+  }
+
+  private applyAdoptedCount(
+    node: AdoptedTreeNode,
+    cached: CachedFileList,
+    started: number,
+  ): AdoptedCountPatch {
+    if (!cached.ok) {
+      const message = cached.nodes[0]?.tooltip ?? "Failed to list changes";
+      node.description = undefined;
+      node.adoptedCountError = message;
+      return { id: node.id, state: "error", message };
+    }
+    const count = cached.entries.length;
+    node.description = String(count);
+    node.adoptedCountError = undefined;
+    this.onTiming?.({
+      phase: "adopted-count",
+      durationMs: Date.now() - started,
+      fileCount: count,
+    });
+    return { id: node.id, state: "resolved", count };
   }
 }
 

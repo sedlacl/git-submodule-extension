@@ -64,23 +64,20 @@ export function parseGitShowUri(uri: { path: string; query: string }): ParsedGit
 }
 
 export function prepareFileDiff(file: AdoptedFileDiff): PreparedFileDiff {
-  const originalPath = originalGitPath(file);
-  const modifiedPath = file.path;
-  const originalEmpty = file.status === "added";
-  const modifiedEmpty = file.status === "deleted";
+  const sides = diffSides(file);
 
   const original = gitShowUriParts({
     repoRoot: file.repoRoot,
-    sha: file.fromSha,
-    gitPath: originalPath,
-    empty: originalEmpty,
+    sha: sides.original.sha,
+    gitPath: sides.original.gitPath,
+    empty: sides.original.empty,
     status: file.status,
   });
   const modified = gitShowUriParts({
     repoRoot: file.repoRoot,
-    sha: file.toSha,
-    gitPath: modifiedPath,
-    empty: modifiedEmpty,
+    sha: sides.modified.sha,
+    gitPath: sides.modified.gitPath,
+    empty: sides.modified.empty,
     status: file.status,
   });
 
@@ -88,7 +85,7 @@ export function prepareFileDiff(file: AdoptedFileDiff): PreparedFileDiff {
     title: diffTitle(file),
     original,
     modified,
-    reveal: modifiedEmpty ? original : modified,
+    reveal: sides.modified.empty ? original : modified,
   };
 }
 
@@ -134,11 +131,32 @@ export function openAllTitle(label: string, fileCount: number): string {
   return `${label} (${count})`;
 }
 
-function originalGitPath(file: AdoptedFileDiff): string {
-  if ((file.status === "renamed" || file.status === "copied") && file.oldPath) {
-    return file.oldPath;
+interface DiffSidePlan {
+  sha: string;
+  gitPath: string;
+  empty?: boolean;
+}
+
+function diffSides(file: AdoptedFileDiff): { original: DiffSidePlan; modified: DiffSidePlan } {
+  const source = { sha: file.fromSha, gitPath: file.path };
+  const target = { sha: file.toSha, gitPath: file.path };
+  switch (file.status) {
+    case "added":
+      return { original: { ...source, empty: true }, modified: target };
+    case "deleted":
+      return { original: source, modified: { ...target, empty: true } };
+    case "renamed":
+    case "copied":
+      return {
+        original: { ...source, gitPath: file.oldPath ?? file.path },
+        modified: target,
+      };
+    case "modified":
+    case "typechange":
+    case "unmerged":
+    case "unknown":
+      return { original: source, modified: target };
   }
-  return file.path;
 }
 
 function diffTitle(file: AdoptedFileDiff): string {

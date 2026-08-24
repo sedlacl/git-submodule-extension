@@ -86,6 +86,7 @@ export interface AdoptedTreeNode {
   decoration?: FileDecorationSpec;
   diffSpec?: AdoptedDiffSpec;
   diffSpecs?: AdoptedDiffSpec[];
+  adoptedCountError?: string;
   fileDiff?: AdoptedFileDiff;
   change?: ChangeFileRef;
   resourceUri?: string;
@@ -490,6 +491,7 @@ function buildGitlinkAdoptedGroup(
     repositoryRoot: gitlink.rootPath,
     label: "Adopted Changes",
     description: spec ? undefined : "0",
+    adoptedCountError: undefined,
     tooltip,
     collapsible: true,
     expandByDefault: false,

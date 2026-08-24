@@ -24,23 +24,69 @@ function file(overrides: Partial<AdoptedFileDiff> & Pick<AdoptedFileDiff, "statu
 }
 
 describe("prepareFileDiff", () => {
-  it("uses an empty original side for added files and empty modified side for deletes", () => {
-    const added = prepareFileDiff(file({ status: "added", path: "src/new.ts" }));
-    expect(parseGitShowUri(added.original)).toMatchObject({ gitPath: "src/new.ts", sha: FROM, empty: true });
-    expect(parseGitShowUri(added.modified)).toMatchObject({ gitPath: "src/new.ts", sha: TO, empty: false, status: "added" });
+  it.each(["staged", "unstaged"] as const)(
+    "plans added and deleted %s diffs against an empty opposite side",
+    (kind) => {
+      const added = prepareFileDiff(file({ kind, status: "added", path: "src/new.ts" }));
+      expect(parseGitShowUri(added.original)).toMatchObject({
+        gitPath: "src/new.ts",
+        sha: FROM,
+        empty: true,
+      });
+      expect(parseGitShowUri(added.modified)).toMatchObject({
+        gitPath: "src/new.ts",
+        sha: TO,
+        empty: false,
+        status: "added",
+      });
+      expect(added.original).not.toEqual(added.modified);
 
-    const deleted = prepareFileDiff(file({ status: "deleted", path: "gone.md" }));
-    expect(parseGitShowUri(deleted.original)).toMatchObject({ gitPath: "gone.md", sha: FROM, empty: false });
-    expect(parseGitShowUri(deleted.modified)).toMatchObject({ gitPath: "gone.md", sha: TO, empty: true });
-    expect(deleted.reveal).toEqual(deleted.original);
+      const deleted = prepareFileDiff(file({ kind, status: "deleted", path: "gone.md" }));
+      expect(parseGitShowUri(deleted.original)).toMatchObject({
+        gitPath: "gone.md",
+        sha: FROM,
+        empty: false,
+      });
+      expect(parseGitShowUri(deleted.modified)).toMatchObject({
+        gitPath: "gone.md",
+        sha: TO,
+        empty: true,
+      });
+      expect(deleted.original).not.toEqual(deleted.modified);
+      expect(deleted.reveal).toEqual(deleted.original);
+    },
+  );
+
+  it("uses source and target refs for modified and typechange files", () => {
+    for (const status of ["modified", "typechange"] as const) {
+      const prepared = prepareFileDiff(file({ status, path: "src/shared.ts" }));
+      expect(parseGitShowUri(prepared.original)).toMatchObject({
+        gitPath: "src/shared.ts",
+        sha: FROM,
+        empty: false,
+      });
+      expect(parseGitShowUri(prepared.modified)).toMatchObject({
+        gitPath: "src/shared.ts",
+        sha: TO,
+        empty: false,
+      });
+    }
   });
 
   it("diffs rename and copy against the old path at the from SHA", () => {
     const renamed = prepareFileDiff(
       file({ status: "renamed", path: "new/name.ts", oldPath: "old/name.ts", similarity: 90 }),
     );
-    expect(parseGitShowUri(renamed.original).gitPath).toBe("old/name.ts");
-    expect(parseGitShowUri(renamed.modified).gitPath).toBe("new/name.ts");
+    expect(parseGitShowUri(renamed.original)).toMatchObject({
+      gitPath: "old/name.ts",
+      sha: FROM,
+      empty: false,
+    });
+    expect(parseGitShowUri(renamed.modified)).toMatchObject({
+      gitPath: "new/name.ts",
+      sha: TO,
+      empty: false,
+    });
     expect(renamed.title).toContain("old/name.ts → new/name.ts");
     expect(renamed.title).toContain("unstaged");
 

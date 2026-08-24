@@ -87,7 +87,7 @@ describe("AdoptedTreeController", () => {
     checkoutHeadSha: CHECKOUT,
   });
 
-  it("defers adopted file counts until expansion and reuses the cache for Open All", async () => {
+  it("hydrates collapsed adopted counts in the background and reuses the cache for expansion and Open All", async () => {
     const fake = new FakeModel(modelWith(child), []);
     fake.nameStatusImpl = async (spec) => {
       if (spec.kind === "staged") {
@@ -117,6 +117,16 @@ describe("AdoptedTreeController", () => {
     expect(unstagedGitlink?.children[0]?.description).toBeUndefined();
     expect(lib?.children).toEqual([]);
     expect(fake.nameStatusCalls).toEqual([]);
+
+    const patches: unknown[] = [];
+    await controller.hydrateAdoptedCounts(roots, (patch) => patches.push(patch));
+    expect(stagedGitlink?.children[0]?.description).toBe("1");
+    expect(unstagedGitlink?.children[0]?.description).toBe("2");
+    expect(patches).toEqual([
+      { id: stagedGitlink?.children[0]?.id, state: "resolved", count: 1 },
+      { id: unstagedGitlink?.children[0]?.id, state: "resolved", count: 2 },
+    ]);
+    expect(fake.nameStatusCalls).toHaveLength(2);
 
     const stagedFiles = await controller.getChildren(stagedGitlink!.children[0]!);
     const unstagedFiles = await controller.getChildren(unstagedGitlink!.children[0]!);
@@ -299,10 +309,61 @@ describe("AdoptedTreeController", () => {
     expect(tree[0]?.kind).toBe("workspace-root");
     expect(filesController.rootLoadError()).toBeUndefined();
     const adopted = tree[0]?.children.find((node) => node.changeGroup === "index")?.children[0]?.children[0];
+    const patches: unknown[] = [];
+    await filesController.hydrateAdoptedCounts(tree, (patch) => patches.push(patch));
+    expect(patches).toHaveLength(2);
+    expect(patches).toContainEqual({
+      id: adopted?.id,
+      state: "error",
+      message: "diff failed",
+    });
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: "error", message: "diff failed" }),
+        expect.objectContaining({ state: "error", message: "diff failed" }),
+      ]),
+    );
+    expect(adopted?.description).toBeUndefined();
+    expect(adopted?.adoptedCountError).toBe("diff failed");
+
     const failure = await filesController.getChildren(adopted);
     expect(failure[0]?.kind).toBe("message");
     expect(failure[0]?.tooltip).toContain("diff failed");
     expect(treeItemCommand(failure[0]!)).toBeUndefined();
+
+    ok.nameStatusImpl = async () => [{ status: "added", path: "retry.ts" }];
+    await expect(filesController.retryAdoptedCount(adopted!)).resolves.toEqual({
+      id: adopted?.id,
+      state: "resolved",
+      count: 1,
+    });
+    expect(adopted?.description).toBe("1");
+    expect(adopted?.adoptedCountError).toBeUndefined();
+  });
+
+  it("drops adopted count patches from a stale tree generation", async () => {
+    const fake = new FakeModel(modelWith(child));
+    let resolveFirst!: (entries: readonly NameStatusEntry[]) => void;
+    let call = 0;
+    fake.nameStatusImpl = async () => {
+      call += 1;
+      if (call === 1) {
+        return new Promise<readonly NameStatusEntry[]>((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return [{ status: "modified", path: "new-generation.ts" }];
+    };
+    const controller = new AdoptedTreeController(fake);
+    const first = await controller.getRootNodes();
+    const patches: unknown[] = [];
+    const hydration = controller.hydrateAdoptedCounts(first, (patch) => patches.push(patch));
+
+    await controller.refresh();
+    resolveFirst([{ status: "modified", path: "stale.ts" }]);
+    await hydration;
+
+    expect(patches).toEqual([]);
   });
 
   it("peeks the last published tree while a refresh is in flight", async () => {

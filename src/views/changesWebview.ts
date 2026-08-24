@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as vscode from "vscode";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { commitMessagePlaceholder } from "../scm/dailyGitActions.js";
-import type { AdoptedTreeController } from "./adoptedTreeController.js";
+import type { AdoptedCountPatch, AdoptedTreeController } from "./adoptedTreeController.js";
 import { buildBootstrapRepoNodes, treeItemCommand, type AdoptedTreeNode } from "./adoptedViewModel.js";
 import { type RowActionConfig, contextActions } from "./changesRowActions.js";
 import { readChangesTreeSettings, type ChangesTreeSettings } from "./changesTreeSettings.js";
@@ -30,6 +30,7 @@ type WebviewMessage =
   | ({ type: "ready" } & ChangesRenderVersion)
   | ({ type: "rendered" } & ChangesRenderVersion)
   | { type: "retry" }
+  | { type: "retryAdopted"; id: string }
   | { type: "toggle"; id: string }
   | { type: "click"; id: string; additive?: boolean }
   | { type: "branch"; id: string }
@@ -48,6 +49,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private lastTreeHtml: string | undefined;
   private lastRoots: AdoptedTreeNode[] = [];
   private readonly renderProtocol = new ChangesRenderProtocol();
+  private readonly adoptedCountPatches = new Map<string, AdoptedCountEnvelope>();
   private latestRender: RenderEnvelope | undefined;
   private progressCompletion: { generation: number; resolve: () => void } | undefined;
   private renderTiming: RenderTiming | undefined;
@@ -146,6 +148,9 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         await loading;
         return;
       }
+      case "retryAdopted":
+        await this.retryAdoptedCount(message.id);
+        return;
       case "toggle":
         await this.toggle(message.id);
         return;
@@ -256,6 +261,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     timing: Omit<RenderTiming, "generation" | "postMs">,
   ): ChangesRenderVersion {
     const version = this.renderProtocol.begin(renderState);
+    this.adoptedCountPatches.clear();
     this.latestRender = { type: "setTree", html, ...version };
     this.renderTiming = { generation: version.generation, postMs: 0, ...timing };
     this.startProgress(version.generation);
@@ -277,6 +283,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       view.badge = count > 0 ? { value: count, tooltip: `${count}` } : undefined;
       const html = this.measureSerialization(generation, () => this.renderTreeHtml(roots, true));
       await this.publishRender(generation, "final", html);
+      void this.hydrateAdoptedCounts(generation, view, roots);
       void this.hydrateExpandedAdopted(generation, view, roots);
     } catch (error) {
       if (!this.isCurrentRender(generation, view)) {
@@ -387,11 +394,72 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     }
     if (!accepted) {
       this.htmlReady = false;
+      return;
     }
+    await this.sendAdoptedCountPatches(render.generation, view);
   }
 
   private isCurrentRender(generation: number, view: vscode.WebviewView): boolean {
     return this.renderProtocol.isCurrent(generation) && this.view === view;
+  }
+
+  private async hydrateAdoptedCounts(
+    generation: number,
+    view: vscode.WebviewView,
+    roots: AdoptedTreeNode[],
+  ): Promise<void> {
+    await this.options.controller.hydrateAdoptedCounts(roots, (patch) => {
+      void this.publishAdoptedCountPatch(generation, view, patch);
+    });
+  }
+
+  private async retryAdoptedCount(id: string): Promise<void> {
+    const view = this.view;
+    const node = this.nodes.get(id);
+    if (!view || !node || node.kind !== "adopted-group") {
+      return;
+    }
+    const generation = this.renderProtocol.version().generation;
+    await this.publishAdoptedCountPatch(generation, view, { id, state: "loading" });
+    const patch = await this.options.controller.retryAdoptedCount(node);
+    if (patch) {
+      await this.publishAdoptedCountPatch(generation, view, patch);
+    }
+  }
+
+  private async publishAdoptedCountPatch(
+    generation: number,
+    view: vscode.WebviewView,
+    patch: AdoptedCountPatch,
+  ): Promise<void> {
+    if (!this.isCurrentRender(generation, view)) {
+      return;
+    }
+    const envelope: AdoptedCountEnvelope = { type: "adoptedCount", generation, ...patch };
+    this.adoptedCountPatches.set(patch.id, envelope);
+    applyAdoptedCountPatch(this.lastRoots, patch);
+    const indexed = this.nodes.get(patch.id);
+    if (indexed) {
+      applyAdoptedCountPatch([indexed], patch);
+    }
+    if (!this.htmlReady) {
+      return;
+    }
+    if (!(await view.webview.postMessage(envelope))) {
+      this.htmlReady = false;
+    }
+  }
+
+  private async sendAdoptedCountPatches(generation: number, view: vscode.WebviewView): Promise<void> {
+    for (const patch of this.adoptedCountPatches.values()) {
+      if (!this.isCurrentRender(generation, view) || patch.generation !== generation) {
+        return;
+      }
+      if (!(await view.webview.postMessage(patch))) {
+        this.htmlReady = false;
+        return;
+      }
+    }
   }
 
   private startProgress(generation: number): void {
@@ -545,6 +613,11 @@ interface RenderEnvelope extends ChangesRenderVersion {
   html: string;
 }
 
+type AdoptedCountEnvelope = AdoptedCountPatch & {
+  type: "adoptedCount";
+  generation: number;
+};
+
 interface ImmediatePaint {
   nodes?: AdoptedTreeNode[];
   snapshotMs: number;
@@ -564,4 +637,26 @@ interface RenderTiming {
 
 function emptyImmediatePaint(): ImmediatePaint {
   return { snapshotMs: 0, treeBuildMs: 0 };
+}
+
+function applyAdoptedCountPatch(nodes: readonly AdoptedTreeNode[], patch: AdoptedCountPatch): boolean {
+  for (const node of nodes) {
+    if (node.id === patch.id) {
+      if (patch.state === "resolved") {
+        node.description = String(patch.count);
+        node.adoptedCountError = undefined;
+      } else if (patch.state === "error") {
+        node.description = undefined;
+        node.adoptedCountError = patch.message;
+      } else {
+        node.description = undefined;
+        node.adoptedCountError = undefined;
+      }
+      return true;
+    }
+    if (applyAdoptedCountPatch(node.children, patch)) {
+      return true;
+    }
+  }
+  return false;
 }

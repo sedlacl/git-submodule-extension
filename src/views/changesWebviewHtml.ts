@@ -20,6 +20,8 @@ export interface ChangesWebviewRow {
   decorationBadge?: string;
   decorationColor?: string;
   countPill?: string;
+  adoptedCountState?: "loading" | "error";
+  adoptedCountError?: string;
   dirtyDot: boolean;
   contextValue: string;
   showCommitChrome: boolean;
@@ -48,6 +50,12 @@ export function toChangesWebviewRows(
     const showCommitChrome = expanded && repoHasOwnCommitChanges(node);
     const repositoryRoot = node.repositoryRoot;
     const countPill = groupCountPill(node);
+    const adoptedCountState =
+      node.kind === "adopted-group" && node.diffSpec && !countPill
+        ? node.adoptedCountError
+          ? "error"
+          : "loading"
+        : undefined;
     const children = expanded ? toChangesWebviewRows(node.children, state, depth + 1) : [];
     if (
       expanded &&
@@ -74,6 +82,8 @@ export function toChangesWebviewRows(
       decorationBadge: node.decoration?.badge,
       decorationColor: node.decoration?.themeColorId,
       countPill,
+      adoptedCountState,
+      adoptedCountError: node.adoptedCountError,
       dirtyDot: node.kind === "folder",
       contextValue: node.contextValue,
       showCommitChrome,
@@ -197,13 +207,21 @@ function renderRow(row: ChangesWebviewRow): string {
   const icon = row.iconId
     ? `<i class="codicon ${codiconClass(row.iconId)}"${row.iconColor ? ` style="color:${themeVar(row.iconColor)}"` : ""}></i>`
     : "";
-  const countPill = row.countPill ? `<span class="count-pill">${escapeHtml(row.countPill)}</span>` : "";
+  const adoptedCount = row.countPill
+    ? row.kind === "adopted-group"
+      ? `<span class="count-pill" data-adopted-count>${escapeHtml(row.countPill)}</span>`
+      : `<span class="count-pill">${escapeHtml(row.countPill)}</span>`
+    : row.adoptedCountState === "error"
+      ? `<button type="button" class="adopted-count adopted-count-error" data-act="retry-adopted" title="${escapeHtml(row.adoptedCountError ?? "Failed to load adopted count. Retry.")}" aria-label="Retry adopted count"><i class="codicon codicon-warning"></i></button>`
+      : row.adoptedCountState === "loading"
+        ? `<span class="adopted-count adopted-count-loading" title="Loading adopted count" aria-label="Loading adopted count"><i class="codicon codicon-loading codicon-modifier-spin"></i></span>`
+        : "";
   const badge = row.decorationBadge
     ? `<span class="badge"${row.decorationColor ? ` style="color:${themeVar(row.decorationColor)}"` : ""}>${escapeHtml(row.decorationBadge)}</span>`
     : "";
   const dirtyDot = row.dirtyDot ? `<span class="dirty-dot" aria-hidden="true"></span>` : "";
-  const status = countPill || badge || dirtyDot
-    ? `<span class="row-status">${countPill}${badge}${dirtyDot}</span>`
+  const status = adoptedCount || badge || dirtyDot
+    ? `<span class="row-status">${adoptedCount}${badge}${dirtyDot}</span>`
     : "";
   const isRepo = row.kind === "workspace-root" || row.kind === "submodule";
   const isGroup = row.kind === "change-group" || row.kind === "adopted-group";
@@ -321,6 +339,21 @@ body {
   color: inherit;
   padding: 0;
   cursor: pointer;
+}
+.adopted-count-error {
+  border: none;
+  padding: 0;
+  color: var(--vscode-list-warningForeground, var(--vscode-editorWarning-foreground));
+  background: transparent;
+  cursor: pointer;
+}
+.adopted-count-loading, .adopted-count-error {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 .twistie, .twistie-spacer, .inline-btn, .sparkle-btn {
   width: 16px;
@@ -468,7 +501,13 @@ let current = {
 
 window.addEventListener("message", (event) => {
   const msg = event.data;
-  if (!msg || msg.type !== "setTree") return;
+  if (!msg) return;
+  if (msg.type === "adoptedCount") {
+    if (msg.generation !== current.generation) return;
+    applyAdoptedCount(msg);
+    return;
+  }
+  if (msg.type !== "setTree") return;
   if (msg.generation < current.generation) return;
   if (msg.generation === current.generation && stateRank[msg.renderState] < stateRank[current.renderState]) return;
   const active = document.activeElement;
@@ -488,6 +527,40 @@ window.addEventListener("message", (event) => {
   vscode.postMessage({ type: "rendered", generation: current.generation, renderState: current.renderState });
 });
 
+function applyAdoptedCount(msg) {
+  const nodeEl = Array.from(root.querySelectorAll(".node")).find((node) => node.getAttribute("data-id") === msg.id);
+  if (!nodeEl) return;
+  const row = nodeEl.querySelector(":scope > .row");
+  if (!row) return;
+  let status = Array.from(row.children).find((child) => child.classList.contains("row-status"));
+  if (!status) {
+    status = document.createElement("span");
+    status.className = "row-status";
+    row.appendChild(status);
+  }
+  let indicator = status.querySelector("[data-adopted-count], .adopted-count");
+  if (!indicator) {
+    indicator = document.createElement("span");
+    status.prepend(indicator);
+  }
+  if (msg.state === "resolved") {
+    indicator.outerHTML = '<span class="count-pill" data-adopted-count>' + String(msg.count) + "</span>";
+    return;
+  }
+  if (msg.state === "error") {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "adopted-count adopted-count-error";
+    button.setAttribute("data-act", "retry-adopted");
+    button.title = msg.message || "Failed to load adopted count. Retry.";
+    button.setAttribute("aria-label", "Retry adopted count");
+    button.innerHTML = '<i class="codicon codicon-warning"></i>';
+    indicator.replaceWith(button);
+    return;
+  }
+  indicator.outerHTML = '<span class="adopted-count adopted-count-loading" title="Loading adopted count" aria-label="Loading adopted count"><i class="codicon codicon-loading codicon-modifier-spin"></i></span>';
+}
+
 root.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) return;
@@ -503,6 +576,11 @@ root.addEventListener("click", (event) => {
   if (act === "toggle") {
     event.stopPropagation();
     vscode.postMessage({ type: "toggle", id });
+    return;
+  }
+  if (act === "retry-adopted") {
+    event.stopPropagation();
+    vscode.postMessage({ type: "retryAdopted", id });
     return;
   }
   if (act === "branch") {
