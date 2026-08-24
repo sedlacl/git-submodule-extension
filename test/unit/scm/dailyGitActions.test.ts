@@ -95,6 +95,8 @@ class FakeUi implements DailyGitActionsUi {
   nextInput: string | undefined;
   nextRemote: string | undefined;
   nextBranch: string | undefined;
+  nextGeneratedSubject: string | undefined;
+  generateCalls: string[] = [];
 
   async confirm(message: string, actions: readonly string[]): Promise<string | undefined> {
     this.confirmations.push({ message, actions });
@@ -118,6 +120,11 @@ class FakeUi implements DailyGitActionsUi {
 
   info(message: string): void {
     this.infos.push(message);
+  }
+
+  async generateCommitSubject(rootPath: string): Promise<string | undefined> {
+    this.generateCalls.push(rootPath);
+    return this.nextGeneratedSubject;
   }
 }
 
@@ -372,6 +379,21 @@ describe("DailyGitActions repository commands", () => {
     ]);
   });
 
+  it("commits a non-empty input-box draft without prompting", async () => {
+    const root = "/ws/repo";
+    const staged = resource(root, "a.ts", ResourceStatus.INDEX_MODIFIED);
+    const repository = new FakeRepository(root, snapshot(root, { index: [staged] }));
+    repository.inputBoxValue = "feat: from draft";
+    const ui = new FakeUi();
+    const { actions } = harness([repository], ui);
+
+    await actions.commit(root);
+
+    expect(ui.inputs).toEqual([]);
+    expect(repository.calls).toEqual([{ operation: "commit", args: ["feat: from draft", undefined] }]);
+    expect(repository.inputBoxValue).toBe("");
+  });
+
   it("syncs by public pull then push after confirmation", async () => {
     const root = "/ws/repo";
     const repository = new FakeRepository(root, snapshot(root));
@@ -411,8 +433,8 @@ describe("DailyGitActions repository commands", () => {
     const root = "/ws/repo";
     const staged = resource(root, "submodule", ResourceStatus.INDEX_MODIFIED);
     const repository = new FakeRepository(root, snapshot(root, { index: [staged] }));
+    repository.inputBoxValue = "chore: update service pointers";
     const ui = new FakeUi();
-    ui.nextInput = "chore: update service pointers";
     const chore: SubmoduleChoreReadService = {
       preview: async () => ({
         subject: "chore: update submodules",
@@ -434,11 +456,12 @@ describe("DailyGitActions repository commands", () => {
 
     await actions.prepareSubmoduleChore(root);
 
+    expect(ui.inputs).toEqual([]);
+    expect(ui.generateCalls).toEqual([]);
     expect(repository.inputBoxValue).toContain("chore: update service pointers");
     expect(repository.inputBoxValue).toContain("- feat: child");
     expect(repository.calls).toEqual([]);
 
-    ui.nextInput = repository.inputBoxValue;
     ui.nextConfirmation = undefined;
     await actions.commit(root);
     expect(repository.calls).toEqual([]);
@@ -451,6 +474,66 @@ describe("DailyGitActions repository commands", () => {
       args: [preparedMessage, undefined],
     });
     expect(repository.inputBoxValue).toBe("");
+  });
+
+  it("uses a public generate subject then appends the chore body", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGeneratedSubject = "feat: from copilot";
+    const chore: SubmoduleChoreReadService = {
+      preview: async () => ({
+        subject: "chore: update submodules",
+        body: "\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- feat: child",
+        message: "chore: update submodules\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- feat: child",
+        updates: [{
+          path: "submodule",
+          beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          branch: "main",
+          subjects: ["feat: child"],
+          staged: true,
+        }],
+        hasUnstagedUpdates: false,
+        unstagedNote: null,
+      }),
+    };
+    const { actions } = harness([repository], ui, chore);
+
+    await actions.prepareSubmoduleChore(root);
+
+    expect(ui.generateCalls).toEqual([root]);
+    expect(repository.inputBoxValue.startsWith("feat: from copilot")).toBe(true);
+    expect(repository.inputBoxValue).toContain("- feat: child");
+    expect(ui.infos).toEqual([]);
+  });
+
+  it("reports when sparkle has no public AI command and no pointer diffs", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    const chore: SubmoduleChoreReadService = { preview: async () => null };
+    const { actions } = harness([repository], ui, chore);
+
+    await actions.prepareSubmoduleChore(root);
+
+    expect(ui.generateCalls).toEqual([root]);
+    expect(repository.inputBoxValue).toBe("");
+    expect(ui.infos).toEqual(["No submodule pointer changes"]);
+  });
+
+  it("keeps a public AI subject when there are no pointer diffs", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGeneratedSubject = "feat: only ai";
+    const chore: SubmoduleChoreReadService = { preview: async () => null };
+    const { actions } = harness([repository], ui, chore);
+
+    await actions.prepareSubmoduleChore(root);
+
+    expect(repository.inputBoxValue).toBe("feat: only ai");
+    expect(ui.infos).toEqual([]);
   });
 
   it("stages through a handle whose rootPath separators differ from the tree node", async () => {

@@ -228,6 +228,42 @@ export function buildAdoptedTree(
   return model.roots.map((root) => buildWorkspaceRootNode(root, byRoot, settings));
 }
 
+/** Sync first-paint rows from vscode.git only — no recursive submodule discovery. */
+export function buildBootstrapRepoNodes(
+  snapshots: readonly RepositoryStateSnapshot[],
+  workspaceFolderPaths: readonly string[],
+  settings: ChangesTreeSettings = DEFAULT_CHANGES_TREE_SETTINGS,
+): AdoptedTreeNode[] {
+  const byRoot = indexSnapshots(snapshots);
+  const nodes: AdoptedTreeNode[] = [];
+  for (const folderPath of workspaceFolderPaths) {
+    const snapshot = lookupSnapshot(folderPath, byRoot);
+    if (!snapshot) {
+      continue;
+    }
+    nodes.push(
+      buildWorkspaceRootNode(
+        {
+          id: snapshot.rootPath,
+          kind: "workspace-root",
+          rootPath: snapshot.rootPath,
+          workspaceFolderPath: folderPath,
+          displayName: repoDisplayName(snapshot.rootPath),
+          children: [],
+        },
+        byRoot,
+        settings,
+      ),
+    );
+  }
+  return nodes;
+}
+
+function repoDisplayName(rootPath: string): string {
+  const parts = rootPath.replaceAll("\\", "/").split("/");
+  return parts[parts.length - 1] || rootPath;
+}
+
 export const buildChangesTree = buildAdoptedTree;
 
 export function fileNodesFromNameStatus(
@@ -453,10 +489,10 @@ function buildGitlinkAdoptedGroup(
     kind: "adopted-group",
     repositoryRoot: gitlink.rootPath,
     label: "Adopted Changes",
-    description: "0",
+    description: spec ? undefined : "0",
     tooltip,
     collapsible: true,
-    expandByDefault: true,
+    expandByDefault: false,
     contextValue: CONTEXT.adoptedGroup,
     iconId: "",
     diffSpec: spec,
@@ -769,6 +805,22 @@ export function hasPropagatedSubmoduleChanges(nodes: readonly AdoptedTreeNode[])
 function submoduleRepoHasLocalChanges(node: AdoptedTreeNode): boolean {
   return node.children.some(
     (child) => child.kind === "change-group" && child.description !== "0" && child.children.length > 0,
+  );
+}
+
+const COMMIT_CHROME_GROUPS = new Set(["index", "workingTree", "untracked"]);
+
+/** True when this repo row has its own staged/unstaged/untracked files (not merge-only, not dirty descendants). */
+export function repoHasOwnCommitChanges(node: AdoptedTreeNode): boolean {
+  if (node.kind !== "workspace-root" && node.kind !== "submodule") {
+    return false;
+  }
+  return node.children.some(
+    (child) =>
+      child.kind === "change-group" &&
+      child.changeGroup !== undefined &&
+      COMMIT_CHROME_GROUPS.has(child.changeGroup) &&
+      child.children.length > 0,
   );
 }
 

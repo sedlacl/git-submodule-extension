@@ -17,7 +17,8 @@ import { changeOpenTarget } from "./changeOpenPlan.js";
 import { readChangesTreeSettings, type ScmViewMode } from "./changesTreeSettings.js";
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
-import { AdoptedFileDecorationProvider, SubmoduleTreeProvider, toVscodeUri } from "./submoduleTree.js";
+import { ChangesWebviewProvider } from "./changesWebview.js";
+import { toVscodeUri } from "./submoduleTree.js";
 
 /** Coalesce bursty vscode.git events before a full gitlink/HEAD rediscovery. File overlays stay immediate. */
 const REFRESH_DEBOUNCE_MS = 300;
@@ -27,6 +28,7 @@ export interface RegisterAdoptedViewOptions {
   gitApi: VsCodeGitApiAdapter;
   cli: GitCli;
   restoreStatus?: RestoreStatusStore;
+  extensionUri: vscode.Uri;
 }
 
 export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode.Disposable {
@@ -44,25 +46,20 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       );
     },
   );
-  const treeProvider = new SubmoduleTreeProvider(controller);
-  const decorations = new AdoptedFileDecorationProvider();
   const contentProvider = new GitShowContentProvider(options.cli);
-
-  const treeView = vscode.window.createTreeView(VIEW_ID, {
-    treeDataProvider: treeProvider,
-    showCollapseAll: true,
-    canSelectMany: true,
+  const webviewProvider = new ChangesWebviewProvider({
+    controller,
+    gitApi: options.gitApi,
+    extensionUri: options.extensionUri,
   });
 
   const render = (): void => {
-    treeProvider.refresh();
-    decorations.refresh();
-    const count = controller.countBadge();
-    treeView.badge = count > 0 ? { value: count, tooltip: `${count}` } : undefined;
+    webviewProvider.refresh();
   };
 
   const overlayRefresh = coalesce(() => {
-    void controller.refresh().then(render);
+    void controller.refresh();
+    render();
   });
 
   const scheduleDiscovery = debounce(() => {
@@ -71,9 +68,10 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
   }, REFRESH_DEBOUNCE_MS);
 
   const disposables: vscode.Disposable[] = [
-    treeView,
+    vscode.window.registerWebviewViewProvider(VIEW_ID, webviewProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
     vscode.workspace.registerTextDocumentContentProvider(GIT_SHOW_SCHEME, contentProvider),
-    vscode.window.registerFileDecorationProvider(decorations),
     registerDailyGitActions({
       gitApi: options.gitApi,
       choreService: new SubmoduleChoreReadService(options.cli),

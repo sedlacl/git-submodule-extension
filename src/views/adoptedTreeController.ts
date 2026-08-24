@@ -23,17 +23,34 @@ import {
 } from "./adoptedViewModel.js";
 import { gitModelNeedsRediscovery } from "./gitModelRefresh.js";
 
-export interface AdoptedTreeRefreshTimings {
-  usedCachedModel: boolean;
-  durationMs: number;
-}
+export type AdoptedTreeTiming =
+  | {
+      phase: "roots";
+      usedCachedModel: boolean;
+      modelDiscoveryMs: number;
+      treeBuildMs: number;
+      adoptedCountHydrationMs: number;
+      deferredAdoptedGroups: number;
+      durationMs: number;
+    }
+  | {
+      phase: "adopted-files";
+      kind: AdoptedDiffSpec["kind"];
+      durationMs: number;
+      fileCount: number;
+      ok: boolean;
+    };
 
 export class AdoptedTreeController {
   private generation = 0;
   private roots: AdoptedTreeNode[] | undefined;
+  private publishedRoots: AdoptedTreeNode[] | undefined;
+  private rootError: string | undefined;
   private cachedModel: WorkspaceGitModel | undefined;
   private readonly lastStates = new Map<string, RepositoryStateSnapshot>();
   private readonly fileCache = new Map<string, CachedFileList>();
+  private readonly fileInflight = new Map<string, InflightFileList>();
+  private readonly runFileDiff = createLimiter(4);
   private inflight: Promise<AdoptedTreeNode[]> | undefined;
 
   constructor(
@@ -41,12 +58,13 @@ export class AdoptedTreeController {
     private readonly restoreStatus: (childRootPath: string) => RestoreResult | undefined = () => undefined,
     private readonly repositorySnapshots: () => readonly RepositoryStateSnapshot[] = () => [],
     private readonly settings: () => ChangesTreeSettings = () => DEFAULT_CHANGES_TREE_SETTINGS,
-    private readonly onRefresh?: (timings: AdoptedTreeRefreshTimings) => void,
+    private readonly onTiming?: (timing: AdoptedTreeTiming) => void,
   ) {}
 
   invalidateModel(): void {
     this.cachedModel = undefined;
     this.fileCache.clear();
+    this.fileInflight.clear();
   }
 
   consumeRepositoryState(snapshot: RepositoryStateSnapshot): boolean {
@@ -62,7 +80,18 @@ export class AdoptedTreeController {
   async refresh(): Promise<void> {
     this.generation += 1;
     this.roots = undefined;
+    this.rootError = undefined;
     this.inflight = undefined;
+    await this.getRootNodes();
+  }
+
+  /** Last successful tree, including during an in-flight refresh. */
+  peekRoots(): AdoptedTreeNode[] | undefined {
+    return this.publishedRoots;
+  }
+
+  rootLoadError(): string | undefined {
+    return this.rootError;
   }
 
   async getRootNodes(): Promise<AdoptedTreeNode[]> {
@@ -100,11 +129,8 @@ export class AdoptedTreeController {
     }
 
     const specs = collectDiffSpecs(node);
-    const files: AdoptedFileDiff[] = [];
-    for (const spec of specs) {
-      files.push(...collectFileDiffs(await this.loadFileNodes(spec)));
-    }
-    return files;
+    const groups = await Promise.all(specs.map(async (spec) => collectFileDiffs(await this.loadFileNodes(spec))));
+    return groups.flat();
   }
 
   changesForOpenAll(node: AdoptedTreeNode): ChangeFileRef[] {
@@ -119,31 +145,56 @@ export class AdoptedTreeController {
   private async loadRoots(generation: number): Promise<AdoptedTreeNode[]> {
     const started = Date.now();
     const usedCachedModel = this.cachedModel !== undefined;
+    let modelDiscoveryMs = 0;
+    let treeBuildMs = 0;
     try {
+      const discoveryStarted = Date.now();
       const snapshot = this.cachedModel ?? (await this.model.snapshot());
+      modelDiscoveryMs = Date.now() - discoveryStarted;
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
       this.cachedModel = snapshot;
-      this.rememberSnapshots(this.repositorySnapshots());
+      const repositorySnapshots = this.repositorySnapshots();
+      this.rememberSnapshots(repositorySnapshots);
+      const buildStarted = Date.now();
       const roots = applyRestoreOverlay(
-        buildAdoptedTree(toSubmoduleViewModel(snapshot), this.repositorySnapshots(), this.settings()),
+        buildAdoptedTree(toSubmoduleViewModel(snapshot), repositorySnapshots, this.settings()),
         this.restoreStatus,
       );
-      await this.hydrateAdoptedCounts(roots, generation);
+      treeBuildMs = Date.now() - buildStarted;
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
+      this.rootError = undefined;
       this.roots = roots;
-      this.onRefresh?.({ usedCachedModel, durationMs: Date.now() - started });
+      this.publishedRoots = roots;
+      this.onTiming?.({
+        phase: "roots",
+        usedCachedModel,
+        modelDiscoveryMs,
+        treeBuildMs,
+        adoptedCountHydrationMs: 0,
+        deferredAdoptedGroups: collectAdoptedGroups(roots).filter((group) => group.diffSpec).length,
+        durationMs: Date.now() - started,
+      });
       return roots;
     } catch (error) {
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
       const roots = [errorMessageNode("root:error", error, "Failed to load changes")];
+      this.rootError = roots[0]?.tooltip ?? "Failed to load changes";
       this.roots = roots;
-      this.onRefresh?.({ usedCachedModel, durationMs: Date.now() - started });
+      this.onTiming?.({
+        phase: "roots",
+        usedCachedModel,
+        modelDiscoveryMs,
+        treeBuildMs,
+        adoptedCountHydrationMs: 0,
+        deferredAdoptedGroups: 0,
+        durationMs: Date.now() - started,
+      });
       return roots;
     }
   }
@@ -154,51 +205,79 @@ export class AdoptedTreeController {
     }
   }
 
-  private async hydrateAdoptedCounts(roots: readonly AdoptedTreeNode[], generation: number): Promise<void> {
-    await Promise.all(
-      collectAdoptedGroups(roots).map(async (group) => {
-        if (!group.diffSpec) {
-          group.description = "0";
-          return;
-        }
-        const files = await this.loadFileNodes(group.diffSpec);
-        if (generation !== this.generation) {
-          return;
-        }
-        group.description = String(collectFileDiffs(files).length);
-      }),
-    );
-  }
-
   private async getFileChildren(node: AdoptedTreeNode): Promise<AdoptedTreeNode[]> {
     if (!node.diffSpec) {
       return node.children;
     }
-    return this.loadFileNodes(node.diffSpec);
+    const files = await this.loadFileNodes(node.diffSpec);
+    if (!files.some((child) => child.kind === "message")) {
+      node.description = String(collectFileDiffs(files).length);
+    }
+    return files;
   }
 
   private async loadFileNodes(spec: AdoptedDiffSpec): Promise<AdoptedTreeNode[]> {
+    return nodesFromCache(spec, await this.loadFileList(spec), this.settings());
+  }
+
+  private async loadFileList(spec: AdoptedDiffSpec): Promise<CachedFileList> {
     const key = cacheKey(spec);
     const cached = this.fileCache.get(key);
     if (cached) {
-      return nodesFromCache(spec, cached, this.settings());
+      return cached;
+    }
+    const existing = this.fileInflight.get(key);
+    if (existing?.generation === this.generation) {
+      const result = await existing.promise;
+      return existing.generation === this.generation ? result : this.loadFileList(spec);
     }
 
     const generation = this.generation;
+    const promise = this.runFileDiff(async () => {
+      const started = Date.now();
+      try {
+        const entries = await this.model.listNameStatus(spec);
+        if (generation !== this.generation) {
+          return { ok: true, entries: [] } satisfies CachedFileList;
+        }
+        const result: CachedFileList = { ok: true, entries };
+        this.fileCache.set(key, result);
+        this.onTiming?.({
+          phase: "adopted-files",
+          kind: spec.kind,
+          durationMs: Date.now() - started,
+          fileCount: entries.length,
+          ok: true,
+        });
+        return result;
+      } catch (error) {
+        if (generation !== this.generation) {
+          return { ok: true, entries: [] } satisfies CachedFileList;
+        }
+        const result: CachedFileList = {
+          ok: false,
+          nodes: [errorMessageNode(`${spec.kind}:${spec.repoRoot}:error`, error)],
+        };
+        this.fileCache.set(key, result);
+        this.onTiming?.({
+          phase: "adopted-files",
+          kind: spec.kind,
+          durationMs: Date.now() - started,
+          fileCount: 0,
+          ok: false,
+        });
+        return result;
+      }
+    });
+    const inflight = { generation, promise };
+    this.fileInflight.set(key, inflight);
     try {
-      const entries = await this.model.listNameStatus(spec);
-      if (generation !== this.generation) {
-        return this.loadFileNodes(spec);
+      const result = await promise;
+      return generation === this.generation ? result : this.loadFileList(spec);
+    } finally {
+      if (this.fileInflight.get(key) === inflight) {
+        this.fileInflight.delete(key);
       }
-      this.fileCache.set(key, { ok: true, entries });
-      return fileNodesFromNameStatus(spec, entries, this.settings());
-    } catch (error) {
-      if (generation !== this.generation) {
-        return this.loadFileNodes(spec);
-      }
-      const nodes = [errorMessageNode(`${spec.kind}:${spec.repoRoot}:error`, error)];
-      this.fileCache.set(key, { ok: false, nodes });
-      return nodes;
     }
   }
 }
@@ -206,6 +285,11 @@ export class AdoptedTreeController {
 type CachedFileList =
   | { ok: true; entries: readonly NameStatusEntry[] }
   | { ok: false; nodes: AdoptedTreeNode[] };
+
+interface InflightFileList {
+  generation: number;
+  promise: Promise<CachedFileList>;
+}
 
 function cacheKey(spec: AdoptedDiffSpec): string {
   return `${spec.repoRoot}|${spec.kind}|${spec.fromSha}|${spec.toSha}`;
@@ -219,5 +303,24 @@ function collectAdoptedGroups(nodes: readonly AdoptedTreeNode[]): AdoptedTreeNod
   return nodes.flatMap((node) =>
     node.kind === "adopted-group" ? [node, ...collectAdoptedGroups(node.children)] : collectAdoptedGroups(node.children),
   );
+}
+
+type Limiter = <T>(task: () => Promise<T>) => Promise<T>;
+
+function createLimiter(limit: number): Limiter {
+  let active = 0;
+  const pending: Array<() => void> = [];
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => pending.push(resolve));
+    }
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      pending.shift()?.();
+    }
+  };
 }
 

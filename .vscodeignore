@@ -6,6 +6,7 @@ test/**
 scripts/**
 fixtures/**
 node_modules/**
+!node_modules/@vscode/codicons/dist/**
 **/*.ts
 **/*.map
 !dist/**

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { computeAdoptedPointers } from "../../../src/git/adoptedPointers.js";
+import { ResourceStatus } from "../../../src/git/repositoryState.js";
 import type { RepoPins, RepoWorkingState, SubmoduleNode, WorkspaceRootNode } from "../../../src/git/types.js";
 import {
   applyRestoreOverlay,
   buildAdoptedTree,
+  buildBootstrapRepoNodes,
   fileDecoration,
   fileNodesFromNameStatus,
   submoduleIcon,
@@ -16,7 +18,7 @@ import {
   type AdoptedTreeNode,
 } from "../../../src/views/adoptedViewModel.js";
 import { BUILTIN_GROUP_LABELS } from "../../../src/views/builtinGitParity.js";
-import { DEFAULT_CHANGES_TREE_SETTINGS } from "../../../src/views/changesTreeSettings.js";
+import { DEFAULT_CHANGES_TREE_SETTINGS, emptyChangeGroups } from "../../../src/views/changesTreeSettings.js";
 import { COMMANDS, CONTEXT } from "../../../src/views/constants.js";
 
 const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -148,9 +150,9 @@ describe("buildAdoptedTree", () => {
       "submodule",
     ]);
     expect(treeCollapsibleMode(tree[0]!)).toBe("expanded");
-    expect(treeCollapsibleMode(tree[1]!)).toBe("expanded");
+    expect(treeCollapsibleMode(tree[1]!)).toBe("none");
     expect(byKind(tree[1]?.children, "adopted-group")).toEqual([]);
-    expect(tree[1]?.children.map((child) => child.kind)).toEqual(["change-group"]);
+    expect(tree[1]?.children).toEqual([]);
 
     const staged = byLabel(tree[0]?.children, BUILTIN_GROUP_LABELS.index);
     const changes = byLabel(tree[0]?.children, BUILTIN_GROUP_LABELS.workingTree);
@@ -193,8 +195,8 @@ describe("buildAdoptedTree", () => {
     expect(libNode?.kind).toBe("submodule");
     expect(treeItemCodicon(libNode!)).toEqual({ id: "file-submodule", colorId: "foreground" });
     expect(byKind(libNode?.children, "adopted-group")).toEqual([]);
-    expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
-    expect(treeCollapsibleMode(libNode!)).toBe("collapsed");
+    expect(libNode?.children).toEqual([]);
+    expect(treeCollapsibleMode(libNode!)).toBe("none");
 
     const nestedGitlink = findByRelativePath(
       byLabel(commonNode?.children, BUILTIN_GROUP_LABELS.workingTree)?.children,
@@ -214,7 +216,7 @@ describe("buildAdoptedTree", () => {
     expect(nestedNode?.kind).toBe("submodule");
     expect(nestedNode?.description).toContain("detached");
     expect(byKind(nestedNode?.children, "adopted-group")).toEqual([]);
-    expect(nestedNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
+    expect(nestedNode?.children).toEqual([]);
   });
 
   it("omits gitlink rows when the parent has no pointer diffs", () => {
@@ -226,9 +228,9 @@ describe("buildAdoptedTree", () => {
     });
     const [root] = buildAdoptedTree({ roots: [workspaceRoot("/ws/app", [child])] });
     expect(byKind(root?.children, "adopted-group")).toEqual([]);
-    expect(root?.children.map((node) => node.kind)).toEqual(["change-group", "submodule"]);
-    expect(byKind(root?.children[1]?.children, "adopted-group")).toEqual([]);
-    expect(root?.children[1]?.children.map((node) => node.kind)).toEqual(["change-group"]);
+    expect(root?.children.map((node) => node.kind)).toEqual(["submodule"]);
+    expect(byKind(root?.children[0]?.children, "adopted-group")).toEqual([]);
+    expect(root?.children[0]?.children).toEqual([]);
   });
 });
 
@@ -331,5 +333,36 @@ describe("restore overlay", () => {
     expect(submoduleNode?.tooltip).toContain("working tree is dirty");
     expect(submoduleNode?.restoreTarget).toMatchObject({ childRootPath: "/ws/app/mod", branch: "main" });
     expect(usesThemeFileIcon(submoduleNode!)).toBe(false);
+  });
+});
+
+describe("bootstrap repo nodes", () => {
+  it("builds workspace rows from vscode.git snapshots without a git model", () => {
+    const nodes = buildBootstrapRepoNodes(
+      [
+        {
+          rootPath: "/ws/httpendpoint",
+          head: { name: "main", commit: "c1", detached: false },
+          remotes: [],
+          groups: {
+            ...emptyChangeGroups(),
+            workingTree: [
+              {
+                uri: "/ws/httpendpoint/app.ts",
+                originalUri: "/ws/httpendpoint/app.ts",
+                status: ResourceStatus.MODIFIED,
+                relativePath: "app.ts",
+              },
+            ],
+          },
+        },
+      ],
+      ["/ws/httpendpoint", "/ws/other"],
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]?.id).toBe("root:/ws/httpendpoint");
+    expect(nodes[0]?.label).toBe("httpendpoint");
+    expect(nodes[0]?.description).toBe("main*");
+    expect(nodes[0]?.children.some((child) => child.kind === "change-group" && child.label === "Changes")).toBe(true);
   });
 });

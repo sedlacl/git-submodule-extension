@@ -1,6 +1,7 @@
 export {
   BusyRepositoryError,
   DailyGitActions,
+  commitMessagePlaceholder,
 } from "./dailyGitActions.js";
 export type {
   DailyGitActionsUi,
@@ -14,6 +15,12 @@ export {
   buildSubmoduleChoreMessage,
   shortSha,
 } from "./submoduleChoreMessage.js";
+export {
+  KNOWN_GENERATE_COMMIT_MESSAGE_COMMANDS,
+  firstCommitLine,
+  mergeCommitDraftWithChore,
+  pickPublicGenerateCommitMessageCommand,
+} from "./generateCommitMessage.js";
 export type { BuildSubmoduleChoreMessageInput, SubmoduleChoreMessage } from "./submoduleChoreMessage.js";
 export { SubmoduleChoreReadService } from "./submoduleChoreService.js";
 export type {

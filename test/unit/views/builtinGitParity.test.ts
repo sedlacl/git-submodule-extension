@@ -9,14 +9,14 @@ import {
   BUILTIN_PANE_NAME,
 } from "../../../src/views/builtinGitParity.js";
 import { COMMANDS, CONTEXT, VIEW_ID } from "../../../src/views/constants.js";
+import { contextActions, inlineActions } from "../../../src/views/changesRowActions.js";
 
 const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
   contributes: {
-    views: { scm: Array<{ id: string; name: string; contextualTitle?: string }> };
+    views: { scm: Array<{ id: string; name: string; contextualTitle?: string; type?: string }> };
     commands: Array<{ command: string; title: string }>;
     menus: {
       "view/title": Array<{ command: string; when: string; group?: string }>;
-      "view/item/context": Array<{ command: string; when: string; group?: string }>;
     };
   };
 };
@@ -27,18 +27,21 @@ function commandTitle(command: string): string | undefined {
   return pkg.contributes.commands.find((entry) => entry.command === command)?.title;
 }
 
-function menu(command: string, groupPrefix: string, whenIncludes: string): boolean {
-  return pkg.contributes.menus["view/item/context"].some(
-    (entry) => entry.command === command && (entry.group ?? "").startsWith(groupPrefix) && entry.when.includes(whenIncludes),
-  );
+function hasInline(command: string, contextValue: string, config?: Parameters<typeof inlineActions>[1]): boolean {
+  return inlineActions(contextValue, config).some((action) => action.command === command);
+}
+
+function hasContext(command: string, contextValue: string, config?: Parameters<typeof contextActions>[1]): boolean {
+  return contextActions(contextValue, config).some((action) => action.command === command);
 }
 
 describe("built-in Git parity", () => {
-  it("names the SCM pane CHANGES with submodules", () => {
+  it("names the SCM pane CHANGES with submodules as a webview", () => {
     const view = pkg.contributes.views.scm.find((entry) => entry.id === VIEW_ID);
     expect(BUILTIN_PANE_NAME).toBe("CHANGES with submodules");
     expect(view?.name).toBe(BUILTIN_PANE_NAME);
     expect(view?.contextualTitle).toBe(BUILTIN_PANE_NAME);
+    expect(view?.type).toBe("webview");
   });
 
   it("uses built-in group titles", () => {
@@ -74,24 +77,27 @@ describe("built-in Git parity", () => {
   });
 
   it("mirrors built-in inline and context menu slots", () => {
-    expect(menu(COMMANDS.stageAllMerge, "inline", CONTEXT.changeGroupMerge)).toBe(true);
-    expect(menu(COMMANDS.unstageAll, "inline", CONTEXT.changeGroupIndex)).toBe(true);
-    expect(menu(COMMANDS.stageAll, "inline", "config.git.untrackedChanges == mixed")).toBe(true);
-    expect(menu(COMMANDS.cleanAll, "inline", "config.git.untrackedChanges == mixed")).toBe(true);
-    expect(menu(COMMANDS.stageAllTracked, "inline", "config.git.untrackedChanges != mixed")).toBe(true);
-    expect(menu(COMMANDS.cleanAllTracked, "inline", "config.git.untrackedChanges != mixed")).toBe(true);
-    expect(menu(COMMANDS.stageAllUntracked, "inline", CONTEXT.changeGroupUntracked)).toBe(true);
-    expect(menu(COMMANDS.cleanAllUntracked, "inline", CONTEXT.changeGroupUntracked)).toBe(true);
-    expect(menu(COMMANDS.stage, "inline", "change")).toBe(true);
-    expect(menu(COMMANDS.unstage, "inline", "index")).toBe(true);
-    expect(menu(COMMANDS.clean, "inline", "workingTree")).toBe(true);
-    expect(menu(COMMANDS.openFile, "inline", "config.git.openDiffOnClick")).toBe(true);
-    expect(menu(COMMANDS.stageAllMerge, "1_modification", CONTEXT.changeGroupMerge)).toBe(true);
-    expect(menu(COMMANDS.openChange, "navigation", "change")).toBe(true);
-    expect(menu(COMMANDS.commit, "inline", "workspaceRoot")).toBe(true);
-    expect(menu(COMMANDS.sync, "inline", "workspaceRoot")).toBe(true);
-    expect(menu(COMMANDS.publish, "inline", "workspaceRoot")).toBe(true);
-    expect(menu(COMMANDS.refresh, "inline", "workspaceRoot")).toBe(true);
+    const repo = `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`;
+    const repoPublish = `${CONTEXT.workspaceRoot}.${CONTEXT.noUpstream}`;
+    const separate = { untrackedChanges: "separate" as const, showInlineOpenFileAction: true, openDiffOnClick: true };
+    expect(hasInline(COMMANDS.stageAllMerge, CONTEXT.changeGroupMerge)).toBe(true);
+    expect(hasInline(COMMANDS.unstageAll, CONTEXT.changeGroupIndex)).toBe(true);
+    expect(hasInline(COMMANDS.stageAll, CONTEXT.changeGroupWorkingTree)).toBe(true);
+    expect(hasInline(COMMANDS.cleanAll, CONTEXT.changeGroupWorkingTree)).toBe(true);
+    expect(hasInline(COMMANDS.stageAllTracked, CONTEXT.changeGroupWorkingTree, separate)).toBe(true);
+    expect(hasInline(COMMANDS.cleanAllTracked, CONTEXT.changeGroupWorkingTree, separate)).toBe(true);
+    expect(hasInline(COMMANDS.stageAllUntracked, CONTEXT.changeGroupUntracked)).toBe(true);
+    expect(hasInline(COMMANDS.cleanAllUntracked, CONTEXT.changeGroupUntracked)).toBe(true);
+    expect(hasInline(COMMANDS.stage, CONTEXT.changeWorkingTree)).toBe(true);
+    expect(hasInline(COMMANDS.unstage, CONTEXT.changeIndex)).toBe(true);
+    expect(hasInline(COMMANDS.clean, CONTEXT.changeWorkingTree)).toBe(true);
+    expect(hasInline(COMMANDS.openFile, CONTEXT.changeWorkingTree)).toBe(true);
+    expect(hasContext(COMMANDS.stageAllMerge, CONTEXT.changeGroupMerge)).toBe(true);
+    expect(hasContext(COMMANDS.openChange, CONTEXT.changeWorkingTree)).toBe(true);
+    expect(hasInline(COMMANDS.commit, repo)).toBe(true);
+    expect(hasInline(COMMANDS.sync, repo)).toBe(true);
+    expect(hasInline(COMMANDS.publish, repoPublish)).toBe(true);
+    expect(hasInline(COMMANDS.refresh, repo)).toBe(true);
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.commit && entry.group === "navigation@1")).toBe(
       true,
     );

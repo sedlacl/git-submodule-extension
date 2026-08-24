@@ -115,7 +115,7 @@ describe("AdoptedTreeController", () => {
     expect(unstagedGitlink?.description).toBe(`${INDEX.slice(0, 7)} → main`);
     expect(unstagedGitlink?.children[0]?.diffSpec?.kind).toBe("unstaged");
     expect(unstagedGitlink?.children[0]?.description).toBe("2");
-    expect(lib?.children.map((node) => node.kind)).toEqual(["change-group"]);
+    expect(lib?.children).toEqual([]);
     expect(fake.nameStatusCalls.map((call) => call.kind).sort()).toEqual(["staged", "unstaged"]);
 
     const stagedFiles = await controller.getChildren(stagedGitlink!.children[0]!);
@@ -243,7 +243,7 @@ describe("AdoptedTreeController", () => {
     expect(files[0]?.fileDiff?.path).toBe("after-refresh.ts");
   });
 
-  it("surfaces snapshot and name-status failures as message nodes", async () => {
+  it("surfaces snapshot and adopted hydration failures as retryable root errors", async () => {
     const fake = new FakeModel(modelWith(child));
     fake.snapshotImpl = async () => {
       throw new Error("git unavailable");
@@ -253,6 +253,12 @@ describe("AdoptedTreeController", () => {
     expect(roots[0]?.kind).toBe("message");
     expect(roots[0]?.label).toBe("Failed to load changes");
     expect(roots[0]?.tooltip).toContain("git unavailable");
+    expect(controller.rootLoadError()).toContain("git unavailable");
+
+    fake.snapshotImpl = async () => modelWith(child);
+    controller.invalidateModel();
+    await controller.refresh();
+    expect(controller.rootLoadError()).toBeUndefined();
 
     const ok = new FakeModel(modelWith(child));
     ok.nameStatusImpl = async () => {
@@ -260,11 +266,24 @@ describe("AdoptedTreeController", () => {
     };
     const filesController = new AdoptedTreeController(ok);
     const tree = await filesController.getRootNodes();
-    const staged = tree[0]?.children.find((node) => node.kind === "change-group" && node.changeGroup === "index")?.children[0];
-    expect(staged?.children[0]?.diffSpec?.kind).toBe("staged");
-    const files = await filesController.getChildren(staged!.children[0]);
-    expect(files[0]?.kind).toBe("message");
-    expect(files[0]?.label).toBe("Failed to list changes");
-    expect(treeItemCommand(files[0]!)).toBeUndefined();
+    expect(tree[0]?.kind).toBe("message");
+    expect(tree[0]?.label).toBe("Failed to load changes");
+    expect(tree[0]?.tooltip).toContain("diff failed");
+    expect(filesController.rootLoadError()).toContain("diff failed");
+    expect(treeItemCommand(tree[0]!)).toBeUndefined();
+  });
+
+  it("peeks the last published tree while a refresh is in flight", async () => {
+    const fake = new FakeModel(modelWith(child));
+    fake.snapshotImpl = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return modelWith(child);
+    };
+    const controller = new AdoptedTreeController(fake);
+    expect(controller.peekRoots()).toBeUndefined();
+    const first = await controller.getRootNodes();
+    expect(controller.peekRoots()?.[0]?.id).toBe(first[0]?.id);
+    await controller.refresh();
+    expect(controller.peekRoots()?.[0]?.id).toBe(first[0]?.id);
   });
 });

@@ -58,7 +58,8 @@
           "id": "gitSubmodule.repos",
           "name": "CHANGES with submodules",
           "icon": "$(git-commit)",
-          "contextualTitle": "CHANGES with submodules"
+          "contextualTitle": "CHANGES with submodules",
+          "type": "webview"
         }
       ]
     },
@@ -340,208 +341,6 @@
           "when": "view == gitSubmodule.repos && gitSubmodule.viewMode != tree",
           "group": "navigation@4"
         }
-      ],
-      "view/item/context": [
-        {
-          "command": "gitSubmodule.commit",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "gitSubmodule.sync",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.publish",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.noUpstream/",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.refresh",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "inline@3"
-        },
-        {
-          "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(staged|unstaged|changeGroup|adoptedGroup)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\..*\\.gitlink/",
-          "group": "inline@3"
-        },
-        {
-          "command": "gitSubmodule.openFile",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./ && config.git.showInlineOpenFileAction && config.git.openDiffOnClick",
-          "group": "inline@1"
-        },
-        {
-          "command": "gitSubmodule.openChange",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./ && config.git.showInlineOpenFileAction && !config.git.openDiffOnClick",
-          "group": "inline@1"
-        },
-        {
-          "command": "gitSubmodule.stageAllMerge",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.merge",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.unstageAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.index",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.stageAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.cleanAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.stageAllTracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.cleanAllTracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.stageAllUntracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.cleanAllUntracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.stage",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(merge|workingTree|untracked)/",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.unstage",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.index/",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.clean",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(workingTree|untracked)/",
-          "group": "inline@2"
-        },
-        {
-          "command": "gitSubmodule.retryRestore",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.submodule/",
-          "group": "inline@4"
-        },
-        {
-          "command": "gitSubmodule.fetchRemote",
-          "when": "view == gitSubmodule.repos && viewItem =~ /restoreBlocked/",
-          "group": "inline@5"
-        },
-        {
-          "command": "gitSubmodule.checkoutBranch",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "1_modification@1"
-        },
-        {
-          "command": "gitSubmodule.fetch",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "1_modification@2"
-        },
-        {
-          "command": "gitSubmodule.pull",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/ && viewItem =~ /gitSubmodule\\.hasUpstream/",
-          "group": "1_modification@3"
-        },
-        {
-          "command": "gitSubmodule.generateSubmoduleChore",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "1_modification@4"
-        },
-        {
-          "command": "gitSubmodule.openAllChanges",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(workspaceRoot|submodule)/",
-          "group": "1_modification@5"
-        },
-        {
-          "command": "gitSubmodule.stageAllMerge",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.merge",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.unstageAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.index",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.stageAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.cleanAll",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges == mixed",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.stageAllTracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.cleanAllTracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.workingTree && config.git.untrackedChanges != mixed",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.stageAllUntracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.cleanAllUntracked",
-          "when": "view == gitSubmodule.repos && viewItem == gitSubmodule.changeGroup.untracked",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.openChange",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\.(index|workingTree|untracked)/",
-          "group": "navigation"
-        },
-        {
-          "command": "gitSubmodule.openFile",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\./",
-          "group": "navigation"
-        },
-        {
-          "command": "gitSubmodule.openHEADFile",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.change\\.(index|workingTree|untracked)/",
-          "group": "navigation"
-        },
-        {
-          "command": "gitSubmodule.stage",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(merge|workingTree|untracked)/",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.unstage",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.index/",
-          "group": "1_modification"
-        },
-        {
-          "command": "gitSubmodule.clean",
-          "when": "view == gitSubmodule.repos && viewItem =~ /gitSubmodule\\.(change|resourceFolder)\\.(workingTree|untracked)/",
-          "group": "1_modification"
-        }
       ]
     },
     "viewsWelcome": [
@@ -577,9 +376,12 @@
     "esbuild": "^0.25.5",
     "eslint": "^9.27.0",
     "ovsx": "^0.10.2",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.32.1",
-    "tsx": "^4.19.4",
     "vitest": "^3.1.4"
+  },
+  "dependencies": {
+    "@vscode/codicons": "^0.0.36"
   }
 }

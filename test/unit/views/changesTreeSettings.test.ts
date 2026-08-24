@@ -74,16 +74,15 @@ describe("applyUntrackedSettings", () => {
 });
 
 describe("visibleTreeGroups", () => {
-  it("always shows Changes, hides empty Merge/Untracked, and hides empty Staged by default", () => {
+  it("hides every empty group by default", () => {
     const groups = visibleTreeGroups(emptyChangeGroups(), DEFAULT_CHANGES_TREE_SETTINGS);
-    expect(groups.map((group) => group.label)).toEqual([CHANGE_GROUP_LABELS.workingTree]);
-    expect(groups[0]?.resources).toEqual([]);
+    expect(groups).toEqual([]);
   });
 
   it("shows empty Staged Changes when git.alwaysShowStagedChangesResourceGroup is true", () => {
     const settings: ChangesTreeSettings = { ...DEFAULT_CHANGES_TREE_SETTINGS, alwaysShowStagedChangesResourceGroup: true };
     const groups = visibleTreeGroups(emptyChangeGroups(), settings);
-    expect(groups.map((group) => group.label)).toEqual([CHANGE_GROUP_LABELS.index, CHANGE_GROUP_LABELS.workingTree]);
+    expect(groups.map((group) => group.label)).toEqual([CHANGE_GROUP_LABELS.index]);
   });
 
   it("keeps Merge → Staged → Changes → Untracked order", () => {

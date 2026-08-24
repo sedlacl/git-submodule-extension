@@ -94,7 +94,7 @@ export function applyUntrackedSettings(
  *
  * - Merge Changes: hide when empty (`hideWhenEmpty = true`)
  * - Staged Changes: hide when empty unless `git.alwaysShowStagedChangesResourceGroup`
- * - Changes: always shown (`workingTreeGroup.hideWhenEmpty` is left at the default `false`)
+ * - Changes: hide when empty, matching the current built-in Changes presentation
  * - Untracked Changes: hide when empty (`hideWhenEmpty = true`); only filled in `separate` mode
  */
 export function visibleTreeGroups(
@@ -118,9 +118,6 @@ export function shouldShowGroup(
   count: number,
   settings: ChangesTreeSettings,
 ): boolean {
-  if (kind === "workingTree") {
-    return true;
-  }
   if (kind === "index") {
     return count > 0 || settings.alwaysShowStagedChangesResourceGroup;
   }

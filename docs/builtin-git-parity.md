@@ -5,7 +5,7 @@
 
 # Built-in Git parity
 
-This extension’s **CHANGES with submodules** pane is a native SCM `TreeView`, not a
+This extension’s **CHANGES with submodules** pane is an SCM `WebviewView`, not a
 `SourceControl` provider. It copies everyday built-in Git vocabulary and
 layout from microsoft/vscode `extensions/git` tag **1.96.0**
 (`src/repository.ts`, `package.nls.json`, `package.json` menus) while using
@@ -17,36 +17,42 @@ are the machine-checked source for labels and the deviation list below.
 ## What matches
 
 - Group titles and order: Merge Changes → Staged Changes → Changes → Untracked Changes
-- Empty-group rules: `hideWhenEmpty` for merge/untracked; Staged respects
-  `git.alwaysShowStagedChangesResourceGroup`; Changes stays visible when empty
+- Empty-group rules: merge/Changes/untracked hide when empty; Staged respects
+  `git.alwaysShowStagedChangesResourceGroup`
 - `git.untrackedChanges`: mixed / separate / hidden
 - Status letters, tooltip text, and `gitDecoration.*` colors from
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
 - Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
-- File theme icons when `git.decorations.enabled` is true (default)
+- Status letters and `@vscode/codicons` on webview rows (file icon theme is not available inside a webview)
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`
-- Menu titles and inline/context slots for Open / Stage / Unstage / Discard /
-  Commit / Refresh / Sync / Publish (command IDs are `gitSubmodule.*`)
-- Repository rows expose the same hover toolbar as the built-in Git view:
-  Commit, Sync (or Publish without an upstream), Refresh
+- Menu titles and row toolbar / context slots for Open / Stage / Unstage / Discard /
+  Commit / Refresh / Sync / Publish (command IDs are `gitSubmodule.*`; actions are HTML, not `view/item/context`)
+- Repository rows expose the same toolbar as the built-in Git repo header:
+  Commit, Sync (or Publish without an upstream), Refresh — always visible, not hover-only
+- File, folder, and change-group inline icons are hover-only, matching built-in Changes
+- Expanded dirty repositories show a branch label, commit message box, Generate Commit Message sparkle, and Commit button before their groups. Collapsing hides the commit chrome with the subtree; the draft remains in `repository.inputBoxValue`
+- The sparkle uses a public built-in/Copilot generate-commit-message command for the subject when available, then appends the submodule chore body from pointer diffs; without a public AI command it only generates that chore
+- Group headers (Merge / Staged / Changes / Untracked / Adopted Changes) show the file count in a pill badge immediately after the title; folders use a dirty dot; files keep the status letter
 
 ## Intentional deviations
 
 | id | Deviation |
 | --- | --- |
-| `treeview-not-sourcecontrol` | Hierarchy uses a native SCM TreeView named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
+| `treeview-not-sourcecontrol` | Hierarchy uses an SCM webview named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
 | `no-proposed-scm-api` | No `scmActionButton`, `scmMultiDiffEditor`, `scmValidation`, merge editor, or internal `git.*` command/resource contracts. |
 | `command-ids` | Commands are `gitSubmodule.*` contributed on this view, not built-in `git.*` IDs. |
-| `adopted-changes-group` | Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. |
+| `adopted-changes-group` | Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. |
 | `hierarchical-repos` | Child repositories nest under their gitlink parent instead of the built-in flat repository list. |
 | `status-icons` | When `git.decorations.enabled` is false, status ThemeIcons are used instead of shipping copies of Git’s `status-*.svg` assets. |
-| `no-strikethrough` | TreeView items cannot apply `SourceControlResourceDecorations.strikeThrough` on `vscode ^1.85`; deleted files use the D decoration only. |
+| `no-strikethrough` | Deleted files use the D decoration only; webview rows do not apply `SourceControlResourceDecorations.strikeThrough`. |
 | `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs nest under the gitlink row. |
 | `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
-| `count-badge-scope` | `git.countBadge` is applied as a single TreeView badge over every hierarchical repository, not per SourceControl instance. |
+| `count-badge-scope` | `git.countBadge` is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance. |
+| `no-file-icon-theme` | Webview rows cannot use the file icon theme; files show a status letter plus a generic file/folder codicon. |
+| `no-viewitem-menus` | `view/item/context` menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same `gitSubmodule.*` commands. |
 
 Microsoft copyright remains on copied API declarations in `src/git/git.d.ts`.
 Behavior described here is adapted, not forked.

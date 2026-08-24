@@ -14,20 +14,20 @@ Publisher: `qjohn`. Identifier: `git-submodule-extension`.
 
 The built-in Git **Changes** panel cannot be replaced or hidden through a stable API — hide it manually from the SCM view title menu if you want this pane to be the daily driver.
 
-This extension contributes a native SCM `TreeView` named **CHANGES with submodules** that lists:
+This extension contributes an SCM webview named **CHANGES with submodules** that lists:
 
-- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` unstaged, `+` staged, `!` merge) and the built-in Git hover toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch and Pull sit in the row context menu
-- **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, counts, file icons, and M/A/D/R/U decorations; gitlink rows use `S`
+- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` unstaged, `+` staged, `!` merge) and an always-visible toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch and Pull sit in the row context menu
+- **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, pill-shaped file counts, file icons, and M/A/D/R/U decorations; folders use a dirty dot; gitlink rows use `S`
 - empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`)
-- gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), always shown with a file count (including `0`) and the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label. **View as List** / **View as Tree** (`scm.defaultViewMode`, plus `scm.compactFolders`) applies to those inner files as well
+- gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), always shown with a pill file count (including `0`) and the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label. **View as List** / **View as Tree** (`scm.defaultViewMode`, plus `scm.compactFolders`) applies to those inner files as well
 - nested submodules under their immediate gitlink parent, each with the same group layout
 - collapsed repository names tinted with `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes
 - file rows that open `vscode.diff` (or `vscode.changes` for Open All)
 - tree layout by default (`scm.defaultViewMode`); the view title toggles **View as List** / **View as Tree** and writes that setting so it applies globally
 
-The tree uses native `TreeItem` APIs only (`collapsibleState`, `contextValue`, `resourceUri`, `iconPath`, `command`, menu contributions). File rows rely on the file icon theme plus status decorations; inline actions are hover-only. Row height and indent come from VS Code’s SCM tree (22px / 8px) — there is no webview or custom CSS.
+The pane is a `WebviewView` (not a second SCM view). It renders the same `AdoptedTreeNode` model as HTML: 22px rows, 8px indent, status letters, count pills, and `@vscode/codicons`. Row toolbar and context actions call the existing `gitSubmodule.*` commands. Expanded dirty repositories (own staged/unstaged/untracked files) show the commit textarea (`repository.inputBoxValue`), Generate Commit Message sparkle, and Commit button before their groups; collapsing the repository hides that chrome with its subtree while preserving the draft. The sparkle uses a public built-in/Copilot generate-commit-message command for the subject when one exists, then appends a submodule chore body from pointer diffs; without a public AI command it only generates that chore (or reports that there is nothing to generate). Expand state is kept while the view is hidden (`retainContextWhenHidden`).
 
-Built-in labels, menu slots, and intentional deviations (TreeView vs SourceControl, no proposed SCM API, `gitSubmodule.*` command IDs) are documented in [`docs/builtin-git-parity.md`](docs/builtin-git-parity.md).
+Built-in labels, menu slots, and intentional deviations (webview vs SourceControl, no proposed SCM API, `gitSubmodule.*` command IDs, no file-icon theme / `view/item/context`) are documented in [`docs/builtin-git-parity.md`](docs/builtin-git-parity.md).
 
 ## Settings
 
@@ -45,7 +45,7 @@ The generated UI fixture workspace sets `gitSubmodule.restore.enabled` to `false
 - **Git Submodule: Fetch Submodule Remote** — `git fetch origin <branch>` after a modal confirmation; never runs automatically
 - Open Changes / Open File / Open All Changes — tree item actions
 
-Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** only prepares an editable commit message; it never stages or commits.
+Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
 
 Blocked restore cases appear on the submodule row, in the **Git Submodule** output channel, and on the status bar.
 

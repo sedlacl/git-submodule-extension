@@ -223,7 +223,7 @@ describe("DailyGitActions temporary repository fixture", () => {
 
     const repository = new GitBackedRepository(repos.parent);
     const ui = new RecordingUi();
-    ui.nextInput = "chore: update service pointers";
+    repository.inputBoxValue = "chore: update service pointers";
     const actions = new DailyGitActions(
       { getRepositoryHandle: (rootPath) => (sameRepoPath(rootPath, repos.parent) ? repository : undefined) },
       ui,

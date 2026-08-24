@@ -8,6 +8,7 @@ import {
   type RepositoryRemote,
   type ResourceChange,
 } from "../git/repositoryState.js";
+import { firstCommitLine, mergeCommitDraftWithChore } from "./generateCommitMessage.js";
 import { buildSubmoduleChoreMessage } from "./submoduleChoreMessage.js";
 import type { SubmoduleChoreReadService } from "./submoduleChoreTypes.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "../views/adoptedViewModel.js";
@@ -23,6 +24,7 @@ export interface DailyGitActionsUi {
     branches: readonly { name: string; description?: string; current?: boolean }[],
   ): Promise<string | undefined>;
   info(message: string): void;
+  generateCommitSubject?(rootPath: string): Promise<string | undefined>;
 }
 
 export class BusyRepositoryError extends Error {
@@ -30,6 +32,10 @@ export class BusyRepositoryError extends Error {
     super(`A Git operation is already running for ${rootPath}.`);
     this.name = "BusyRepositoryError";
   }
+}
+
+export function commitMessagePlaceholder(branchName: string | undefined): string {
+  return branchName ? `Message (commit on "${branchName}")` : "Commit message";
 }
 
 const CONFLICT_STATUSES = new Set<ResourceStatus>([
@@ -124,11 +130,14 @@ export class DailyGitActions {
       }
 
       const branch = state.head?.name;
-      const message = await this.ui.input({
-        value: target.inputBoxValue,
-        placeHolder: branch ? `Message (commit on "${branch}")` : "Commit message",
-        prompt: "Please provide a commit message",
-      });
+      const draft = target.inputBoxValue;
+      const message = draft.trim()
+        ? draft
+        : await this.ui.input({
+            value: draft,
+            placeHolder: commitMessagePlaceholder(branch),
+            prompt: "Please provide a commit message",
+          });
       if (!message?.trim()) {
         return;
       }
@@ -152,30 +161,34 @@ export class DailyGitActions {
 
   async prepareSubmoduleChore(rootPath: string): Promise<void> {
     const repository = this.requireRepository(rootPath);
-    if (!this.choreService) {
-      throw new Error("Submodule chore service is not available.");
-    }
-
     await this.runBusy([repository], async (target) => {
-      const preview = await this.choreService!.preview(rootPath);
-      if (!preview) {
-        this.ui.info("No direct submodule pointer changes found.");
+      const existing = target.inputBoxValue;
+      let aiSubject: string | undefined;
+      if (!existing.trim() && this.ui.generateCommitSubject) {
+        aiSubject = (await this.ui.generateCommitSubject(rootPath))?.trim() || undefined;
+      }
+
+      const preview = this.choreService ? await this.choreService.preview(rootPath) : null;
+      if (preview) {
+        const seed = existing.trim() ? existing : (aiSubject ?? "");
+        const chore = buildSubmoduleChoreMessage({
+          updates: preview.updates,
+          subject: firstCommitLine(seed).trim() || preview.subject,
+        });
+        const message = mergeCommitDraftWithChore(seed, chore);
+        target.inputBoxValue = message;
+        this.preparedChoreMessages.set(rootPath, message);
         return;
       }
 
-      const subject = await this.ui.input({
-        value: preview.subject,
-        placeHolder: "Submodule chore subject",
-        prompt: "Edit the subject. The mechanical submodule details will be preserved.",
-      });
-      if (!subject?.trim()) {
+      if (aiSubject && !target.inputBoxValue.trim()) {
+        target.inputBoxValue = aiSubject;
         return;
       }
-
-      const message = buildSubmoduleChoreMessage({ updates: preview.updates, subject }).message;
-      target.inputBoxValue = message;
-      this.preparedChoreMessages.set(rootPath, message);
-      this.ui.info("Submodule chore message prepared. Review it and run Commit when ready.");
+      if (aiSubject || target.inputBoxValue.trim()) {
+        return;
+      }
+      this.ui.info("No submodule pointer changes");
     });
   }
 

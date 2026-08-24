@@ -3,23 +3,30 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { RESTORE_COMMANDS, RESTORE_DEFAULTS, RESTORE_SETTINGS } from "../../../src/restore/settings.js";
 import { COMMANDS, CONTEXT, VIEW_ID } from "../../../src/views/constants.js";
+import { contextActions, inlineActions } from "../../../src/views/changesRowActions.js";
 
 const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
   contributes: {
     configuration: { properties: Record<string, { default?: unknown }> };
-    views: { scm: Array<{ id: string }> };
+    views: { scm: Array<{ id: string; type?: string }> };
     commands: Array<{ command: string }>;
     menus: {
       "view/title": Array<{ command: string; when: string; group?: string }>;
-      "view/item/context": Array<{ command: string; when: string; group?: string }>;
+      "view/item/context"?: Array<{ command: string; when: string; group?: string }>;
     };
   };
   activationEvents: string[];
 };
 
+const repoUpstream = `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`;
+const repoNoUpstream = `${CONTEXT.workspaceRoot}.${CONTEXT.noUpstream}`;
+const submodule = `${CONTEXT.submodule}.${CONTEXT.hasUpstream}`;
+const restoreBlocked = `${CONTEXT.submodule}.restoreBlocked`;
+
 describe("adopted-view contributions", () => {
-  it("registers the SCM tree and commands used by the view", () => {
-    expect(pkg.contributes.views.scm.map((view) => view.id)).toContain(VIEW_ID);
+  it("registers the SCM webview and commands used by the view", () => {
+    const view = pkg.contributes.views.scm.find((entry) => entry.id === VIEW_ID);
+    expect(view?.type).toBe("webview");
     expect(pkg.contributes.commands.map((command) => command.command)).toEqual(
       expect.arrayContaining([
         COMMANDS.refresh,
@@ -51,82 +58,61 @@ describe("adopted-view contributions", () => {
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === COMMANDS.viewAsTree && entry.group === "navigation@4")).toBe(
       true,
     );
-    expect(pkg.contributes.menus["view/item/context"].some((entry) => entry.command === COMMANDS.openAllChanges)).toBe(true);
-    const openAll = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("changeGroup"),
+    expect(pkg.contributes.menus["view/item/context"]).toBeUndefined();
+    expect(inlineActions(CONTEXT.changeGroupIndex).some((action) => action.command === COMMANDS.openAllChanges)).toBe(true);
+    expect(inlineActions(CONTEXT.changeGroupMerge).some((action) => action.command === COMMANDS.openAllChanges)).toBe(true);
+    expect(inlineActions(CONTEXT.adoptedGroup).some((action) => action.command === COMMANDS.openAllChanges)).toBe(true);
+    expect(
+      inlineActions(`${CONTEXT.changeWorkingTree}.${CONTEXT.gitlink}`).some(
+        (action) => action.command === COMMANDS.openAllChanges && action.order === 3,
+      ),
+    ).toBe(true);
+    const chore = contextActions(repoUpstream).find((action) => action.command === COMMANDS.generateSubmoduleChore);
+    expect(chore?.order).toBe(4);
+    const repositoryOpenAll = contextActions(repoUpstream).find((action) => action.command === COMMANDS.openAllChanges);
+    expect(repositoryOpenAll?.order).toBe(5);
+    expect(contextActions(repoUpstream).map((action) => action.command)).toEqual(
+      expect.arrayContaining([COMMANDS.checkoutBranch, COMMANDS.fetch, COMMANDS.pull]),
     );
-    expect(openAll?.when).toContain("changeGroup");
-    expect(openAll?.when).toContain("staged");
-    expect(openAll?.when).toContain("adoptedGroup");
-    const gitlinkOpenAll = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("gitlink"),
-    );
-    expect(gitlinkOpenAll?.group).toBe("inline@3");
-    const chore = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.generateSubmoduleChore,
-    );
-    expect(chore?.when).toContain("workspaceRoot");
-    expect(chore?.when).toContain("submodule");
-    expect(chore?.group).toBe("1_modification@4");
-    const repositoryOpenAll = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.openAllChanges && entry.when.includes("workspaceRoot"),
-    );
-    expect(repositoryOpenAll?.group).toBe("1_modification@5");
-    const checkout = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.checkoutBranch,
-    );
-    const fetch = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.fetch,
-    );
-    const pull = pkg.contributes.menus["view/item/context"].find(
-      (entry) => entry.command === COMMANDS.pull,
-    );
-    expect(checkout?.group).toBe("1_modification@1");
-    expect(fetch?.group).toBe("1_modification@2");
-    expect(pull?.group).toBe("1_modification@3");
-    expect(pull?.when).toContain("hasUpstream");
-    const sync = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.sync);
-    const publish = pkg.contributes.menus["view/item/context"].find((entry) => entry.command === COMMANDS.publish);
-    expect(sync?.when).toContain("hasUpstream");
-    expect(publish?.when).toContain("noUpstream");
+    expect(contextActions(repoNoUpstream).some((action) => action.command === COMMANDS.pull)).toBe(false);
+    expect(inlineActions(repoUpstream).some((action) => action.command === COMMANDS.sync)).toBe(true);
+    expect(inlineActions(repoNoUpstream).some((action) => action.command === COMMANDS.publish)).toBe(true);
     expect(CONTEXT.adoptedGroup).toContain("adoptedGroup");
     expect(CONTEXT.adoptedPointer).toContain("adoptedPointer");
   });
 
   it("mirrors the built-in Git repository row toolbar and keeps inline slots unambiguous", () => {
-    const repositoryRow = /workspaceRoot\|submodule/;
-    const inlineOnRepositoryRows = pkg.contributes.menus["view/item/context"]
-      .filter((entry) => entry.group?.startsWith("inline") && repositoryRow.test(entry.when))
-      .map((entry) => ({ command: entry.command, group: entry.group }));
-    expect(inlineOnRepositoryRows).toEqual([
-      { command: COMMANDS.commit, group: "inline@1" },
-      { command: COMMANDS.sync, group: "inline@2" },
-      { command: COMMANDS.publish, group: "inline@2" },
-      { command: COMMANDS.refresh, group: "inline@3" },
+    const upstream = inlineActions(repoUpstream).filter((action) => action.group === "inline");
+    expect(upstream.map((action) => ({ command: action.command, order: action.order }))).toEqual([
+      { command: COMMANDS.commit, order: 1 },
+      { command: COMMANDS.sync, order: 2 },
+      { command: COMMANDS.refresh, order: 3 },
     ]);
+    const noUpstream = inlineActions(repoNoUpstream);
+    expect(noUpstream.map((action) => action.command)).toContain(COMMANDS.publish);
+    expect(noUpstream.map((action) => action.command)).not.toContain(COMMANDS.sync);
 
-    const submoduleInline = pkg.contributes.menus["view/item/context"].filter(
-      (entry) => entry.group?.startsWith("inline") && (repositoryRow.test(entry.when) || /submodule|restoreBlocked/.test(entry.when)),
-    );
-    const slotOwners = new Map<string, string[]>();
-    for (const entry of submoduleInline) {
-      slotOwners.set(entry.group ?? "", [...(slotOwners.get(entry.group ?? "") ?? []), entry.command]);
+    const submoduleInline = [
+      ...inlineActions(submodule),
+      ...inlineActions(restoreBlocked).filter((action) => action.command === COMMANDS.fetchRemote),
+    ];
+    const slotOwners = new Map<number, string[]>();
+    for (const action of submoduleInline) {
+      slotOwners.set(action.order, [...(slotOwners.get(action.order) ?? []), action.command]);
     }
-    // Only sync/publish may share a slot; they are mutually exclusive via the upstream context key.
-    expect([...slotOwners].filter(([, commands]) => commands.length > 1)).toEqual([
-      ["inline@2", [COMMANDS.sync, COMMANDS.publish]],
-    ]);
+    expect([...slotOwners].filter(([, commands]) => commands.length > 1)).toEqual([]);
+    expect(inlineActions(repoUpstream).some((action) => action.command === COMMANDS.sync)).toBe(true);
+    expect(inlineActions(repoNoUpstream).some((action) => action.command === COMMANDS.publish)).toBe(true);
   });
 
-  it("defaults auto-safe restore on and keeps fetch/retry as native hover actions", () => {
+  it("defaults auto-safe restore on and keeps fetch/retry as row toolbar actions", () => {
     expect(pkg.contributes.configuration.properties[RESTORE_SETTINGS.enabled]?.default).toBe(RESTORE_DEFAULTS.enabled);
     expect(pkg.contributes.configuration.properties[RESTORE_SETTINGS.debounceMs]?.default).toBe(RESTORE_DEFAULTS.debounceMs);
     expect(pkg.contributes.commands.map((command) => command.command)).toEqual(
       expect.arrayContaining([RESTORE_COMMANDS.retry, RESTORE_COMMANDS.fetch]),
     );
-    const inline = pkg.contributes.menus["view/item/context"];
-    expect(inline.some((entry) => entry.command === RESTORE_COMMANDS.retry && entry.group?.startsWith("inline"))).toBe(true);
-    expect(inline.some((entry) => entry.command === RESTORE_COMMANDS.fetch && entry.when.includes("restoreBlocked"))).toBe(true);
+    expect(inlineActions(submodule).some((action) => action.command === RESTORE_COMMANDS.retry)).toBe(true);
+    expect(inlineActions(restoreBlocked).some((action) => action.command === RESTORE_COMMANDS.fetch)).toBe(true);
     expect(pkg.contributes.menus["view/title"].some((entry) => entry.command === RESTORE_COMMANDS.retry)).toBe(true);
   });
 });

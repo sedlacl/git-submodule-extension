@@ -256,7 +256,7 @@ describe("buildAdoptedTree change groups", () => {
     expect(byKind(http?.children, "adopted-group")).toEqual([]);
   });
 
-  it("omits empty Adopted Changes and still shows empty Changes", () => {
+  it("omits empty Adopted Changes and empty working-tree groups", () => {
     const child = submodule({
       rootPath: "/ws/app/mod",
       parentRootPath: "/ws/app",
@@ -265,10 +265,7 @@ describe("buildAdoptedTree change groups", () => {
     });
     const [root] = buildAdoptedTree({ roots: [workspaceRoot("/ws/app", [child])] });
     expect(byKind(root?.children, "adopted-group")).toEqual([]);
-    expect(root?.children.map((node) => node.kind)).toEqual(["change-group", "submodule"]);
-    expect(root?.children[0]?.label).toBe(BUILTIN_GROUP_LABELS.workingTree);
-    expect(root?.children[0]?.description).toBe("0");
-    expect(root?.children[0]?.children).toEqual([]);
+    expect(root?.children.map((node) => node.kind)).toEqual(["submodule"]);
     expect(root?.decoration).toBeUndefined();
   });
 
@@ -369,7 +366,7 @@ describe("buildAdoptedTree change groups", () => {
     const libNode = byLabel(http?.children, "uu_energygateway_httpendpointg01");
     expect(libNode?.kind).toBe("submodule");
     expect(byKind(libNode?.children, "adopted-group")).toEqual([]);
-    expect(libNode?.children.map((child) => child.kind)).toEqual(["change-group"]);
+    expect(libNode?.children).toEqual([]);
 
     const commonNode = byLabel(http?.children, "usy_idsmari_commong01");
     const nestedGitlink = findByRelativePath(

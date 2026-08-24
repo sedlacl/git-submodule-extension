@@ -28,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const restore = registerBranchRestore({ cli, gitApi });
   context.subscriptions.push(
     restore,
-    registerAdoptedView({ model, gitApi, cli, restoreStatus: restore.status }),
+    registerAdoptedView({ model, gitApi, cli, restoreStatus: restore.status, extensionUri: context.extensionUri }),
   );
 }
 

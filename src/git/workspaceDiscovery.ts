@@ -20,18 +20,19 @@ export async function discoverWorkspaceGitModel(
   reader: GitRepositoryReader,
   input: DiscoveryInput,
 ): Promise<WorkspaceGitModel> {
+  const runGit = createLimiter(4);
   const workspaceFolders = uniqueNormalized(input.workspaceFolderPaths);
-  const workTreeRoots: string[] = [];
-  for (const folder of workspaceFolders) {
-    if (await reader.isWorkTreeRoot(folder)) {
-      workTreeRoots.push(folder);
-    }
-  }
+  const workTreeChecks = await Promise.all(
+    workspaceFolders.map(async (folder) => ({
+      folder,
+      isRoot: await runGit(() => reader.isWorkTreeRoot(folder)),
+    })),
+  );
+  const workTreeRoots = workTreeChecks.filter((check) => check.isRoot).map((check) => check.folder);
 
   const parentByChild = new Map<string, string>();
   const childrenByParent = new Map<string, SubmoduleNode[]>();
   const loadingParents = new Set<string>();
-  const visiting = new Set<string>();
 
   const loadChildren = async (parentRoot: string): Promise<SubmoduleNode[]> => {
     const cached = childrenByParent.get(parentRoot);
@@ -44,10 +45,11 @@ export async function discoverWorkspaceGitModel(
     loadingParents.add(parentRoot);
 
     try {
-      const declared = await readDeclared(reader, parentRoot);
+      const declared = await readDeclared(reader, parentRoot, runGit);
+      const entries: Array<{ childRoot: string; entry: DeclaredSubmodule }> = [];
       for (const entry of declared) {
         const childRoot = canonicalizeRepoPath(joinRepoPath(parentRoot, entry.relativePath));
-        if (childRoot === parentRoot || visiting.has(childRoot) || loadingParents.has(childRoot)) {
+        if (childRoot === parentRoot || loadingParents.has(childRoot)) {
           continue;
         }
 
@@ -56,12 +58,14 @@ export async function discoverWorkspaceGitModel(
           continue;
         }
         parentByChild.set(childRoot, parentRoot);
-
-        visiting.add(childRoot);
-        const node = await buildSubmoduleNode(reader, parentRoot, childRoot, entry, loadChildren);
-        visiting.delete(childRoot);
-        children.push(node);
+        entries.push({ childRoot, entry });
       }
+      const loaded = await Promise.all(
+        entries.map(({ childRoot, entry }) =>
+          buildSubmoduleNode(reader, parentRoot, childRoot, entry, loadChildren, runGit),
+        ),
+      );
+      children.push(...loaded);
     } finally {
       loadingParents.delete(parentRoot);
     }
@@ -69,9 +73,7 @@ export async function discoverWorkspaceGitModel(
     return children;
   };
 
-  for (const root of workTreeRoots) {
-    await loadChildren(root);
-  }
+  await Promise.all(workTreeRoots.map((root) => loadChildren(root)));
 
   const roots: WorkspaceRootNode[] = [];
   for (const folder of workTreeRoots) {
@@ -102,12 +104,16 @@ export async function discoverWorkspaceGitModel(
   return { roots, nodesByRootPath };
 }
 
-async function readDeclared(reader: GitRepositoryReader, parentRoot: string): Promise<DeclaredSubmodule[]> {
+async function readDeclared(
+  reader: GitRepositoryReader,
+  parentRoot: string,
+  runGit: Limiter,
+): Promise<DeclaredSubmodule[]> {
   const [indexGitmodules, headGitmodules, headGitlinks, indexGitlinks] = await Promise.all([
-    reader.readGitmodulesFrom(parentRoot, ":.gitmodules"),
-    reader.readGitmodulesFrom(parentRoot, "HEAD:.gitmodules"),
-    reader.readHeadGitlinks(parentRoot),
-    reader.readIndexGitlinks(parentRoot),
+    runGit(() => reader.readGitmodulesFrom(parentRoot, ":.gitmodules")),
+    runGit(() => reader.readGitmodulesFrom(parentRoot, "HEAD:.gitmodules")),
+    runGit(() => reader.readHeadGitlinks(parentRoot)),
+    runGit(() => reader.readIndexGitlinks(parentRoot)),
   ]);
   return mergeDeclaredSubmodules({
     indexGitmodules,
@@ -123,8 +129,9 @@ async function buildSubmoduleNode(
   childRoot: string,
   entry: DeclaredSubmodule,
   loadChildren: (parentRoot: string) => Promise<SubmoduleNode[]>,
+  runGit: Limiter,
 ): Promise<SubmoduleNode> {
-  const initialized = await reader.isWorkTreeRoot(childRoot);
+  const initialized = await runGit(() => reader.isWorkTreeRoot(childRoot));
   let checkoutHeadSha: string | null = null;
   let branchName: string | null = null;
   let upstream: string | null = null;
@@ -139,8 +146,8 @@ async function buildSubmoduleNode(
   if (initialized) {
     try {
       const [status, inProgress] = await Promise.all([
-        reader.readStatus(childRoot),
-        reader.hasOperationInProgress(childRoot),
+        runGit(() => reader.readStatus(childRoot)),
+        runGit(() => reader.hasOperationInProgress(childRoot)),
       ]);
       checkoutHeadSha = status.oid;
       branchName = status.head;
@@ -208,4 +215,26 @@ function uniqueNormalized(paths: readonly string[]): string[] {
     unique.push(normalized);
   }
   return unique;
+}
+
+type Limiter = <T>(task: () => Promise<T>) => Promise<T>;
+
+function createLimiter(limit: number): Limiter {
+  let active = 0;
+  const pending: Array<() => void> = [];
+  const release = (): void => {
+    active -= 1;
+    pending.shift()?.();
+  };
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => pending.push(resolve));
+    }
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  };
 }

@@ -1,5 +1,5 @@
 /**
- * Built-in Git labels, menu slots, and intentional TreeView deviations.
+ * Built-in Git labels, menu slots, and intentional webview deviations.
  *
  * Reference: microsoft/vscode `extensions/git` tag **1.96.0**
  * (`package.nls.json`, `src/repository.ts`, `package.json` menus).
@@ -47,7 +47,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "treeview-not-sourcecontrol",
     summary:
-      "Hierarchy uses a native SCM TreeView named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API).",
+      "Hierarchy uses an SCM webview named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API).",
   },
   {
     id: "no-proposed-scm-api",
@@ -61,7 +61,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "adopted-changes-group",
     summary:
-      "Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group.",
+      "Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group.",
   },
   {
     id: "hierarchical-repos",
@@ -75,7 +75,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "no-strikethrough",
     summary:
-      "TreeView items cannot apply SourceControlResourceDecorations.strikeThrough on vscode ^1.85; deleted files use D decoration only.",
+      "Deleted files use the D decoration only; webview rows do not apply SourceControlResourceDecorations.strikeThrough.",
   },
   {
     id: "gitlink-submoduleof",
@@ -90,6 +90,16 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "count-badge-scope",
     summary:
-      "git.countBadge is applied as a single TreeView badge over every hierarchical repository, not per SourceControl instance.",
+      "git.countBadge is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance.",
+  },
+  {
+    id: "no-file-icon-theme",
+    summary:
+      "Webview rows cannot use the file icon theme; files show a status letter plus a generic file/folder codicon.",
+  },
+  {
+    id: "no-viewitem-menus",
+    summary:
+      "view/item/context menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same gitSubmodule.* commands.",
   },
 ] as const;

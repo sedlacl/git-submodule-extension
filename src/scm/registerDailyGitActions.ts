@@ -4,6 +4,7 @@ import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import type { AdoptedTreeNode } from "../views/adoptedViewModel.js";
 import { COMMANDS } from "../views/constants.js";
 import { BusyRepositoryError, DailyGitActions, type DailyGitActionsUi } from "./dailyGitActions.js";
+import { firstCommitLine, pickPublicGenerateCommitMessageCommand } from "./generateCommitMessage.js";
 import type { SubmoduleChoreReadService } from "./submoduleChoreTypes.js";
 
 export interface RegisterDailyGitActionsOptions {
@@ -14,7 +15,7 @@ export interface RegisterDailyGitActionsOptions {
 }
 
 export function registerDailyGitActions(options: RegisterDailyGitActionsOptions): vscode.Disposable {
-  const actions = new DailyGitActions(options.gitApi, createUi(), options.choreService);
+  const actions = new DailyGitActions(options.gitApi, createUi(options.gitApi), options.choreService);
   const register = (
     command: string,
     title: string,
@@ -118,7 +119,7 @@ async function resolveRepositoryRoot(
   return selected?.rootPath;
 }
 
-function createUi(): DailyGitActionsUi {
+function createUi(gitApi: VsCodeGitApiAdapter): DailyGitActionsUi {
   return {
     confirm: async (message, actions) =>
       await vscode.window.showWarningMessage(message, { modal: true }, ...actions),
@@ -129,6 +130,7 @@ function createUi(): DailyGitActionsUi {
         prompt: options.prompt,
         ignoreFocusOut: true,
       }),
+    generateCommitSubject: async (rootPath) => await tryPublicGenerateCommitSubject(gitApi, rootPath),
     pickRemote: async (remotes) => {
       const selected = await vscode.window.showQuickPick(
         remotes.map((remote) => ({
@@ -158,6 +160,34 @@ function createUi(): DailyGitActionsUi {
       void vscode.window.showInformationMessage(message);
     },
   };
+}
+
+async function tryPublicGenerateCommitSubject(
+  gitApi: VsCodeGitApiAdapter,
+  rootPath: string,
+): Promise<string | undefined> {
+  let commands: string[];
+  try {
+    commands = await vscode.commands.getCommands(true);
+  } catch {
+    return undefined;
+  }
+  const command = pickPublicGenerateCommitMessageCommand(commands);
+  if (!command) {
+    return undefined;
+  }
+  const before = gitApi.getRepositoryHandle(rootPath)?.inputBoxValue ?? "";
+  try {
+    await vscode.commands.executeCommand(command);
+  } catch {
+    return undefined;
+  }
+  const after = gitApi.getRepositoryHandle(rootPath)?.inputBoxValue ?? "";
+  const subject = firstCommitLine(after).trim();
+  if (subject && after !== before) {
+    return subject;
+  }
+  return undefined;
 }
 
 async function runCommand(title: string, operation: () => Promise<void>): Promise<void> {

@@ -8,7 +8,7 @@ import type {
 } from "./types.js";
 
 /**
- * Snapshot consumed by the SCM TreeView. Roots are independent workspace
+ * Snapshot consumed by the SCM webview. Roots are independent workspace
  * folders; submodule nodes are nested by immediate gitlink parenthood.
  */
 export interface SubmoduleViewModel {
