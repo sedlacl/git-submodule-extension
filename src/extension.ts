@@ -1,8 +1,10 @@
+import { promises as fs } from "node:fs";
 import * as vscode from "vscode";
 import { GitCliRunner } from "./git/gitCli.js";
 import { createGitModelService } from "./git/gitModelService.js";
 import { activateVsCodeGitApi } from "./git/vscodeGitApi.js";
 import { registerBranchRestore } from "./restore/registerBranchRestore.js";
+import { createChangesDiagnosticWriter } from "./views/changesLoadDiagnostics.js";
 import { registerAdoptedView } from "./views/registerAdoptedView.js";
 
 /**
@@ -26,9 +28,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   const restore = registerBranchRestore({ cli, gitApi });
+  const timingFile = process.env.GIT_SUBMODULE_TIMING_FILE?.trim();
+  const writeDiagnostic = createChangesDiagnosticWriter((line) => {
+    restore.output.appendLine(line);
+    if (timingFile) {
+      void fs.appendFile(timingFile, `${line}\n`, "utf8").catch(() => undefined);
+    }
+  });
   context.subscriptions.push(
     restore,
-    registerAdoptedView({ model, gitApi, cli, restoreStatus: restore.status, extensionUri: context.extensionUri }),
+    registerAdoptedView({
+      model,
+      gitApi,
+      cli,
+      restoreStatus: restore.status,
+      extensionUri: context.extensionUri,
+      writeDiagnostic,
+    }),
   );
 }
 

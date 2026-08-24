@@ -119,7 +119,7 @@ describe("AdoptedTreeController", () => {
     expect(fake.nameStatusCalls).toEqual([]);
 
     const patches: unknown[] = [];
-    await controller.hydrateAdoptedCounts(roots, (patch) => patches.push(patch));
+    const timing = await controller.hydrateAdoptedCounts(roots, (patch) => patches.push(patch));
     expect(stagedGitlink?.children[0]?.description).toBe("1");
     expect(unstagedGitlink?.children[0]?.description).toBe("2");
     expect(patches).toEqual([
@@ -127,12 +127,29 @@ describe("AdoptedTreeController", () => {
       { id: unstagedGitlink?.children[0]?.id, state: "resolved", count: 2 },
     ]);
     expect(fake.nameStatusCalls).toHaveLength(2);
+    expect(timing).toMatchObject({
+      queuedCount: 2,
+      cacheHits: 0,
+      cacheMisses: 2,
+      gitCalls: 2,
+      concurrencyLimit: 4,
+      cancelled: false,
+    });
+    expect(timing.peakConcurrency).toBeGreaterThan(0);
 
     const stagedFiles = await controller.getChildren(stagedGitlink!.children[0]!);
     const unstagedFiles = await controller.getChildren(unstagedGitlink!.children[0]!);
     expect(stagedGitlink?.children[0]?.description).toBe("1");
     expect(unstagedGitlink?.children[0]?.description).toBe("2");
     expect(fake.nameStatusCalls).toHaveLength(2);
+    const cachedTiming = await controller.hydrateAdoptedCounts(roots, () => undefined);
+    expect(cachedTiming).toMatchObject({
+      queuedCount: 2,
+      cacheHits: 2,
+      cacheMisses: 0,
+      gitCalls: 0,
+      peakConcurrency: 0,
+    });
     expect(stagedFiles.map((node) => node.label)).toEqual(["src"]);
     expect(stagedFiles[0]?.children.map((node) => node.fileDiff?.path)).toEqual(["src/index.ts"]);
     expect(unstagedFiles.map((node) => node.label)).toEqual(["legacy.ts", "src"]);
@@ -378,5 +395,43 @@ describe("AdoptedTreeController", () => {
     expect(controller.peekRoots()?.[0]?.id).toBe(first[0]?.id);
     await controller.refresh();
     expect(controller.peekRoots()?.[0]?.id).toBe(first[0]?.id);
+  });
+
+  it("detects a material HEAD change while initial discovery is in flight", async () => {
+    const fake = new FakeModel(modelWith(child));
+    let resolveSnapshot!: (model: WorkspaceGitModel) => void;
+    fake.snapshotImpl = () =>
+      new Promise<WorkspaceGitModel>((resolve) => {
+        resolveSnapshot = resolve;
+      });
+    const controller = new AdoptedTreeController(fake);
+    const loading = controller.getRootNodes();
+    const initial = {
+      rootPath: "/ws/http",
+      head: { name: "main", commit: "c1", detached: false },
+      remotes: [],
+      groups: emptyChangeGroups(),
+    } satisfies RepositoryStateSnapshot;
+
+    expect(controller.consumeRepositoryState(initial)).toBe(false);
+    expect(
+      controller.consumeRepositoryState({
+        ...initial,
+        head: { name: "main", commit: "c2", detached: false },
+      }),
+    ).toBe(true);
+
+    resolveSnapshot(modelWith(child));
+    await loading;
+  });
+
+  it("rediscovers only when vscode.git opens a repository absent from the cached topology", async () => {
+    const controller = new AdoptedTreeController(new FakeModel(modelWith(child)));
+
+    expect(controller.repositoryOpenNeedsRediscovery("/ws/new")).toBe(false);
+    await controller.getRootNodes();
+    expect(controller.repositoryOpenNeedsRediscovery("/ws/http")).toBe(false);
+    expect(controller.repositoryOpenNeedsRediscovery("/ws/http/lib")).toBe(false);
+    expect(controller.repositoryOpenNeedsRediscovery("/ws/new")).toBe(true);
   });
 });

@@ -22,14 +22,17 @@ import {
   fileNodesFromNameStatus,
 } from "./adoptedViewModel.js";
 import { gitModelNeedsRediscovery } from "./gitModelRefresh.js";
+import type { ChangesLoadReason } from "./changesLoadDiagnostics.js";
 
 export type AdoptedTreeTiming =
   | {
       phase: "roots";
+      generation: number;
+      reason: ChangesLoadReason;
+      startedAt: number;
       usedCachedModel: boolean;
       modelDiscoveryMs: number;
       treeBuildMs: number;
-      adoptedCountHydrationMs: number;
       deferredAdoptedGroups: number;
       durationMs: number;
     }
@@ -39,12 +42,20 @@ export type AdoptedTreeTiming =
       durationMs: number;
       fileCount: number;
       ok: boolean;
-    }
-  | {
-      phase: "adopted-count";
-      durationMs: number;
-      fileCount: number;
     };
+
+export interface AdoptedCountHydrationTiming {
+  durationMs: number;
+  queuedCount: number;
+  cacheHits: number;
+  cacheMisses: number;
+  gitCalls: number;
+  concurrencyLimit: number;
+  peakConcurrency: number;
+  slowestCallMs: number;
+  errors: number;
+  cancelled: boolean;
+}
 
 export type AdoptedCountPatch =
   | { id: string; state: "loading" }
@@ -52,7 +63,10 @@ export type AdoptedCountPatch =
   | { id: string; state: "error"; message: string };
 
 export class AdoptedTreeController {
+  static readonly FILE_DIFF_CONCURRENCY = 4;
+
   private generation = 0;
+  private reason: ChangesLoadReason = "activation";
   private roots: AdoptedTreeNode[] | undefined;
   private publishedRoots: AdoptedTreeNode[] | undefined;
   private rootError: string | undefined;
@@ -60,8 +74,9 @@ export class AdoptedTreeController {
   private readonly lastStates = new Map<string, RepositoryStateSnapshot>();
   private readonly fileCache = new Map<string, CachedFileList>();
   private readonly fileInflight = new Map<string, InflightFileList>();
-  private readonly runFileDiff = createLimiter(4);
+  private readonly runFileDiff = createLimiter(AdoptedTreeController.FILE_DIFF_CONCURRENCY);
   private inflight: Promise<AdoptedTreeNode[]> | undefined;
+  private lastRootTiming: Extract<AdoptedTreeTiming, { phase: "roots" }> | undefined;
 
   constructor(
     private readonly model: GitModelProvider & AdoptedDiffReader,
@@ -82,13 +97,30 @@ export class AdoptedTreeController {
     const previous = this.lastStates.get(key);
     this.lastStates.set(key, snapshot);
     if (!this.cachedModel) {
-      return false;
+      return (
+        previous !== undefined &&
+        (previous.head?.commit ?? "") !== (snapshot.head?.commit ?? "")
+      );
     }
     return gitModelNeedsRediscovery(this.cachedModel, previous, snapshot);
   }
 
-  async refresh(): Promise<void> {
+  repositoryOpenNeedsRediscovery(rootPath: string): boolean {
+    if (!this.cachedModel) {
+      return false;
+    }
+    const normalized = normalizeRepoPath(rootPath);
+    for (const knownRootPath of this.cachedModel.nodesByRootPath.keys()) {
+      if (normalizeRepoPath(knownRootPath) === normalized) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async refresh(reason: ChangesLoadReason = "manual refresh"): Promise<void> {
     this.generation += 1;
+    this.reason = reason;
     this.roots = undefined;
     this.rootError = undefined;
     this.inflight = undefined;
@@ -102,6 +134,10 @@ export class AdoptedTreeController {
 
   rootLoadError(): string | undefined {
     return this.rootError;
+  }
+
+  rootTiming(): Extract<AdoptedTreeTiming, { phase: "roots" }> | undefined {
+    return this.lastRootTiming;
   }
 
   async getRootNodes(): Promise<AdoptedTreeNode[]> {
@@ -150,19 +186,49 @@ export class AdoptedTreeController {
   async hydrateAdoptedCounts(
     roots: readonly AdoptedTreeNode[],
     onPatch: (patch: AdoptedCountPatch) => void,
-  ): Promise<void> {
+  ): Promise<AdoptedCountHydrationTiming> {
     const generation = this.generation;
-    await Promise.all(
-      collectAdoptedGroups(roots).map(async (group) => {
-        if (!group.diffSpec) {
-          return;
-        }
-        const patch = await this.loadAdoptedCount(group, generation);
+    const started = performance.now();
+    const groups = collectAdoptedGroups(roots).filter(
+      (group): group is AdoptedTreeNode & { diffSpec: AdoptedDiffSpec } => Boolean(group.diffSpec),
+    );
+    const cacheHits = groups.filter((group) => this.fileCache.has(cacheKey(group.diffSpec))).length;
+    let gitCalls = 0;
+    let active = 0;
+    let peakConcurrency = 0;
+    let slowestCallMs = 0;
+    const observer: FileLoadObserver = {
+      onStart: () => {
+        gitCalls += 1;
+        active += 1;
+        peakConcurrency = Math.max(peakConcurrency, active);
+      },
+      onEnd: (durationMs) => {
+        active -= 1;
+        slowestCallMs = Math.max(slowestCallMs, durationMs);
+      },
+    };
+    const patches = await Promise.all(
+      groups.map(async (group) => {
+        const patch = await this.loadAdoptedCount(group, generation, observer);
         if (patch && generation === this.generation) {
           onPatch(patch);
         }
+        return patch;
       }),
     );
+    return {
+      durationMs: performance.now() - started,
+      queuedCount: groups.length,
+      cacheHits,
+      cacheMisses: groups.length - cacheHits,
+      gitCalls,
+      concurrencyLimit: AdoptedTreeController.FILE_DIFF_CONCURRENCY,
+      peakConcurrency,
+      slowestCallMs,
+      errors: patches.filter((patch) => patch?.state === "error").length,
+      cancelled: generation !== this.generation,
+    };
   }
 
   async retryAdoptedCount(node: AdoptedTreeNode): Promise<AdoptedCountPatch | undefined> {
@@ -181,42 +247,50 @@ export class AdoptedTreeController {
     return this.repositorySnapshots().reduce((total, snapshot) => total + repositoryCountBadge(snapshot.groups, settings), 0);
   }
 
+  hasCachedFiles(node: AdoptedTreeNode): boolean {
+    return Boolean(node.diffSpec && this.fileCache.has(cacheKey(node.diffSpec)));
+  }
+
   private async loadRoots(generation: number): Promise<AdoptedTreeNode[]> {
-    const started = Date.now();
+    const started = performance.now();
     const usedCachedModel = this.cachedModel !== undefined;
     let modelDiscoveryMs = 0;
     let treeBuildMs = 0;
     try {
-      const discoveryStarted = Date.now();
+      const discoveryStarted = performance.now();
       const snapshot = this.cachedModel ?? (await this.model.snapshot());
-      modelDiscoveryMs = Date.now() - discoveryStarted;
+      modelDiscoveryMs = performance.now() - discoveryStarted;
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
       this.cachedModel = snapshot;
       const repositorySnapshots = this.repositorySnapshots();
       this.rememberSnapshots(repositorySnapshots);
-      const buildStarted = Date.now();
+      const buildStarted = performance.now();
       const roots = applyRestoreOverlay(
         buildAdoptedTree(toSubmoduleViewModel(snapshot), repositorySnapshots, this.settings()),
         this.restoreStatus,
       );
-      treeBuildMs = Date.now() - buildStarted;
+      treeBuildMs = performance.now() - buildStarted;
       if (generation !== this.generation) {
         return this.getRootNodes();
       }
       this.rootError = undefined;
       this.roots = roots;
       this.publishedRoots = roots;
-      this.onTiming?.({
+      const timing: Extract<AdoptedTreeTiming, { phase: "roots" }> = {
         phase: "roots",
+        generation,
+        reason: this.reason,
+        startedAt: started,
         usedCachedModel,
         modelDiscoveryMs,
         treeBuildMs,
-        adoptedCountHydrationMs: 0,
         deferredAdoptedGroups: collectAdoptedGroups(roots).filter((group) => group.diffSpec).length,
-        durationMs: Date.now() - started,
-      });
+        durationMs: performance.now() - started,
+      };
+      this.lastRootTiming = timing;
+      this.onTiming?.(timing);
       return roots;
     } catch (error) {
       if (generation !== this.generation) {
@@ -225,15 +299,19 @@ export class AdoptedTreeController {
       const roots = [errorMessageNode("root:error", error, "Failed to load changes")];
       this.rootError = roots[0]?.tooltip ?? "Failed to load changes";
       this.roots = roots;
-      this.onTiming?.({
+      const timing: Extract<AdoptedTreeTiming, { phase: "roots" }> = {
         phase: "roots",
+        generation,
+        reason: this.reason,
+        startedAt: started,
         usedCachedModel,
         modelDiscoveryMs,
         treeBuildMs,
-        adoptedCountHydrationMs: 0,
         deferredAdoptedGroups: 0,
-        durationMs: Date.now() - started,
-      });
+        durationMs: performance.now() - started,
+      };
+      this.lastRootTiming = timing;
+      this.onTiming?.(timing);
       return roots;
     }
   }
@@ -249,7 +327,7 @@ export class AdoptedTreeController {
       return node.children;
     }
     const cached = await this.loadFileList(node.diffSpec);
-    this.applyAdoptedCount(node, cached, Date.now());
+    this.applyAdoptedCount(node, cached);
     return nodesFromCache(node.diffSpec, cached, this.settings());
   }
 
@@ -257,7 +335,7 @@ export class AdoptedTreeController {
     return nodesFromCache(spec, await this.loadFileList(spec), this.settings());
   }
 
-  private async loadFileList(spec: AdoptedDiffSpec): Promise<CachedFileList> {
+  private async loadFileList(spec: AdoptedDiffSpec, observer?: FileLoadObserver): Promise<CachedFileList> {
     const key = cacheKey(spec);
     const cached = this.fileCache.get(key);
     if (cached) {
@@ -271,7 +349,8 @@ export class AdoptedTreeController {
 
     const generation = this.generation;
     const promise = this.runFileDiff(async () => {
-      const started = Date.now();
+      const started = performance.now();
+      observer?.onStart();
       try {
         const entries = await this.model.listNameStatus(spec);
         if (generation !== this.generation) {
@@ -282,7 +361,7 @@ export class AdoptedTreeController {
         this.onTiming?.({
           phase: "adopted-files",
           kind: spec.kind,
-          durationMs: Date.now() - started,
+          durationMs: performance.now() - started,
           fileCount: entries.length,
           ok: true,
         });
@@ -299,11 +378,13 @@ export class AdoptedTreeController {
         this.onTiming?.({
           phase: "adopted-files",
           kind: spec.kind,
-          durationMs: Date.now() - started,
+          durationMs: performance.now() - started,
           fileCount: 0,
           ok: false,
         });
         return result;
+      } finally {
+        observer?.onEnd(performance.now() - started);
       }
     });
     const inflight = { generation, promise };
@@ -321,22 +402,21 @@ export class AdoptedTreeController {
   private async loadAdoptedCount(
     node: AdoptedTreeNode,
     generation: number,
+    observer?: FileLoadObserver,
   ): Promise<AdoptedCountPatch | undefined> {
     if (!node.diffSpec) {
       return undefined;
     }
-    const started = Date.now();
-    const cached = await this.loadFileList(node.diffSpec);
+    const cached = await this.loadFileList(node.diffSpec, observer);
     if (generation !== this.generation) {
       return undefined;
     }
-    return this.applyAdoptedCount(node, cached, started);
+    return this.applyAdoptedCount(node, cached);
   }
 
   private applyAdoptedCount(
     node: AdoptedTreeNode,
     cached: CachedFileList,
-    started: number,
   ): AdoptedCountPatch {
     if (!cached.ok) {
       const message = cached.nodes[0]?.tooltip ?? "Failed to list changes";
@@ -347,11 +427,6 @@ export class AdoptedTreeController {
     const count = cached.entries.length;
     node.description = String(count);
     node.adoptedCountError = undefined;
-    this.onTiming?.({
-      phase: "adopted-count",
-      durationMs: Date.now() - started,
-      fileCount: count,
-    });
     return { id: node.id, state: "resolved", count };
   }
 }
@@ -363,6 +438,11 @@ type CachedFileList =
 interface InflightFileList {
   generation: number;
   promise: Promise<CachedFileList>;
+}
+
+interface FileLoadObserver {
+  onStart(): void;
+  onEnd(durationMs: number): void;
 }
 
 function cacheKey(spec: AdoptedDiffSpec): string {

@@ -14,14 +14,12 @@ import {
 } from "./adoptedDiffPrep.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";
 import { changeOpenTarget } from "./changeOpenPlan.js";
+import type { ChangesDiagnosticWriter, ChangesLoadReason } from "./changesLoadDiagnostics.js";
 import { readChangesTreeSettings, type ScmViewMode } from "./changesTreeSettings.js";
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
 import { ChangesWebviewProvider } from "./changesWebview.js";
 import { toVscodeUri } from "./submoduleTree.js";
-
-/** Coalesce bursty vscode.git events before a full gitlink/HEAD rediscovery. File overlays stay immediate. */
-const REFRESH_DEBOUNCE_MS = 300;
 
 export interface RegisterAdoptedViewOptions {
   model: GitModelProvider & AdoptedDiffReader;
@@ -29,6 +27,7 @@ export interface RegisterAdoptedViewOptions {
   cli: GitCli;
   restoreStatus?: RestoreStatusStore;
   extensionUri: vscode.Uri;
+  writeDiagnostic: ChangesDiagnosticWriter;
 }
 
 export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode.Disposable {
@@ -42,20 +41,13 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       ),
     (timing) => {
       if (timing.phase === "roots") {
-        console.debug(
-          `[git-submodule] tree ${timing.usedCachedModel ? "overlay" : "discovery"} model=${timing.modelDiscoveryMs}ms build=${timing.treeBuildMs}ms adoptedCounts=${timing.adoptedCountHydrationMs}ms deferred=${timing.deferredAdoptedGroups} total=${timing.durationMs}ms`,
-        );
         return;
       }
-      if (timing.phase === "adopted-count") {
-        console.debug(
-          `[git-submodule] adopted-count files=${timing.fileCount} hydrate=${timing.durationMs}ms`,
+      if (!timing.ok || timing.durationMs >= 250) {
+        options.writeDiagnostic(
+          `[changes] adopted git diff ${timing.ok ? "slow" : "error"} ${Math.round(timing.durationMs)}ms (kind ${timing.kind}; files ${timing.fileCount})`,
         );
-        return;
       }
-      console.debug(
-        `[git-submodule] adopted-files kind=${timing.kind} diff=${timing.durationMs}ms files=${timing.fileCount} ok=${timing.ok}`,
-      );
     },
   );
   const contentProvider = new GitShowContentProvider(options.cli);
@@ -63,21 +55,12 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     controller,
     gitApi: options.gitApi,
     extensionUri: options.extensionUri,
+    writeDiagnostic: options.writeDiagnostic,
   });
 
-  const render = (): void => {
-    webviewProvider.refresh();
+  const refresh = (reason: ChangesLoadReason, rediscover: boolean): void => {
+    webviewProvider.refresh(reason, rediscover);
   };
-
-  const overlayRefresh = coalesce(() => {
-    void controller.refresh();
-    render();
-  });
-
-  const scheduleDiscovery = debounce(() => {
-    controller.invalidateModel();
-    overlayRefresh.run();
-  }, REFRESH_DEBOUNCE_MS);
 
   const disposables: vscode.Disposable[] = [
     vscode.window.registerWebviewViewProvider(VIEW_ID, webviewProvider, {
@@ -87,8 +70,10 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     registerDailyGitActions({
       gitApi: options.gitApi,
       choreService: new SubmoduleChoreReadService(options.cli),
-      refreshTree: overlayRefresh.run,
-      beforeRefreshCommand: () => controller.invalidateModel(),
+      refreshTree: () => {
+        refresh("manual refresh", true);
+      },
+      beforeRefreshCommand: () => undefined,
     }),
     vscode.commands.registerCommand(
       COMMANDS.openDiff,
@@ -112,16 +97,14 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     vscode.commands.registerCommand(COMMANDS.viewAsTree, () => setScmViewMode("tree")),
     vscode.commands.registerCommand(COMMANDS.viewAsList, () => setScmViewMode("list")),
     options.gitApi.subscribe({
-      onOpenRepository: scheduleDiscovery.run,
-      onCloseRepository: scheduleDiscovery.run,
+      onOpenRepository: (rootPath) =>
+        refresh("workspace change", controller.repositoryOpenNeedsRediscovery(rootPath)),
+      onCloseRepository: () => refresh("workspace change", false),
       onDidChangeRepositoryState: (snapshot) => {
-        if (controller.consumeRepositoryState(snapshot)) {
-          scheduleDiscovery.run();
-        }
-        overlayRefresh.run();
+        refresh("Git state event", controller.consumeRepositoryState(snapshot));
       },
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => scheduleDiscovery.run()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => refresh("workspace change", true)),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration("git.untrackedChanges") ||
@@ -134,18 +117,15 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         event.affectsConfiguration("scm.compactFolders")
       ) {
         syncViewModeContext();
-        overlayRefresh.run();
+        refresh("config change", false);
       }
     }),
-    options.restoreStatus?.subscribe(overlayRefresh.run) ?? { dispose() {} },
-    new vscode.Disposable(() => {
-      overlayRefresh.dispose();
-      scheduleDiscovery.dispose();
-    }),
+    options.restoreStatus?.subscribe(() => refresh("restore update", false)) ?? { dispose() {} },
+    new vscode.Disposable(() => webviewProvider.dispose()),
   ];
 
   syncViewModeContext();
-  overlayRefresh.run();
+  refresh("activation", true);
 
   return new vscode.Disposable(() => {
     for (const disposable of disposables) {
@@ -283,45 +263,3 @@ async function commandExists(command: string): Promise<boolean> {
   }
 }
 
-function coalesce(fn: () => void): { run: () => void; dispose: () => void } {
-  let scheduled = false;
-  let disposed = false;
-  return {
-    run: () => {
-      if (disposed || scheduled) {
-        return;
-      }
-      scheduled = true;
-      queueMicrotask(() => {
-        scheduled = false;
-        if (!disposed) {
-          fn();
-        }
-      });
-    },
-    dispose: () => {
-      disposed = true;
-    },
-  };
-}
-
-function debounce(fn: () => void, waitMs: number): { run: () => void; dispose: () => void } {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return {
-    run: () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-      timer = setTimeout(() => {
-        timer = undefined;
-        fn();
-      }, waitMs);
-    },
-    dispose: () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-    },
-  };
-}

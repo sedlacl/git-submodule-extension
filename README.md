@@ -49,6 +49,10 @@ Stage, unstage, discard, commit, refresh, sync, and publish use the owning repos
 
 Blocked restore cases appear on the submodule row, in the **Git Submodule** output channel, and on the status bar.
 
+## Load diagnostics
+
+Open **View → Output**, then select **Git Submodule**. Each load diagnostic starts with a local wall-clock timestamp, for example `[15:25:41.382] [changes #25] final ...`. The `[changes #N]` segment identifies one load generation and its trigger, bootstrap work, recursive discovery, tree build, serialization/post/render acknowledgement, total usable-tree time, result, and slowest phase. A separate `adopted counts` line reports background count hydration, including cache hits, Git diff calls, and the four-call concurrency bound. `stale/cancelled` means a newer generation replaced the load; it never represents a final tree.
+
 ## Security guarantees
 
 Restore is fail-closed. Automatic work never does fetch, pull, push, commit, force, discard, or working-tree reset.

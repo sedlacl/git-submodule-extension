@@ -361,6 +361,7 @@
     "create-ui-fixture": "tsx scripts/create-ui-fixture.ts",
     "dev:ui": "tsx scripts/dev-ui.ts",
     "dev:cursor": "tsx scripts/dev-ui.ts --host=cursor",
+    "profile:cursor": "tsx scripts/profile-cursor-ui.ts",
     "dev:ui:reset": "tsx scripts/create-ui-fixture.ts --force",
     "package": "npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build"

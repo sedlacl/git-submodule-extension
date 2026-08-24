@@ -19,11 +19,26 @@ import {
   type ChangesRenderVersion,
 } from "./changesRenderProtocol.js";
 import { COMMANDS, VIEW_ID } from "./constants.js";
+import {
+  formatAdoptedCountBatch,
+  formatAdoptedExpansion,
+  formatChangesLoadSummary,
+  type ChangesDiagnosticWriter,
+  type ChangesLoadReason,
+  type ChangesLoadResult,
+} from "./changesLoadDiagnostics.js";
+import {
+  BootstrapPostGuard,
+  ChangesRefreshCoordinator,
+  type ChangesRefreshBatch,
+  formatChangesRefreshEvents,
+} from "./changesRefreshCoordinator.js";
 
 export interface ChangesWebviewProviderOptions {
   controller: AdoptedTreeController;
   gitApi: VsCodeGitApiAdapter;
   extensionUri: vscode.Uri;
+  writeDiagnostic: ChangesDiagnosticWriter;
 }
 
 type WebviewMessage =
@@ -53,8 +68,14 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private latestRender: RenderEnvelope | undefined;
   private progressCompletion: { generation: number; resolve: () => void } | undefined;
   private renderTiming: RenderTiming | undefined;
+  private renderCompletion: { generation: number; promise: Promise<void>; resolve: () => void } | undefined;
+  private pendingBootstrapTiming: BootstrapTiming | undefined;
+  private readonly bootstrapPostGuard = new BootstrapPostGuard();
+  private readonly refreshCoordinator: ChangesRefreshCoordinator;
 
-  constructor(private readonly options: ChangesWebviewProviderOptions) {}
+  constructor(private readonly options: ChangesWebviewProviderOptions) {
+    this.refreshCoordinator = new ChangesRefreshCoordinator((batch) => this.runRefresh(batch));
+  }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
@@ -65,38 +86,38 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [dist],
     };
     const nonce = crypto.randomBytes(16).toString("hex");
-    const startedAt = Date.now();
     const immediate = this.lastTreeHtml ? emptyImmediatePaint() : this.nodesForImmediatePaint();
-    const serializationStarted = Date.now();
+    const serializationStarted = performance.now();
     const rootHtml =
       this.lastTreeHtml ?? (immediate.nodes ? this.renderTreeHtml(immediate.nodes, false) : changesWebviewLoadingHtml());
-    const version = this.beginRender(
-      rootHtml === changesWebviewLoadingHtml() ? "loading" : "bootstrap",
-      rootHtml,
-      {
-        startedAt,
-        bootstrapSnapshotMs: immediate.snapshotMs,
-        bootstrapTreeMs: immediate.treeBuildMs,
-        serializationMs: Date.now() - serializationStarted,
-      },
-    );
+    const version = this.renderProtocol.version();
+    const bootstrapTiming = this.lastTreeHtml
+      ? undefined
+      : {
+          bootstrapSnapshotMs: immediate.snapshotMs,
+          bootstrapTreeMs: immediate.treeBuildMs,
+          serializationMs: performance.now() - serializationStarted,
+          bootstrapPostMs: 0,
+        };
     webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => {
       void this.onMessage(message);
     });
     webviewView.onDidChangeVisibility(() => {
       if (this.view === webviewView && webviewView.visible) {
         this.htmlReady = true;
-        void this.sendLatestRender();
+        this.refresh("view visible", false);
       }
     });
     webviewView.onDidDispose(() => {
       if (this.view === webviewView) {
         this.view = undefined;
         this.htmlReady = false;
+        this.renderCompletion?.resolve();
         this.finishProgress();
       }
     });
     // Install listeners before assigning HTML: the page can post `ready` synchronously while loading.
+    const bootstrapPostStarted = performance.now();
     webviewView.webview.html = changesWebviewPage({
       nonce,
       cspSource: webviewView.webview.cspSource,
@@ -104,29 +125,25 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       rootHtml,
       ...version,
     });
-    void this.completeRender(version.generation, webviewView);
+    if (bootstrapTiming && this.bootstrapPostGuard.claim()) {
+      bootstrapTiming.bootstrapPostMs = performance.now() - bootstrapPostStarted;
+      this.recordBootstrapTiming(bootstrapTiming);
+    }
+    this.refresh("view resolve", false);
   }
 
-  refresh(): void {
-    const view = this.view;
-    if (!view) {
-      void this.options.controller.getRootNodes();
-      return;
-    }
-    const startedAt = Date.now();
-    const immediate = this.lastTreeHtml ? emptyImmediatePaint() : this.nodesForImmediatePaint();
-    const serializationStarted = Date.now();
-    const html =
-      this.lastTreeHtml ??
-      (immediate.nodes ? this.renderTreeHtml(immediate.nodes, false) : changesWebviewLoadingHtml());
-    const version = this.beginRender(html === changesWebviewLoadingHtml() ? "loading" : "bootstrap", html, {
-      startedAt,
-      bootstrapSnapshotMs: immediate.snapshotMs,
-      bootstrapTreeMs: immediate.treeBuildMs,
-      serializationMs: Date.now() - serializationStarted,
+  refresh(reason: ChangesLoadReason = "manual refresh", rediscover = reason === "manual refresh"): void {
+    this.refreshCoordinator.request({
+      reason,
+      rediscover,
+      immediate: reason === "manual refresh" || reason === "retry",
     });
-    void this.sendLatestRender();
-    void this.completeRender(version.generation, view);
+  }
+
+  dispose(): void {
+    this.refreshCoordinator.dispose();
+    this.renderCompletion?.resolve();
+    this.finishProgress();
   }
 
   private async onMessage(message: WebviewMessage): Promise<void> {
@@ -137,15 +154,14 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         return;
       case "rendered":
         if (this.renderProtocol.acknowledge(message)) {
-          this.finishProgress(message.generation);
           this.logRenderTiming(message.generation);
+          if (this.renderCompletion?.generation === message.generation) {
+            this.renderCompletion.resolve();
+          }
         }
         return;
       case "retry": {
-        this.options.controller.invalidateModel();
-        const loading = this.options.controller.refresh();
-        this.refresh();
-        await loading;
+        this.refresh("retry", true);
         return;
       }
       case "retryAdopted":
@@ -255,17 +271,69 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private beginRender(
-    renderState: "loading" | "bootstrap",
-    html: string,
-    timing: Omit<RenderTiming, "generation" | "postMs">,
-  ): ChangesRenderVersion {
-    const version = this.renderProtocol.begin(renderState);
+  private beginLoad(batch: ChangesRefreshBatch): ChangesRenderVersion {
+    const version = this.renderProtocol.begin(this.lastTreeHtml ? "loading" : "bootstrap");
     this.adoptedCountPatches.clear();
-    this.latestRender = { type: "setTree", html, ...version };
-    this.renderTiming = { generation: version.generation, postMs: 0, ...timing };
+    this.latestRender = undefined;
+    const bootstrap = this.pendingBootstrapTiming ?? emptyBootstrapTiming();
+    this.pendingBootstrapTiming = undefined;
+    this.renderTiming = {
+      generation: version.generation,
+      startedAt: batch.requestedAt,
+      reason: batch.reason,
+      inFlightWaitMs: batch.inFlightWaitMs,
+      eventSummary: formatChangesRefreshEvents(batch.eventCounts),
+      hasFollowUp: batch.hasFollowUp,
+      bootstrapSnapshotMs: bootstrap.bootstrapSnapshotMs,
+      bootstrapTreeMs: bootstrap.bootstrapTreeMs,
+      serializationMs: bootstrap.serializationMs,
+      bootstrapPostMs: bootstrap.bootstrapPostMs,
+      finalPostMs: 0,
+      renderAckMs: 0,
+      discoveryMs: 0,
+      treeBuildMs: 0,
+      logged: false,
+    };
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    this.renderCompletion = { generation: version.generation, promise, resolve };
     this.startProgress(version.generation);
     return version;
+  }
+
+  private async runRefresh(batch: ChangesRefreshBatch): Promise<void> {
+    const version = this.beginLoad(batch);
+    if (batch.rediscover) {
+      this.options.controller.invalidateModel();
+    }
+    await this.options.controller.refresh(primaryReason(batch.eventCounts));
+    const view = this.view;
+    if (!view || !this.isCurrentRender(version.generation, view)) {
+      this.renderCompletion?.resolve();
+      this.finishProgress(version.generation);
+      return;
+    }
+    await this.completeRender(version.generation, view);
+    if (this.renderCompletion?.generation === version.generation) {
+      await this.renderCompletion.promise;
+    }
+    if (!this.refreshCoordinator.hasPendingRefresh()) {
+      this.finishProgress(version.generation);
+    }
+  }
+
+  private recordBootstrapTiming(bootstrap: BootstrapTiming): void {
+    const timing = this.renderTiming;
+    if (timing && this.renderProtocol.isPending()) {
+      timing.bootstrapSnapshotMs += bootstrap.bootstrapSnapshotMs;
+      timing.bootstrapTreeMs += bootstrap.bootstrapTreeMs;
+      timing.serializationMs += bootstrap.serializationMs;
+      timing.bootstrapPostMs += bootstrap.bootstrapPostMs;
+      return;
+    }
+    this.pendingBootstrapTiming = bootstrap;
   }
 
   private async completeRender(generation: number, view: vscode.WebviewView): Promise<void> {
@@ -275,7 +343,17 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         return;
       }
       const rootError = this.options.controller.rootLoadError();
+      const rootTiming = this.options.controller.rootTiming();
+      if (this.renderTiming?.generation === generation && rootTiming) {
+        this.renderTiming.startedAt = Math.min(this.renderTiming.startedAt, rootTiming.startedAt);
+        this.renderTiming.discoveryMs = rootTiming.modelDiscoveryMs;
+        this.renderTiming.treeBuildMs = rootTiming.treeBuildMs;
+      }
       if (rootError) {
+        if (this.renderTiming?.generation === generation) {
+          this.renderTiming.errorPhase = "recursive discovery";
+          this.renderTiming.errorMessage = rootError;
+        }
         await this.publishRender(generation, "error", changesWebviewErrorHtml(rootError));
         return;
       }
@@ -290,6 +368,10 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         return;
       }
       const detail = error instanceof Error ? error.message : String(error);
+      if (this.renderTiming?.generation === generation) {
+        this.renderTiming.errorPhase = "tree load";
+        this.renderTiming.errorMessage = detail;
+      }
       await this.publishRender(generation, "error", changesWebviewErrorHtml(detail));
     }
   }
@@ -300,9 +382,15 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     this.expansion.set(id, expanded);
     if (expanded && node?.diffSpec && node.kind === "adopted-group" && this.view && this.lastRoots.length > 0) {
       const version = this.renderProtocol.version();
+      const expansionStarted = performance.now();
+      const cacheHit = this.options.controller.hasCachedFiles(node);
       const html = this.measureSerialization(version.generation, () => this.renderTreeHtml(this.lastRoots, true));
       await this.publishRender(version.generation, version.renderState, html);
-      await this.hydrateExpandedAdopted(version.generation, this.view, this.lastRoots);
+      await this.hydrateExpandedAdopted(version.generation, this.view, this.lastRoots, {
+        nodeId: node.id,
+        startedAt: expansionStarted,
+        cacheHit,
+      });
       return;
     }
     await this.repaint();
@@ -372,7 +460,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     this.latestRender = { type: "setTree", html, ...version };
     if (renderState === "final" || renderState === "error") {
       if (this.renderTiming?.generation === generation) {
-        this.renderTiming.finalPublishedAt = Date.now();
+        this.renderTiming.finalPublishedAt = performance.now();
       }
     }
     await this.sendLatestRender();
@@ -384,12 +472,17 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     if (!view || !this.htmlReady || !render) {
       return;
     }
-    const postStarted = Date.now();
+    const postStarted = performance.now();
     const accepted = await view.webview.postMessage(render);
     if (this.renderTiming?.generation === render.generation) {
-      this.renderTiming.postMs += Date.now() - postStarted;
+      const postMs = performance.now() - postStarted;
+      if (render.renderState === "loading" || render.renderState === "bootstrap") {
+        this.renderTiming.bootstrapPostMs += postMs;
+      } else {
+        this.renderTiming.finalPostMs += postMs;
+      }
       if (render.renderState === "final" || render.renderState === "error") {
-        this.renderTiming.finalPostAt = Date.now();
+        this.renderTiming.finalPostAt = performance.now();
       }
     }
     if (!accepted) {
@@ -408,9 +501,10 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView,
     roots: AdoptedTreeNode[],
   ): Promise<void> {
-    await this.options.controller.hydrateAdoptedCounts(roots, (patch) => {
+    const timing = await this.options.controller.hydrateAdoptedCounts(roots, (patch) => {
       void this.publishAdoptedCountPatch(generation, view, patch);
     });
+    this.options.writeDiagnostic(formatAdoptedCountBatch({ generation, ...timing }));
   }
 
   private async retryAdoptedCount(id: string): Promise<void> {
@@ -463,7 +557,10 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private startProgress(generation: number): void {
-    this.finishProgress();
+    if (this.progressCompletion) {
+      this.progressCompletion.generation = generation;
+      return;
+    }
     let resolve!: () => void;
     const completion = new Promise<void>((done) => {
       resolve = done;
@@ -506,16 +603,38 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     generation: number,
     view: vscode.WebviewView,
     roots: AdoptedTreeNode[],
+    expansion?: { nodeId: string; startedAt: number; cacheHit: boolean },
   ): Promise<void> {
     if (!this.hasExpandedAdopted(roots)) {
       return;
     }
-    const started = Date.now();
     const hydrated = await this.hydrate(roots);
     if (!this.isCurrentRender(generation, view)) {
+      if (expansion) {
+        this.options.writeDiagnostic(
+          formatAdoptedExpansion({
+            generation,
+            durationMs: performance.now() - expansion.startedAt,
+            fileCount: 0,
+            cacheHit: expansion.cacheHit,
+            ok: false,
+          }),
+        );
+      }
       return;
     }
-    console.debug(`[git-submodule] adopted hydration ${Date.now() - started}ms`);
+    if (expansion) {
+      const expanded = findNode(hydrated, expansion.nodeId);
+      this.options.writeDiagnostic(
+        formatAdoptedExpansion({
+          generation,
+          durationMs: performance.now() - expansion.startedAt,
+          fileCount: expanded ? countFileNodes(expanded.children) : 0,
+          cacheHit: expansion.cacheHit,
+          ok: true,
+        }),
+      );
+    }
     const html = this.measureSerialization(generation, () => this.renderTreeHtml(hydrated, true));
     await this.publishRender(generation, "final", html);
   }
@@ -529,10 +648,10 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private measureSerialization<T>(generation: number, serialize: () => T): T {
-    const started = Date.now();
+    const started = performance.now();
     const result = serialize();
     if (this.renderTiming?.generation === generation) {
-      this.renderTiming.serializationMs += Date.now() - started;
+      this.renderTiming.serializationMs += performance.now() - started;
     }
     return result;
   }
@@ -542,10 +661,49 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     if (!timing || timing.generation !== generation) {
       return;
     }
-    const now = Date.now();
-    const ackMs = timing.finalPostAt === undefined ? 0 : now - timing.finalPostAt;
-    console.debug(
-      `[git-submodule] render generation=${generation} vscodeSnapshot=${timing.bootstrapSnapshotMs}ms bootstrapTree=${timing.bootstrapTreeMs}ms serialize=${timing.serializationMs}ms post=${timing.postMs}ms ack=${ackMs}ms total=${now - timing.startedAt}ms`,
+    const now = performance.now();
+    timing.renderAckMs = timing.finalPostAt === undefined ? 0 : now - timing.finalPostAt;
+    const state = this.renderProtocol.version().renderState;
+    this.writeLoadSummary(timing, state === "error" ? "error" : "final", now);
+  }
+
+  private writeLoadSummary(timing: RenderTiming, result: ChangesLoadResult, finishedAt: number): void {
+    if (timing.logged) {
+      return;
+    }
+    timing.logged = true;
+    const totalMs = finishedAt - timing.startedAt;
+    const measuredMs =
+      timing.inFlightWaitMs +
+      timing.bootstrapSnapshotMs +
+      timing.bootstrapTreeMs +
+      timing.bootstrapPostMs +
+      timing.discoveryMs +
+      timing.treeBuildMs +
+      timing.serializationMs +
+      timing.finalPostMs +
+      timing.renderAckMs;
+    this.options.writeDiagnostic(
+      formatChangesLoadSummary({
+        generation: timing.generation,
+        reason: timing.reason,
+        result,
+        totalMs,
+        queuedCoalescedMs: Math.max(0, totalMs - measuredMs),
+        inFlightWaitMs: timing.inFlightWaitMs,
+        eventSummary: timing.eventSummary,
+        followUp: timing.hasFollowUp(),
+        bootstrapSnapshotMs: timing.bootstrapSnapshotMs,
+        bootstrapBuildMs: timing.bootstrapTreeMs,
+        bootstrapPostMs: timing.bootstrapPostMs,
+        discoveryMs: timing.discoveryMs,
+        treeBuildMs: timing.treeBuildMs,
+        serializationMs: timing.serializationMs,
+        finalPostMs: timing.finalPostMs,
+        renderAckMs: timing.renderAckMs,
+        errorPhase: timing.errorPhase,
+        errorMessage: timing.errorMessage,
+      }),
     );
   }
 
@@ -627,16 +785,47 @@ interface ImmediatePaint {
 interface RenderTiming {
   generation: number;
   startedAt: number;
+  reason: string;
+  inFlightWaitMs: number;
+  eventSummary: string;
+  hasFollowUp: () => boolean;
   bootstrapSnapshotMs: number;
   bootstrapTreeMs: number;
   serializationMs: number;
-  postMs: number;
+  bootstrapPostMs: number;
+  discoveryMs: number;
+  treeBuildMs: number;
+  finalPostMs: number;
+  renderAckMs: number;
   finalPublishedAt?: number;
   finalPostAt?: number;
+  errorPhase?: string;
+  errorMessage?: string;
+  logged: boolean;
+}
+
+interface BootstrapTiming {
+  bootstrapSnapshotMs: number;
+  bootstrapTreeMs: number;
+  serializationMs: number;
+  bootstrapPostMs: number;
 }
 
 function emptyImmediatePaint(): ImmediatePaint {
   return { snapshotMs: 0, treeBuildMs: 0 };
+}
+
+function emptyBootstrapTiming(): BootstrapTiming {
+  return {
+    bootstrapSnapshotMs: 0,
+    bootstrapTreeMs: 0,
+    serializationMs: 0,
+    bootstrapPostMs: 0,
+  };
+}
+
+function primaryReason(counts: ReadonlyMap<ChangesLoadReason, number>): ChangesLoadReason {
+  return counts.keys().next().value ?? "manual refresh";
 }
 
 function applyAdoptedCountPatch(nodes: readonly AdoptedTreeNode[], patch: AdoptedCountPatch): boolean {
@@ -659,4 +848,24 @@ function applyAdoptedCountPatch(nodes: readonly AdoptedTreeNode[], patch: Adopte
     }
   }
   return false;
+}
+
+function findNode(nodes: readonly AdoptedTreeNode[], id: string): AdoptedTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) {
+      return node;
+    }
+    const child = findNode(node.children, id);
+    if (child) {
+      return child;
+    }
+  }
+  return undefined;
+}
+
+function countFileNodes(nodes: readonly AdoptedTreeNode[]): number {
+  return nodes.reduce(
+    (count, node) => count + (node.kind === "file" ? 1 : 0) + countFileNodes(node.children),
+    0,
+  );
 }

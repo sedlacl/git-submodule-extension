@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
 import * as vscode from "vscode";
 
 const EXTENSION_ID = "qjohn.git-submodule-extension";
@@ -45,7 +46,12 @@ export async function run(): Promise<void> {
   );
 
   await vscode.commands.executeCommand("workbench.view.scm");
-  await vscode.commands.executeCommand("gitSubmodule.refresh");
+  if (process.env.GIT_SUBMODULE_TIMING_FILE) {
+    await vscode.commands.executeCommand("gitSubmodule.repos.focus");
+    await runProfileRefreshes();
+  } else {
+    await vscode.commands.executeCommand("gitSubmodule.refresh");
+  }
 
   const folders = vscode.workspace.workspaceFolders ?? [];
   assert.ok(folders.length >= 4, `Expected multi-root fixture, received ${folders.length} folders.`);
@@ -53,4 +59,72 @@ export async function run(): Promise<void> {
   assert.ok(names.includes("httpendpoint"), "httpendpoint folder missing");
   assert.ok(names.includes("infra-deploy"), "infra-deploy folder missing");
   assert.ok(names.includes("plain-app"), "plain-app folder missing");
+}
+
+async function runProfileRefreshes(): Promise<void> {
+  const timingFile = process.env.GIT_SUBMODULE_TIMING_FILE;
+  const refreshCount = Number(process.env.GIT_SUBMODULE_PROFILE_REFRESHES ?? 0);
+  if (!timingFile || !Number.isInteger(refreshCount) || refreshCount < 0) {
+    return;
+  }
+
+  let completedBatches = countMatches(readTimingFile(timingFile), /adopted counts .*\)/g);
+  await vscode.commands.executeCommand("gitSubmodule.refresh");
+  await waitForTimingFile(timingFile, (content) => {
+    const hasFinal = /\[changes #\d+\] final .*\)/.test(content);
+    const batches = countMatches(content, /adopted counts .*\)/g);
+    return hasFinal && batches > completedBatches;
+  });
+  completedBatches = countMatches(readTimingFile(timingFile), /adopted counts .*\)/g);
+
+  for (let index = 0; index < refreshCount; index += 1) {
+    let measured = false;
+    for (let attempt = 0; attempt < 5 && !measured; attempt += 1) {
+      const before = readTimingFile(timingFile);
+      const finalsBefore = countMatches(before, /\[changes #\d+\] final .*\)/g);
+      const manualBefore = countMatches(before, /\[changes #\d+\] final .*reason: [^;]*manual refresh/g);
+      const batchesBefore = countMatches(before, /adopted counts .*\)/g);
+      await vscode.commands.executeCommand("gitSubmodule.refresh");
+      await waitForTimingFile(timingFile, (content) => {
+        return (
+          countMatches(content, /\[changes #\d+\] final .*\)/g) > finalsBefore &&
+          countMatches(content, /adopted counts .*\)/g) > batchesBefore
+        );
+      });
+      const after = readTimingFile(timingFile);
+      measured =
+        countMatches(after, /\[changes #\d+\] final .*reason: [^;]*manual refresh/g) > manualBefore;
+      completedBatches = countMatches(after, /adopted counts .*\)/g);
+    }
+    if (!measured) {
+      throw new Error(`Could not obtain warm manual refresh ${index + 1}/${refreshCount}`);
+    }
+  }
+}
+
+async function waitForTimingFile(
+  filePath: string,
+  predicate: (content: string) => boolean,
+  timeoutMs = 30_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate(readTimingFile(filePath))) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for complete UI timing evidence in ${filePath}`);
+}
+
+function readTimingFile(filePath: string): string {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function countMatches(value: string, pattern: RegExp): number {
+  return [...value.matchAll(pattern)].length;
 }

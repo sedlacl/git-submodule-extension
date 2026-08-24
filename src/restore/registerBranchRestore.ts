@@ -20,6 +20,7 @@ export interface RegisterBranchRestoreOptions {
 
 export interface BranchRestoreRegistration extends vscode.Disposable {
   readonly status: RestoreStatusStore;
+  readonly output: vscode.OutputChannel;
   retry(parentRootPath: string): Promise<void>;
   retryAll(): Promise<void>;
   fetch(request: RestoreRequest): Promise<void>;
@@ -92,6 +93,7 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
 
   return {
     status,
+    output,
     retry: (parentRootPath) => coordinator.retry(parentRootPath),
     retryAll: () => coordinator.retryMany(options.gitApi.getWorkspaceFolderPaths()),
     fetch: (request) => coordinator.fetch(request),
