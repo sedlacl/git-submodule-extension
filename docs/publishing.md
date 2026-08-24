@@ -22,7 +22,9 @@ First public release and every follow-up use the same flow. `package.json` `vers
    git tag v0.1.0
    git push origin main --tags
    ```
-5. GitHub Actions workflow **Release** (trigger: tag `v*`) runs `npm ci`, lint, typecheck, test, package, uploads the `.vsix` to the GitHub Release, and publishes to Open VSX with `OVSX_PAT`.
+5. GitHub Actions workflow **Release** (trigger: tag `v*`) runs `npm ci`, lint, typecheck, test, `npm run package:ci`, uploads the `.vsix` to the GitHub Release, and publishes to Open VSX with `OVSX_PAT`.
+
+CI uses `package:ci`, which skips `build:icon` because the runner has no ImageMagick. After editing `media/icon.svg`, run `npm run build:icon` locally and commit the regenerated `media/icon.png`.
 
 Primary trigger: **git tag `v*`** (for example `v0.1.0`). Do not publish with tokens pasted into chat or committed to the repo.
 
