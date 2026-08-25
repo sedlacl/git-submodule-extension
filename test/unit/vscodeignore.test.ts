@@ -10,8 +10,9 @@ const lines = vscodeignore
 
 describe("vscodeignore packaging exclusions", () => {
   it("excludes editor metadata, tests, fixtures, temp, and node_modules from VSIX", () => {
-    for (const pattern of [".cursor/**", "test/**", "fixtures/**", "temp/**", "node_modules/**"]) {
+    for (const pattern of [".cursor/**", "test/**", "fixtures/**", "temp/**", "node_modules/**", "!dist/**"]) {
       expect(lines).toContain(pattern);
     }
+    expect(lines.some((line) => line.includes("@vscode/codicons"))).toBe(false);
   });
 });

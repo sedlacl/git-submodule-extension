@@ -21,6 +21,12 @@ import {
   type ChangesRenderVersion,
 } from "./changesRenderProtocol.js";
 import { COMMANDS, VIEW_ID } from "./constants.js";
+import { PACKAGED_CODICONS_SEGMENTS } from "./codiconsAssets.js";
+import {
+  fileIconWebviewSrc,
+  loadActiveFileIconTheme,
+  type LoadedFileIconTheme,
+} from "./fileIconThemeHost.js";
 import {
   formatAdoptedCountBatch,
   formatAdoptedExpansion,
@@ -76,19 +82,17 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private pendingBootstrapTiming: BootstrapTiming | undefined;
   private readonly bootstrapPostGuard = new BootstrapPostGuard();
   private readonly refreshCoordinator: ChangesRefreshCoordinator;
+  private fileIcons: LoadedFileIconTheme | undefined;
 
   constructor(private readonly options: ChangesWebviewProviderOptions) {
     this.refreshCoordinator = new ChangesRefreshCoordinator((batch) => this.runRefresh(batch));
+    void this.reloadFileIcons();
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     this.htmlReady = false;
-    const dist = vscode.Uri.joinPath(this.options.extensionUri, "node_modules", "@vscode", "codicons", "dist");
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [dist],
-    };
+    this.applyWebviewRoots(webviewView);
     const nonce = crypto.randomBytes(16).toString("hex");
     const immediate = this.lastTreeHtml ? emptyImmediatePaint() : this.nodesForImmediatePaint();
     const serializationStarted = performance.now();
@@ -125,7 +129,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = changesWebviewPage({
       nonce,
       cspSource: webviewView.webview.cspSource,
-      codiconCssHref: webviewView.webview.asWebviewUri(vscode.Uri.joinPath(dist, "codicon.css")).toString(),
+      codiconCssHref: webviewView.webview.asWebviewUri(vscode.Uri.joinPath(this.codiconsDir(), "codicon.css")).toString(),
       rootHtml,
       ...version,
     });
@@ -134,6 +138,14 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       this.recordBootstrapTiming(bootstrapTiming);
     }
     this.refresh("view resolve", false);
+  }
+
+  async reloadFileIcons(): Promise<void> {
+    this.fileIcons = await loadActiveFileIconTheme();
+    if (this.view) {
+      this.applyWebviewRoots(this.view);
+      this.refresh("file icon theme", false);
+    }
   }
 
   refresh(
@@ -450,6 +462,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         drafts: this.readDrafts(),
         placeholders: this.readPlaceholders(),
         generateCommitMessageSupportedRoots: this.generateCommitMessageSupportedRoots(),
+        fileIconSrc: this.fileIconSrcBound(),
         config: this.rowConfig(),
       }),
     );
@@ -587,6 +600,30 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     }
     this.progressCompletion.resolve();
     this.progressCompletion = undefined;
+  }
+
+  private codiconsDir(): vscode.Uri {
+    return vscode.Uri.joinPath(this.options.extensionUri, ...PACKAGED_CODICONS_SEGMENTS);
+  }
+
+  private applyWebviewRoots(view: vscode.WebviewView): void {
+    const roots = [this.codiconsDir()];
+    if (this.fileIcons) {
+      roots.push(this.fileIcons.extensionUri);
+    }
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: roots,
+    };
+  }
+
+  private fileIconSrcBound(): ((node: AdoptedTreeNode, expanded: boolean) => string | undefined) | undefined {
+    const view = this.view;
+    const loaded = this.fileIcons;
+    if (!view || !loaded) {
+      return undefined;
+    }
+    return (node, expanded) => fileIconWebviewSrc(loaded, view.webview, node, expanded);
   }
 
   private treeSettings(): ChangesTreeSettings {

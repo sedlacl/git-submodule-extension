@@ -1,5 +1,7 @@
+import path from "node:path";
 import type { AdoptedTreeNode } from "./adoptedViewModel.js";
 import { repoHasOwnCommitChanges } from "./adoptedViewModel.js";
+import { compactFolderDisplayLabel } from "./fileIconTheme.js";
 import type { RowAction, RowActionConfig } from "./changesRowActions.js";
 import { inlineActions } from "./changesRowActions.js";
 import type { ChangesRenderState } from "./changesRenderProtocol.js";
@@ -15,6 +17,7 @@ export interface ChangesWebviewRow {
   selected: boolean;
   depth: number;
   iconId: string;
+  iconSrc?: string;
   iconColor?: string;
   labelColor?: string;
   decorationBadge?: string;
@@ -39,6 +42,7 @@ export interface ChangesWebviewTreeState {
   drafts: ReadonlyMap<string, string>;
   placeholders: ReadonlyMap<string, string>;
   generateCommitMessageSupportedRoots?: ReadonlySet<string>;
+  fileIconSrc?: (node: AdoptedTreeNode, expanded: boolean) => string | undefined;
   config: RowActionConfig;
 }
 
@@ -82,6 +86,7 @@ export function toChangesWebviewRows(
       selected: state.selected.has(node.id),
       depth,
       iconId: rowIconId(node),
+      iconSrc: state.fileIconSrc?.(node, expanded),
       iconColor: rowIconColor(node),
       labelColor: repoLabelColor(node),
       decorationBadge: node.decoration?.badge,
@@ -213,9 +218,11 @@ function renderRow(row: ChangesWebviewRow): string {
   const twistie = row.collapsible
     ? `<button type="button" class="twistie" data-act="toggle" aria-label="${row.expanded ? "Collapse" : "Expand"}"><i class="codicon ${row.expanded ? "codicon-chevron-down" : "codicon-chevron-right"}"></i></button>`
     : `<span class="twistie-spacer"></span>`;
-  const icon = row.iconId
-    ? `<i class="codicon ${codiconClass(row.iconId)}"${row.iconColor ? ` style="color:${themeVar(row.iconColor)}"` : ""}></i>`
-    : "";
+  const icon = row.iconSrc
+    ? `<img class="file-theme-icon" src="${escapeHtml(row.iconSrc)}" alt="" />`
+    : row.iconId
+      ? `<i class="codicon ${codiconClass(row.iconId)}"${row.iconColor ? ` style="color:${themeVar(row.iconColor)}"` : ""}></i>`
+      : "";
   const adoptedCount = row.countPill
     ? row.kind === "adopted-group"
       ? `<span class="count-pill" data-adopted-count>${escapeHtml(row.countPill)}</span>`
@@ -259,9 +266,10 @@ function renderRow(row: ChangesWebviewRow): string {
          </div>`
     : "";
   const kids = row.children.map((child) => renderRow(child)).join("");
+  const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label, path.sep) : row.label;
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
     <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
-      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(row.label)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${status}
+      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${status}
     </div>
     ${chrome}${kids}
   </div>`;
@@ -345,6 +353,17 @@ body {
 }
 .row:hover { background: var(--vscode-list-hoverBackground); }
 .row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.row > .codicon,
+.file-theme-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  font-size: 16px;
+  line-height: 16px;
+}
+.file-theme-icon {
+  object-fit: contain;
+}
 .twistie, .inline-btn, .branch, .commit-btn, .sparkle-btn {
   border: none;
   background: transparent;

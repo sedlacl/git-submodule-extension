@@ -126,6 +126,10 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       refresh("workspace folders changed", () => controller.workspaceFoldersNeedRediscovery()),
     ),
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("workbench.iconTheme")) {
+        void webviewProvider.reloadFileIcons();
+        return;
+      }
       if (
         event.affectsConfiguration("git.untrackedChanges") ||
         event.affectsConfiguration("git.alwaysShowStagedChangesResourceGroup") ||
@@ -139,6 +143,9 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         syncViewModeContext();
         refresh("config change", false);
       }
+    }),
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      void webviewProvider.reloadFileIcons();
     }),
     options.restoreStatus?.subscribe(() => refresh("restore update", false)) ?? { dispose() {} },
     new vscode.Disposable(() => webviewProvider.dispose()),

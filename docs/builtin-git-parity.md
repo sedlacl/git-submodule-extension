@@ -25,7 +25,7 @@ are the machine-checked source for labels and the deviation list below.
   `gitDecoration.submoduleResourceForeground` on gitlink rows
 - Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
-- Status letters and `@vscode/codicons` on webview rows (file icon theme is not available inside a webview)
+- Status letters and the active file icon theme on webview rows when that theme ships SVG `iconPath` entries (Material Icon Theme, vscode-icons). UI chrome uses packaged `@vscode/codicons`
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
   `scm.compactFolders`, `git.countBadge`
 - Menu titles and row toolbar / context slots for Open / Stage / Unstage / Discard /
@@ -51,7 +51,7 @@ are the machine-checked source for labels and the deviation list below.
 | `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs nest under the gitlink row. |
 | `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
 | `count-badge-scope` | `git.countBadge` is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance. |
-| `no-file-icon-theme` | Webview rows cannot use the file icon theme; files show a status letter plus a generic file/folder codicon. |
+| `file-icon-theme-webview` | Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons. |
 | `no-viewitem-menus` | `view/item/context` menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same `gitSubmodule.*` commands. |
 
 Microsoft copyright remains on copied API declarations in `src/git/git.d.ts`.

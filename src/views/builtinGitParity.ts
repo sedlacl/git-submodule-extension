@@ -93,9 +93,9 @@ export const BUILTIN_GIT_DEVIATIONS = [
       "git.countBadge is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance.",
   },
   {
-    id: "no-file-icon-theme",
+    id: "file-icon-theme-webview",
     summary:
-      "Webview rows cannot use the file icon theme; files show a status letter plus a generic file/folder codicon.",
+      "Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons.",
   },
   {
     id: "no-viewitem-menus",

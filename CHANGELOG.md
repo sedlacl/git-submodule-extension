@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Packaged VSIX now includes Codicon CSS/font, so Commit, chevrons, and row actions show icons after marketplace install.
+
+### Changed
+
+- File and folder rows use the active file icon theme (for example Material Icon Theme) instead of generic file/folder codicons, while keeping hierarchical submodule nesting and status letters.
+
 ## [0.1.2] - 2026-08-24
 
 ### Added
@@ -41,5 +51,6 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.2...HEAD
 [0.1.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.0.1...v0.1.0

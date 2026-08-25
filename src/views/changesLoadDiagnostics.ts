@@ -9,6 +9,7 @@ export type ChangesLoadReason =
   | "repository closed"
   | "workspace folders changed"
   | "config change"
+  | "file icon theme"
   | "restore update"
   | "retry";
 

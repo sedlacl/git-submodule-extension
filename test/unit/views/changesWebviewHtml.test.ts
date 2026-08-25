@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
 import { DEFAULT_ROW_ACTION_CONFIG } from "../../../src/views/changesRowActions.js";
@@ -272,6 +273,50 @@ describe("changes webview HTML", () => {
     expect(html).toContain("repo-row");
     expect(html).toContain("codicon-check");
     expect(html).toMatch(/data-id="file:workingTree:0"[\s\S]*?class="inline"[\s\S]*?class="row-status"[\s\S]*?class="badge"/);
+  });
+
+  it("renders file icon theme images and compact folder labels", () => {
+    const folder: AdoptedTreeNode = {
+      id: "folder:/ws/app:workingTree:src/util",
+      kind: "folder",
+      label: "src/util",
+      tooltip: "src/util",
+      collapsible: true,
+      expandByDefault: true,
+      contextValue: CONTEXT.resourceFolderWorkingTree,
+      iconId: "folder",
+      children: [
+        {
+          id: "file:workingTree:app.js",
+          kind: "change",
+          label: "app.js",
+          tooltip: "file",
+          collapsible: false,
+          expandByDefault: false,
+          contextValue: CONTEXT.changeWorkingTree,
+          iconId: "file",
+          decoration: { badge: "M", tooltip: "Modified", themeColorId: "gitDecoration.modifiedResourceForeground" },
+          children: [],
+        },
+      ],
+    };
+    const html = renderChangesTree(
+      toChangesWebviewRows([folder], {
+        expanded: new Set(["folder:/ws/app:workingTree:src/util"]),
+        selected: new Set<string>(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+        fileIconSrc: (node) =>
+          node.kind === "folder" ? "https://theme.example/folder.svg" : "https://theme.example/javascript.svg",
+      }),
+    );
+    expect(html).toContain('src="https://theme.example/folder.svg"');
+    expect(html).toContain('src="https://theme.example/javascript.svg"');
+    expect(html).toContain("file-theme-icon");
+    expect(html).not.toContain("codicon-folder");
+    expect(html).not.toContain("codicon-file");
+    expect(html).toContain(`src ${path.sep} util`);
   });
 
   it("paints loading HTML in #root before any model message", () => {
