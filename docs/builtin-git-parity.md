@@ -52,6 +52,7 @@ are the machine-checked source for labels and the deviation list below.
 | `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
 | `count-badge-scope` | `git.countBadge` is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance. |
 | `file-icon-theme-webview` | Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons. |
+| `compact-folder-posix` | Compact folder labels join with POSIX ` / ` on every platform instead of the OS path separator used by built-in SCM. |
 | `no-viewitem-menus` | `view/item/context` menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same `gitSubmodule.*` commands. |
 
 Microsoft copyright remains on copied API declarations in `src/git/git.d.ts`.

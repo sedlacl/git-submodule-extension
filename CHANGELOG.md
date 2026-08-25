@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Packaged VSIX now includes Codicon CSS/font, so Commit, chevrons, and row actions show icons after marketplace install.
 - Generate-commit sparkle no longer falls back to the "Cursor cannot target this repo" info icon just because the Git model and `vscode.git` spell the same root differently, and the Cursor command is re-detected when the view becomes visible.
+- Repository identity (drafts, busy locks, change grouping, Git API listeners) compares roots as POSIX paths with a normalized drive letter, so Windows `C:\\` vs `c:/` spellings no longer miss each other.
 
 ### Changed
 
 - File and folder rows use the active file icon theme (for example Material Icon Theme) instead of generic file/folder codicons, while keeping hierarchical submodule nesting and status letters.
+- Compact folder labels always show POSIX `src / util` instead of the host OS separator.
 
 ## [0.1.2] - 2026-08-24
 

@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { AdoptedTreeNode } from "./adoptedViewModel.js";
 import { repoHasOwnCommitChanges } from "./adoptedViewModel.js";
 import { compactFolderDisplayLabel } from "./fileIconTheme.js";
@@ -271,7 +270,7 @@ function renderRow(row: ChangesWebviewRow): string {
          </div>`
     : "";
   const kids = row.children.map((child) => renderRow(child)).join("");
-  const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label, path.sep) : row.label;
+  const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label) : row.label;
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
     <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
       ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${status}

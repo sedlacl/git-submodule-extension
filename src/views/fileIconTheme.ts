@@ -72,8 +72,9 @@ export function iconThemeQueryForNode(
   };
 }
 
-export function compactFolderDisplayLabel(label: string, sep: string): string {
-  return label.split("/").join(` ${sep} `);
+/** Nested compact folders always show POSIX `src / util`, never the OS separator. */
+export function compactFolderDisplayLabel(label: string): string {
+  return label.replaceAll("\\", "/").split("/").filter(Boolean).join(" / ");
 }
 
 function mergeLight(theme: IconThemeDocument): IconThemeDocument {

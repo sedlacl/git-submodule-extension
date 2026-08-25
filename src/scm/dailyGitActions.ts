@@ -5,7 +5,7 @@ import {
   type ActionOutcome,
   type ActionRun,
 } from "../actionDiagnostics.js";
-import { sameRepoPath } from "../git/pathUtils.js";
+import { normalizeRepoPath } from "../git/pathUtils.js";
 import {
   ResourceStatus,
   isRenameChange,
@@ -167,7 +167,7 @@ export class DailyGitActions {
       }
 
       target.inputBoxValue = message;
-      if (this.preparedChoreMessages.has(rootPath)) {
+      if (this.preparedChoreMessages.has(normalizeRepoPath(rootPath))) {
         const confirmation = await this.ui.confirm(
           "Commit the prepared submodule chore message?",
           ["Commit"],
@@ -183,7 +183,7 @@ export class DailyGitActions {
 
       await target.operations().commit(message, commitAll ? { all: true } : undefined);
       target.inputBoxValue = "";
-      this.preparedChoreMessages.delete(rootPath);
+      this.preparedChoreMessages.delete(normalizeRepoPath(rootPath));
       outcome = completed({ ...baseDetails, "smart commit": commitAll ? "yes" : "no", branch });
     });
     return outcome;
@@ -225,7 +225,7 @@ export class DailyGitActions {
         });
         const message = mergeCommitDraftWithChore(seed, chore);
         target.inputBoxValue = message;
-        this.preparedChoreMessages.set(rootPath, message);
+        this.preparedChoreMessages.set(normalizeRepoPath(rootPath), message);
         const merge = existing.trim()
           ? message === existing
             ? "unchanged"
@@ -426,7 +426,7 @@ export class DailyGitActions {
     if (repositories.length === 0) {
       return;
     }
-    const roots = unique(repositories.map((repository) => repository.rootPath)).sort();
+    const roots = unique(repositories.map((repository) => normalizeRepoPath(repository.rootPath))).sort();
     const alreadyBusy = roots.find((rootPath) => this.busy.has(rootPath));
     if (alreadyBusy) {
       throw new BusyRepositoryError(alreadyBusy);
@@ -455,10 +455,10 @@ function actionChanges(
   for (const node of nodes) {
     const repositoryRoot = node.repositoryRoot;
     for (const change of collectNodeChanges(node)) {
-      if ((repositoryRoot && change.rootPath !== repositoryRoot) || !allowedGroups.has(change.group)) {
+      if ((repositoryRoot && normalizeRepoPath(change.rootPath) !== normalizeRepoPath(repositoryRoot)) || !allowedGroups.has(change.group)) {
         continue;
       }
-      const key = `${change.rootPath}\0${change.group}\0${change.resource.uri}`;
+      const key = `${normalizeRepoPath(change.rootPath)}\0${change.group}\0${change.resource.uri}`;
       if (!seen.has(key)) {
         seen.add(key);
         changes.push(change);
@@ -478,9 +478,10 @@ function collectNodeChanges(node: AdoptedTreeNode): ChangeFileRef[] {
 function groupChanges(changes: readonly ChangeFileRef[]): Map<string, ChangeFileRef[]> {
   const grouped = new Map<string, ChangeFileRef[]>();
   for (const change of changes) {
-    const list = grouped.get(change.rootPath) ?? [];
+    const key = normalizeRepoPath(change.rootPath);
+    const list = grouped.get(key) ?? [];
     list.push(change);
-    grouped.set(change.rootPath, list);
+    grouped.set(key, list);
   }
   return grouped;
 }
@@ -489,13 +490,7 @@ function changesForRepository(
   grouped: ReadonlyMap<string, ChangeFileRef[]>,
   rootPath: string,
 ): ChangeFileRef[] {
-  const matched: ChangeFileRef[] = [];
-  for (const [key, list] of grouped) {
-    if (key === rootPath || sameRepoPath(key, rootPath)) {
-      matched.push(...list);
-    }
-  }
-  return matched;
+  return grouped.get(normalizeRepoPath(rootPath)) ?? [];
 }
 
 function discardConfirmation(resources: readonly ResourceChange[]): { message: string; action: string } {
@@ -535,13 +530,23 @@ function writableRemotes(remotes: readonly RepositoryRemote[]): RepositoryRemote
 }
 
 function unique(values: readonly string[]): string[] {
-  return [...new Set(values)];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = normalizeRepoPath(value);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
 }
 
 function changeDetails(changes: readonly ChangeFileRef[]): ActionDetails {
   return {
     resources: changes.length,
-    repositories: new Set(changes.map((change) => change.rootPath)).size,
+    repositories: new Set(changes.map((change) => normalizeRepoPath(change.rootPath))).size,
   };
 }
 

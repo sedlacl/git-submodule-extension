@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { API, GitExtension, Repository } from "./git.js";
 import { overlayHierarchicalRepositoryState, type HierarchicalRepositoryView } from "./hierarchicalRepositoryState.js";
-import { sameRepoPath } from "./pathUtils.js";
+import { normalizeRepoPath, sameRepoPath } from "./pathUtils.js";
 import {
   bindRepositoryOperations,
   snapshotRepository,
@@ -75,9 +75,10 @@ export class VsCodeGitApiAdapter {
 
     const attachRepo = (repository: Repository): void => {
       const rootPath = repository.rootUri.fsPath;
-      this.repoDisposables.get(rootPath)?.dispose();
+      const key = normalizeRepoPath(rootPath);
+      this.repoDisposables.get(key)?.dispose();
       this.repoDisposables.set(
-        rootPath,
+        key,
         repository.state.onDidChange(() => {
           const snapshot = snapshotRepository(repository);
           listener.onDidChangeRepository?.(rootPath);
@@ -100,8 +101,9 @@ export class VsCodeGitApiAdapter {
     disposables.push(
       this.api.onDidCloseRepository((repository) => {
         const rootPath = repository.rootUri.fsPath;
-        this.repoDisposables.get(rootPath)?.dispose();
-        this.repoDisposables.delete(rootPath);
+        const key = normalizeRepoPath(rootPath);
+        this.repoDisposables.get(key)?.dispose();
+        this.repoDisposables.delete(key);
         listener.onCloseRepository?.(rootPath);
       }),
     );

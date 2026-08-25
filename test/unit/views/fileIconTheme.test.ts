@@ -120,8 +120,9 @@ describe("icon theme queries", () => {
 });
 
 describe("compact folder labels", () => {
-  it("joins nested folder names with the platform separator used by built-in SCM", () => {
-    expect(compactFolderDisplayLabel("initDataSets/dataFlows", "\\")).toBe("initDataSets \\ dataFlows");
-    expect(compactFolderDisplayLabel("src", "/")).toBe("src");
+  it("joins nested folder names with POSIX slashes on every platform", () => {
+    expect(compactFolderDisplayLabel("initDataSets/dataFlows")).toBe("initDataSets / dataFlows");
+    expect(compactFolderDisplayLabel("initDataSets\\dataFlows")).toBe("initDataSets / dataFlows");
+    expect(compactFolderDisplayLabel("src")).toBe("src");
   });
 });

@@ -341,7 +341,7 @@ describe("changes webview HTML", () => {
     expect(html).toContain("file-theme-icon");
     expect(html).not.toContain("codicon-folder");
     expect(html).not.toContain("codicon-file");
-    expect(html).toContain(`src ${path.sep} util`);
+    expect(html).toContain("src / util");
   });
 
   it("paints loading HTML in #root before any model message", () => {

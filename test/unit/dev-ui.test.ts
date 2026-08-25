@@ -55,7 +55,7 @@ describe("dev-ui launch config", () => {
   });
 
   it("resolves Cursor from CURSOR_BIN and rewrites the CLI shim to the Electron app", () => {
-    expect(resolveCursorExecutable({ CURSOR_BIN: "/opt/cursor/cursor" })).toBe("/opt/cursor/cursor");
+    expect(resolveCursorExecutable({ CURSOR_BIN: "/opt/cursor/cursor" })).toBe(path.resolve("/opt/cursor/cursor"));
     if (process.platform === "linux" && fs.existsSync("/usr/bin/cursor")) {
       const electron = resolveCursorElectronBinary("/usr/bin/cursor");
       expect(electron).toBe("/usr/share/cursor/cursor");

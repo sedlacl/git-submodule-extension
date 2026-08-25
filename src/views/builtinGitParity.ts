@@ -98,6 +98,11 @@ export const BUILTIN_GIT_DEVIATIONS = [
       "Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons.",
   },
   {
+    id: "compact-folder-posix",
+    summary:
+      "Compact folder labels join with POSIX ` / ` on every platform instead of the OS path separator used by built-in SCM.",
+  },
+  {
     id: "no-viewitem-menus",
     summary:
       "view/item/context menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same gitSubmodule.* commands.",

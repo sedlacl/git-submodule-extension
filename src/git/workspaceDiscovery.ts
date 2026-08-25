@@ -5,6 +5,7 @@ import {
   canonicalizeRepoPath,
   displayNameFromRepoPath,
   joinRepoPath,
+  normalizeRepoPath,
 } from "./pathUtils.js";
 import { classifyWorkingState } from "./repoStatus.js";
 import type {
@@ -98,6 +99,10 @@ export async function discoverWorkspaceGitModel(
   const nodesByRootPath = new Map<string, GitRepoNode>();
   const indexNode = (node: GitRepoNode): void => {
     nodesByRootPath.set(node.rootPath, node);
+    const alias = normalizeRepoPath(node.rootPath);
+    if (alias !== node.rootPath) {
+      nodesByRootPath.set(alias, node);
+    }
     for (const child of node.children) {
       indexNode(child);
     }

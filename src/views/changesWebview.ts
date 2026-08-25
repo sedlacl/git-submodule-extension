@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import * as vscode from "vscode";
+import { normalizeRepoPath } from "../git/pathUtils.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { commitMessagePlaceholder } from "../scm/dailyGitActions.js";
 import { isPublicCommitMessageTargetSupported } from "../scm/generateCommitMessage.js";
@@ -794,7 +795,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private readDrafts(): Map<string, string> {
     const drafts = new Map<string, string>();
     for (const repository of this.options.gitApi.getOpenRepositories()) {
-      drafts.set(repository.rootPath, repository.inputBoxValue);
+      drafts.set(normalizeRepoPath(repository.rootPath), repository.inputBoxValue);
     }
     return drafts;
   }
@@ -802,7 +803,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private readPlaceholders(): Map<string, string> {
     const placeholders = new Map<string, string>();
     for (const repository of this.options.gitApi.getOpenRepositories()) {
-      placeholders.set(repository.rootPath, commitMessagePlaceholder(repository.snapshot().head?.name));
+      placeholders.set(normalizeRepoPath(repository.rootPath), commitMessagePlaceholder(repository.snapshot().head?.name));
     }
     return placeholders;
   }
@@ -815,7 +816,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         .filter((repository) =>
           isPublicCommitMessageTargetSupported(repositories, repository.rootPath, command),
         )
-        .map((repository) => repository.rootPath),
+        .map((repository) => normalizeRepoPath(repository.rootPath)),
     );
   }
 

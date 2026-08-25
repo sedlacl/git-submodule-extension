@@ -35,6 +35,7 @@ describe("pathUtils", () => {
     expect(repoSetHas(new Set([root]), alias)).toBe(true);
     expect(repoMapGet(new Map([[root, "ok"]]), alias)).toBe("ok");
     expect(repoSetHas(new Set([alias]), root)).toBe(true);
+    expect(normalizeRepoPath(root.replace(/\\/g, "/"))).toBe(alias);
   });
 
   it("canonicalizes existing directories so 8.3 short names match Git toplevel paths", () => {

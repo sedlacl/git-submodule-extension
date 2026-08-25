@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import type { Branch, CommitOptions, FetchOptions, ForcePushMode, Ref, Remote, Repository } from "./git.js";
-import { normalizeRepoPath } from "./pathUtils.js";
+import { normalizeRepoPath, repoMapGet } from "./pathUtils.js";
 
 /**
  * Runtime copy of vscode.git `Status`. Values match
@@ -307,7 +307,7 @@ export function lookupSnapshot(
   rootPath: string,
   snapshots: ReadonlyMap<string, RepositoryStateSnapshot>,
 ): RepositoryStateSnapshot | undefined {
-  return snapshots.get(rootPath) ?? snapshots.get(normalizeRepoPath(rootPath));
+  return repoMapGet(snapshots, rootPath);
 }
 
 export function resourceStatusLetter(status: ResourceStatus): string {
