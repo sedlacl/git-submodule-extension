@@ -7,6 +7,9 @@ import {
   displayNameFromRepoPath,
   joinRepoPath,
   normalizeGitRelativePath,
+  normalizeRepoPath,
+  repoMapGet,
+  repoSetHas,
   sameRepoPath,
 } from "../../../src/git/pathUtils.js";
 
@@ -24,6 +27,14 @@ describe("pathUtils", () => {
     const joined = joinRepoPath(parent, "submodules/usy_aflex_initdatag01#t1");
     expect(joined).toBe(path.join(parent, "submodules", "usy_aflex_initdatag01#t1"));
     expect(displayNameFromRepoPath(joined)).toBe("usy_aflex_initdatag01#t1");
+  });
+
+  it("looks up repository maps and sets across slash and drive-letter spellings", () => {
+    const root = path.join(process.cwd(), "submodules", "usy_aflex_initdatag01#t1");
+    const alias = normalizeRepoPath(root);
+    expect(repoSetHas(new Set([root]), alias)).toBe(true);
+    expect(repoMapGet(new Map([[root, "ok"]]), alias)).toBe("ok");
+    expect(repoSetHas(new Set([alias]), root)).toBe(true);
   });
 
   it("canonicalizes existing directories so 8.3 short names match Git toplevel paths", () => {

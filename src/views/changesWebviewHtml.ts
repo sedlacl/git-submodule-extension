@@ -2,6 +2,7 @@ import path from "node:path";
 import type { AdoptedTreeNode } from "./adoptedViewModel.js";
 import { repoHasOwnCommitChanges } from "./adoptedViewModel.js";
 import { compactFolderDisplayLabel } from "./fileIconTheme.js";
+import { repoMapGet, repoSetHas } from "../git/pathUtils.js";
 import type { RowAction, RowActionConfig } from "./changesRowActions.js";
 import { inlineActions } from "./changesRowActions.js";
 import type { ChangesRenderState } from "./changesRenderProtocol.js";
@@ -97,10 +98,14 @@ export function toChangesWebviewRows(
       dirtyDot: node.kind === "folder",
       contextValue: node.contextValue,
       showCommitChrome,
-      commitPlaceholder: repositoryRoot ? (state.placeholders.get(repositoryRoot) ?? "Commit message") : "Commit message",
-      commitDraft: repositoryRoot ? (state.drafts.get(repositoryRoot) ?? "") : "",
+      commitPlaceholder: repositoryRoot
+        ? (repoMapGet(state.placeholders, repositoryRoot) ?? "Commit message")
+        : "Commit message",
+      commitDraft: repositoryRoot ? (repoMapGet(state.drafts, repositoryRoot) ?? "") : "",
       generateCommitMessageSupported: repositoryRoot
-        ? (state.generateCommitMessageSupportedRoots?.has(repositoryRoot) ?? true)
+        ? (state.generateCommitMessageSupportedRoots
+            ? repoSetHas(state.generateCommitMessageSupportedRoots, repositoryRoot)
+            : true)
         : false,
       repositoryRoot,
       inlineActions: inlineActions(node.contextValue, state.config),

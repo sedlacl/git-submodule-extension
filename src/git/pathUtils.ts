@@ -32,6 +32,41 @@ export function sameRepoPath(left: string, right: string): boolean {
   return canonicalizeRepoPath(left) === canonicalizeRepoPath(right);
 }
 
+/** Cheap identity for maps/sets of repository roots (separators and drive letter). */
+export function repoMapGet<T>(map: ReadonlyMap<string, T>, rootPath: string): T | undefined {
+  const direct = map.get(rootPath);
+  if (direct !== undefined) {
+    return direct;
+  }
+  const key = normalizeRepoPath(rootPath);
+  const normalized = map.get(key);
+  if (normalized !== undefined) {
+    return normalized;
+  }
+  for (const [candidate, value] of map) {
+    if (normalizeRepoPath(candidate) === key) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+export function repoSetHas(set: ReadonlySet<string>, rootPath: string): boolean {
+  if (set.has(rootPath)) {
+    return true;
+  }
+  const key = normalizeRepoPath(rootPath);
+  if (set.has(key)) {
+    return true;
+  }
+  for (const candidate of set) {
+    if (normalizeRepoPath(candidate) === key) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Git `.gitmodules` and gitlink paths use POSIX separators. Reject absolute
  * paths and `..` traversal so callers can join them onto a parent root.

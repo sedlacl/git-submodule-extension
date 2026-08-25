@@ -56,21 +56,28 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
   );
   const contentProvider = new GitShowContentProvider(options.cli);
   let generateCommitMessageCommand: string | undefined;
+  const refreshGenerateCommitMessageCommand = (): void => {
+    void vscode.commands.getCommands(true).then((commands) => {
+      const next = pickPublicGenerateCommitMessageCommand(commands);
+      if (next !== generateCommitMessageCommand) {
+        generateCommitMessageCommand = next;
+        webviewProvider.refresh("config change", false);
+      }
+    });
+  };
   const webviewProvider = new ChangesWebviewProvider({
     controller,
     gitApi: options.gitApi,
     extensionUri: options.extensionUri,
     writeDiagnostic: options.writeDiagnostic,
     getGenerateCommitMessageCommand: () => generateCommitMessageCommand,
+    onViewVisible: refreshGenerateCommitMessageCommand,
   });
 
   const refresh = (reason: ChangesLoadReason, rediscover: boolean | (() => boolean)): void => {
     webviewProvider.refresh(reason, rediscover);
   };
-  void vscode.commands.getCommands(true).then((commands) => {
-    generateCommitMessageCommand = pickPublicGenerateCommitMessageCommand(commands);
-    refresh("config change", false);
-  });
+  refreshGenerateCommitMessageCommand();
   const consumeLatestRepositoryStates = (): void => {
     for (const snapshot of options.gitApi.snapshotAll()) {
       controller.consumeRepositoryState(snapshot);

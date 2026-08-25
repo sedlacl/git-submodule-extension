@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Packaged VSIX now includes Codicon CSS/font, so Commit, chevrons, and row actions show icons after marketplace install.
+- Generate-commit sparkle no longer falls back to the "Cursor cannot target this repo" info icon just because the Git model and `vscode.git` spell the same root differently, and the Cursor command is re-detected when the view becomes visible.
 
 ### Changed
 

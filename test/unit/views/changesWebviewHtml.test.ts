@@ -1,5 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { normalizeRepoPath } from "../../../src/git/pathUtils.js";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
 import { DEFAULT_ROW_ACTION_CONFIG } from "../../../src/views/changesRowActions.js";
 import {
@@ -201,6 +202,30 @@ describe("changes webview HTML", () => {
     expect(html).toContain('data-act="generate"');
     expect(html).toContain("codicon-sparkle");
     expect(html).not.toContain('data-act="explain-generate"');
+  });
+
+  it("shows the sparkle when the supported root uses a different path spelling", () => {
+    const root = path.join(process.cwd(), "usy_aflex_initdatag01#t1");
+    const child = repo({
+      id: `sub:${root}`,
+      kind: "submodule",
+      label: "usy_aflex_initdatag01#t1",
+      repositoryRoot: root,
+      contextValue: CONTEXT.submodule,
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([child], {
+        expanded: new Set([child.id]),
+        selected: new Set(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        generateCommitMessageSupportedRoots: new Set([normalizeRepoPath(root)]),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+    expect(html).toContain("codicon-sparkle");
+    expect(html).not.toContain("codicon-info");
   });
 
   it("renders group counts as pills, folder dirty dots, and file status letters", () => {

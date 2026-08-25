@@ -48,6 +48,7 @@ export interface ChangesWebviewProviderOptions {
   extensionUri: vscode.Uri;
   writeDiagnostic: ChangesDiagnosticWriter;
   getGenerateCommitMessageCommand?(): string | undefined;
+  onViewVisible?(): void;
 }
 
 type WebviewMessage =
@@ -113,6 +114,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.onDidChangeVisibility(() => {
       if (this.view === webviewView && webviewView.visible) {
         this.htmlReady = true;
+        this.options.onViewVisible?.();
         this.refresh("view visible", false);
       }
     });
