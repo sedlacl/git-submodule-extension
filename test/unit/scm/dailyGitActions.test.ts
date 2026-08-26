@@ -354,6 +354,25 @@ describe("DailyGitActions repository commands", () => {
     expect(second.calls).toEqual([{ operation: "status", args: [] }]);
   });
 
+  it("logs the targeted repository.status phase with an explicit outcome", async () => {
+    const repository = new FakeRepository("/ws/target", snapshot("/ws/target"));
+    const { actions } = harness([repository]);
+    const lines: string[] = [];
+    const diagnostics = new ActionDiagnostics((line) => lines.push(line), () => 10);
+    const action = diagnostics.start("refresh", { repository: "target" });
+
+    const outcome = await actions.refresh(["/ws/target"], action);
+    action.completed(outcome.details);
+
+    expect(lines).toEqual([
+      "[action #1] refresh started (repository: target)",
+      "[action #1] repository.status started (repository: target)",
+      "[action #1] repository.status 0ms (repository: target; outcome: completed)",
+      "[action #1] refresh completed 0ms (repositories: 1)",
+    ]);
+    expect(repository.calls).toEqual([{ operation: "status", args: [] }]);
+  });
+
   it("checks out the branch selected from the repository branch picker", async () => {
     const root = "/ws/repo";
     const repository = new FakeRepository(root, snapshot(root));

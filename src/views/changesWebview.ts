@@ -32,6 +32,7 @@ import {
   formatAdoptedCountBatch,
   formatAdoptedExpansion,
   formatChangesLoadSummary,
+  formatChangesRepositorySnapshot,
   type ChangesDiagnosticWriter,
   type ChangesLoadReason,
   type ChangesLoadResult,
@@ -383,8 +384,6 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         await this.publishRender(generation, "error", changesWebviewErrorHtml(rootError));
         return;
       }
-      const count = this.options.controller.countBadge();
-      view.badge = count > 0 ? { value: count, tooltip: `${count}` } : undefined;
       const html = this.measureSerialization(generation, () => this.renderTreeHtml(roots, true));
       await this.publishRender(generation, "final", html);
       void this.hydrateAdoptedCounts(generation, view, roots);
@@ -735,6 +734,11 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       timing.serializationMs +
       timing.finalPostMs +
       timing.renderAckMs;
+    if (result === "final") {
+      for (const snapshot of this.options.gitApi.snapshotAll()) {
+        this.options.writeDiagnostic(formatChangesRepositorySnapshot(timing.generation, snapshot));
+      }
+    }
     this.options.writeDiagnostic(
       formatChangesLoadSummary({
         generation: timing.generation,

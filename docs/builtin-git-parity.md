@@ -29,7 +29,7 @@ are the machine-checked source for labels and the deviation list below.
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
 - Status letters and the active file icon theme on webview rows when that theme ships SVG `iconPath` entries (Material Icon Theme, vscode-icons). UI chrome uses packaged `@vscode/codicons`
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
-  `scm.compactFolders`, `git.countBadge`
+  `scm.compactFolders`
 - Menu titles and row toolbar / context slots for Open / Stage / Unstage / Discard /
   Commit / Refresh / Sync / Publish (command IDs are `gitSubmodule.*`; actions are HTML, not `view/item/context`)
 - Repository rows expose the same toolbar as the built-in Git repo header:
@@ -53,7 +53,7 @@ are the machine-checked source for labels and the deviation list below.
 | `no-strikethrough` | Deleted files use the D decoration only; webview rows do not apply `SourceControlResourceDecorations.strikeThrough`. |
 | `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs nest under the gitlink row. |
 | `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
-| `count-badge-scope` | `git.countBadge` is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance. |
+| `count-badge-scope` | The built-in Git extension remains the sole owner of the Source Control Activity Bar pending-change count; this WebviewView never sets `badge`. |
 | `file-icon-theme-webview` | Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons. |
 | `compact-folder-posix` | Compact folder labels join with POSIX ` / ` on every platform instead of the OS path separator used by built-in SCM. |
 | `no-viewitem-menus` | `view/item/context` menus do not apply to WebviewView; row toolbar and context actions are rendered in HTML from TypeScript rules and invoke the same `gitSubmodule.*` commands. |

@@ -140,7 +140,6 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       if (
         event.affectsConfiguration("git.untrackedChanges") ||
         event.affectsConfiguration("git.alwaysShowStagedChangesResourceGroup") ||
-        event.affectsConfiguration("git.countBadge") ||
         event.affectsConfiguration("git.openDiffOnClick") ||
         event.affectsConfiguration("git.showInlineOpenFileAction") ||
         event.affectsConfiguration("git.decorations.enabled") ||

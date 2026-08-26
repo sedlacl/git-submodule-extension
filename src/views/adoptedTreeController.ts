@@ -6,7 +6,6 @@ import type { NameStatusEntry, WorkspaceGitModel } from "../git/types.js";
 import type { RestoreResult } from "../restore/branchRestoreService.js";
 import {
   DEFAULT_CHANGES_TREE_SETTINGS,
-  repositoryCountBadge,
   type ChangesTreeSettings,
 } from "./changesTreeSettings.js";
 import {
@@ -258,11 +257,6 @@ export class AdoptedTreeController {
     node.description = undefined;
     node.adoptedCountError = undefined;
     return this.loadAdoptedCount(node, generation);
-  }
-
-  countBadge(): number {
-    const settings = this.settings();
-    return this.repositorySnapshots().reduce((total, snapshot) => total + repositoryCountBadge(snapshot.groups, settings), 0);
   }
 
   hasCachedFiles(node: AdoptedTreeNode): boolean {

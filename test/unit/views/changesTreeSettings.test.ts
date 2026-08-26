@@ -6,7 +6,6 @@ import {
   emptyChangeGroups,
   readChangesTreeSettings,
   repositoryBranchDescription,
-  repositoryCountBadge,
   visibleTreeGroups,
   type ChangesTreeSettings,
 } from "../../../src/views/changesTreeSettings.js";
@@ -129,17 +128,6 @@ describe("repositoryBranchDescription", () => {
         index: [change("staged.ts", ResourceStatus.INDEX_ADDED)],
       }),
     ).toBe("cccccccc+");
-  });
-});
-
-describe("repositoryCountBadge", () => {
-  it("counts merge+index+workingTree and adds separate untracked for git.countBadge=all", () => {
-    expect(repositoryCountBadge(mixedWorking, { ...DEFAULT_CHANGES_TREE_SETTINGS, untrackedChanges: "separate" })).toBe(4);
-    expect(repositoryCountBadge(mixedWorking, DEFAULT_CHANGES_TREE_SETTINGS)).toBe(4);
-    expect(repositoryCountBadge(mixedWorking, { ...DEFAULT_CHANGES_TREE_SETTINGS, countBadge: "off" })).toBe(0);
-    expect(
-      repositoryCountBadge(mixedWorking, { ...DEFAULT_CHANGES_TREE_SETTINGS, countBadge: "tracked", untrackedChanges: "mixed" }),
-    ).toBe(3);
   });
 });
 

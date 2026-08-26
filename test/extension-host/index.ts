@@ -96,17 +96,23 @@ async function runProfileRefreshes(): Promise<void> {
       const before = readTimingFile(timingFile);
       const finalsBefore = countMatches(before, /\[changes #\d+\] final .*\)/g);
       const explicitBefore = countMatches(before, /\[changes #\d+\] final .*reason: [^;]*explicit refresh/g);
+      const statusBefore = countMatches(before, /\[action #\d+\] repository\.status started/g);
+      const snapshotsBefore = countMatches(before, /\[changes #\d+\] snapshot .*own files \d+\)/g);
       const batchesBefore = countMatches(before, /adopted counts .*\)/g);
       await vscode.commands.executeCommand("gitSubmodule.refresh");
       await waitForTimingFile(timingFile, (content) => {
         return (
           countMatches(content, /\[changes #\d+\] final .*\)/g) > finalsBefore &&
-          countMatches(content, /adopted counts .*\)/g) > batchesBefore
+          countMatches(content, /adopted counts .*\)/g) > batchesBefore &&
+          countMatches(content, /\[action #\d+\] repository\.status started/g) > statusBefore &&
+          countMatches(content, /\[changes #\d+\] snapshot .*own files \d+\)/g) > snapshotsBefore
         );
       });
       const after = readTimingFile(timingFile);
       measured =
-        countMatches(after, /\[changes #\d+\] final .*reason: [^;]*explicit refresh/g) > explicitBefore;
+        countMatches(after, /\[changes #\d+\] final .*reason: [^;]*explicit refresh/g) > explicitBefore &&
+        countMatches(after, /\[action #\d+\] repository\.status .*outcome: completed/g) > statusBefore &&
+        countMatches(after, /\[changes #\d+\] snapshot .*own files \d+\)/g) > snapshotsBefore;
       completedBatches = countMatches(after, /adopted counts .*\)/g);
     }
     if (!measured) {

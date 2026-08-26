@@ -4,8 +4,10 @@ import {
   formatAdoptedCountBatch,
   formatAdoptedExpansion,
   formatChangesLoadSummary,
+  formatChangesRepositorySnapshot,
   slowestPhase,
 } from "../../../src/views/changesLoadDiagnostics.js";
+import { ResourceStatus, type RepositoryStateSnapshot } from "../../../src/git/repositoryState.js";
 
 describe("changes load diagnostics", () => {
   it("formats the generation, propagated reason, phases, result, and bottleneck", () => {
@@ -113,6 +115,24 @@ describe("changes load diagnostics", () => {
     const phases = [["build", 18], ["discovery", 611], ["ack", 24]] as const;
     expect(slowestPhase(phases)).toEqual(["discovery", 611]);
     expect(phases[0]).toEqual(["build", 18]);
+  });
+
+  it("formats safe per-repository snapshot counts and the resulting own file count", () => {
+    const snapshot = {
+      rootPath: "/workspaces/demo",
+      head: { name: "main", commit: "abcdef0123456789", detached: false },
+      remotes: [],
+      groups: {
+        merge: [{ status: ResourceStatus.BOTH_MODIFIED }],
+        index: [{ status: ResourceStatus.INDEX_MODIFIED }, { status: ResourceStatus.INDEX_ADDED }],
+        workingTree: [{ status: ResourceStatus.MODIFIED }],
+        untracked: [{ status: ResourceStatus.UNTRACKED }, { status: ResourceStatus.IGNORED }],
+      },
+    } as unknown as RepositoryStateSnapshot;
+
+    expect(formatChangesRepositorySnapshot(9, snapshot)).toBe(
+      "[changes #9] snapshot demo (HEAD abcdef0; merge 1; index 2; workingTree 1; untracked 2; own files 6)",
+    );
   });
 });
 

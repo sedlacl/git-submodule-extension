@@ -90,7 +90,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "count-badge-scope",
     summary:
-      "git.countBadge is applied as a single WebviewView badge over every hierarchical repository, not per SourceControl instance.",
+      "The built-in Git extension remains the sole owner of the Source Control Activity Bar pending-change count; this WebviewView never sets badge.",
   },
   {
     id: "file-icon-theme-webview",

@@ -54,6 +54,14 @@ export class ActionRun {
     this.writeLine(`${this.prefix()} started${formatDetails(details)}`);
   }
 
+  beginPhase(label: string, details: ActionDetails = {}): number {
+    const startedAt = this.now();
+    if (!this.terminalResult) {
+      this.writeLine(`${this.prefix(label)} started${formatDetails(details)}`);
+    }
+    return startedAt;
+  }
+
   phase(label: string, startedAt: number, details: ActionDetails = {}): void {
     if (this.terminalResult) {
       return;

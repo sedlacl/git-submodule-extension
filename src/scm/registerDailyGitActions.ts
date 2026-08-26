@@ -110,10 +110,10 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     register(COMMANDS.pull, "pull", "Pull", repositoryHandler("pull")),
     register(COMMANDS.sync, "sync", "Sync", repositoryHandler("sync")),
     register(COMMANDS.publish, "publish", "Publish Branch", repositoryHandler("publish")),
-    register(COMMANDS.refresh, "refresh", "Refresh", async (node) => {
+    register(COMMANDS.refresh, "refresh", "Refresh", async (node, _selected, action) => {
       const rootPath = node?.repositoryRoot;
       const roots = rootPath ? [rootPath] : options.gitApi.getOpenRepositoryPaths();
-      return await actions.refresh(roots);
+      return await actions.refresh(roots, action);
     }),
   );
 }

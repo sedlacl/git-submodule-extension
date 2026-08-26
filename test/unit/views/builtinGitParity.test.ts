@@ -112,5 +112,12 @@ describe("built-in Git parity", () => {
     }
     expect(docs).toContain("1.96.0");
     expect(docs).toContain("Hide it manually");
+    expect(docs).toContain("never sets `badge`");
+  });
+
+  it("keeps Activity Bar pending-count ownership with built-in Git", () => {
+    const badgeDeviation = BUILTIN_GIT_DEVIATIONS.find((deviation) => deviation.id === "count-badge-scope");
+    expect(badgeDeviation?.summary).toContain("sole owner");
+    expect(badgeDeviation?.summary).toContain("never sets badge");
   });
 });

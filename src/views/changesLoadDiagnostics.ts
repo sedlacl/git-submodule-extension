@@ -1,3 +1,5 @@
+import type { RepositoryStateSnapshot } from "../git/repositoryState.js";
+
 export type ChangesLoadReason =
   | "activation"
   | "view resolve"
@@ -59,6 +61,22 @@ export interface AdoptedExpansionSummary {
 }
 
 export type ChangesDiagnosticWriter = (line: string) => void;
+
+/**
+ * Snapshot evidence for one open vscode.git repository. "Own files" counts
+ * direct pending resources in all four status groups; adopted child diffs are
+ * loaded separately.
+ */
+export function formatChangesRepositorySnapshot(
+  generation: number,
+  snapshot: RepositoryStateSnapshot,
+): string {
+  const groups = snapshot.groups;
+  const ownFiles = groups.merge.length + groups.index.length + groups.workingTree.length + groups.untracked.length;
+  const repository = repositoryLabel(snapshot.rootPath);
+  const head = snapshot.head?.commit?.slice(0, 7) ?? "none";
+  return `[changes #${generation}] snapshot ${repository} (HEAD ${head}; merge ${groups.merge.length}; index ${groups.index.length}; workingTree ${groups.workingTree.length}; untracked ${groups.untracked.length}; own files ${ownFiles})`;
+}
 
 export function createChangesDiagnosticWriter(
   writeLine: ChangesDiagnosticWriter,
@@ -128,4 +146,10 @@ function safeText(value: string): string {
 
 function pad(value: number, length: number): string {
   return String(value).padStart(length, "0");
+}
+
+function repositoryLabel(rootPath: string): string {
+  const normalized = rootPath.replace(/[\\/]+$/, "");
+  const label = normalized.slice(Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\")) + 1);
+  return safeText(label || "repository");
 }

@@ -119,9 +119,27 @@ export class DailyGitActions {
     return completed(changeDetails(changes));
   }
 
-  async refresh(rootPaths: readonly string[]): Promise<ActionOutcome> {
+  async refresh(rootPaths: readonly string[], action?: ActionRun): Promise<ActionOutcome> {
     const targets = unique(rootPaths).map((rootPath) => this.requireRepository(rootPath));
-    await this.runBusy(targets, async (repository) => repository.operations().status());
+    await this.runBusy(targets, async (repository) => {
+      const details = { repository: path.basename(repository.rootPath) };
+      const startedAt = action?.beginPhase("repository.status", details);
+      try {
+        await repository.operations().status();
+        if (startedAt !== undefined) {
+          action?.phase("repository.status", startedAt, { ...details, outcome: "completed" });
+        }
+      } catch (error) {
+        if (startedAt !== undefined) {
+          action?.phase("repository.status", startedAt, {
+            ...details,
+            outcome: "failed",
+            error: safeError(error),
+          });
+        }
+        throw error;
+      }
+    });
     return completed({ repositories: targets.length });
   }
 

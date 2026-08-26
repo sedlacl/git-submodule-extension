@@ -12,16 +12,12 @@ import {
 /** Built-in `git.untrackedChanges` (microsoft/vscode Git, tag 1.96.0). */
 export type UntrackedChangesMode = "mixed" | "separate" | "hidden";
 
-/** Built-in `git.countBadge`. */
-export type CountBadgeMode = "all" | "tracked" | "off";
-
 /** Built-in `scm.defaultViewMode`. */
 export type ScmViewMode = "list" | "tree";
 
 export interface ChangesTreeSettings {
   readonly untrackedChanges: UntrackedChangesMode;
   readonly alwaysShowStagedChangesResourceGroup: boolean;
-  readonly countBadge: CountBadgeMode;
   readonly openDiffOnClick: boolean;
   readonly showInlineOpenFileAction: boolean;
   readonly decorationsEnabled: boolean;
@@ -32,7 +28,6 @@ export interface ChangesTreeSettings {
 export const DEFAULT_CHANGES_TREE_SETTINGS: ChangesTreeSettings = {
   untrackedChanges: "mixed",
   alwaysShowStagedChangesResourceGroup: false,
-  countBadge: "all",
   openDiffOnClick: true,
   showInlineOpenFileAction: true,
   decorationsEnabled: true,
@@ -154,28 +149,6 @@ export function headDirtySuffix(groups: RepositoryChangeGroups | undefined): str
   );
 }
 
-/**
- * Built-in `setCountBadge` over one repository's applied groups.
- * Upstream: `Repository.setCountBadge` in `extensions/git/src/repository.ts` tag 1.96.0.
- */
-export function repositoryCountBadge(
-  groups: RepositoryChangeGroups,
-  settings: ChangesTreeSettings,
-): number {
-  const applied = applyUntrackedSettings(groups, settings.untrackedChanges);
-  if (settings.countBadge === "off") {
-    return 0;
-  }
-  let count = applied.merge.length + applied.index.length + applied.workingTree.length;
-  if (settings.countBadge === "tracked" && settings.untrackedChanges === "mixed") {
-    count -= applied.workingTree.filter((change) => UNTRACKED_OR_IGNORED.has(change.status)).length;
-  }
-  if (settings.countBadge === "all" && settings.untrackedChanges === "separate") {
-    count += applied.untracked.length;
-  }
-  return count;
-}
-
 export function isUntrackedOrIgnored(change: ResourceChange): boolean {
   return UNTRACKED_OR_IGNORED.has(change.status);
 }
@@ -194,7 +167,6 @@ export function readChangesTreeSettings(get: (section: string, key: string, fall
     alwaysShowStagedChangesResourceGroup: Boolean(
       get("git", "alwaysShowStagedChangesResourceGroup", DEFAULT_CHANGES_TREE_SETTINGS.alwaysShowStagedChangesResourceGroup),
     ),
-    countBadge: readEnum(get("git", "countBadge", DEFAULT_CHANGES_TREE_SETTINGS.countBadge), ["all", "tracked", "off"], DEFAULT_CHANGES_TREE_SETTINGS.countBadge),
     openDiffOnClick: Boolean(get("git", "openDiffOnClick", DEFAULT_CHANGES_TREE_SETTINGS.openDiffOnClick)),
     showInlineOpenFileAction: Boolean(
       get("git", "showInlineOpenFileAction", DEFAULT_CHANGES_TREE_SETTINGS.showInlineOpenFileAction),
