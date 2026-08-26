@@ -8,6 +8,7 @@ import {
   buildBootstrapRepoNodes,
   fileDecoration,
   fileNodesFromNameStatus,
+  restoreBlockedSummary,
   submoduleIcon,
   submoduleStatusSummary,
   treeCollapsibleMode,
@@ -330,10 +331,24 @@ describe("restore overlay", () => {
     );
     const submoduleNode = overlaid[0]?.children.find((child) => child.kind === "submodule");
     expect(submoduleNode?.contextValue).toBe(`${CONTEXT.submodule}.restoreBlocked`);
-    expect(submoduleNode?.description).toContain("restore blocked");
+    expect(submoduleNode?.description).toContain("restore blocked: working tree is dirty");
     expect(submoduleNode?.tooltip).toContain("working tree is dirty");
     expect(submoduleNode?.restoreTarget).toMatchObject({ childRootPath: "/ws/app/mod", branch: "main" });
     expect(usesThemeFileIcon(submoduleNode!)).toBe(false);
+  });
+
+  it("shortens the row reason to the leading clause and keeps the full detail in the tooltip", () => {
+    expect(restoreBlockedSummary("pinned commit is not an ancestor of origin/aflex/6.3")).toBe(
+      "pinned commit is not an ancestor of origin/aflex/6.3",
+    );
+    expect(restoreBlockedSummary("missing refs/remotes/origin/aflex/6.3; fetch it explicitly")).toBe(
+      "missing refs/remotes/origin/aflex/6.3",
+    );
+    expect(restoreBlockedSummary("git switch failed\nfatal: unable to write ref\nhint: retry")).toBe(
+      "git switch failed",
+    );
+    expect(restoreBlockedSummary(`local branch ${"a".repeat(80)} has commits not on origin`)).toHaveLength(60);
+    expect(restoreBlockedSummary("   ")).toBe("unknown reason");
   });
 });
 
@@ -408,8 +423,10 @@ describe("bootstrap repo nodes", () => {
     );
     expect(root?.description).toBe("master");
     expect(root?.syncLabel).toBe("23↓ 0↑");
+    expect(root?.syncTooltip).toBe("Pull 23 commits from origin/master");
     const sub = byLabel(root?.children, "mod");
     expect(sub?.description).toBe("feature/t1-deployment");
     expect(sub?.syncLabel).toBe("0↓ 1↑");
+    expect(sub?.syncTooltip).toBe("Push 1 commits to origin/feature/t1-deployment");
   });
 });

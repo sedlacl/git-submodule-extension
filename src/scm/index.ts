@@ -1,6 +1,8 @@
 export {
   BusyRepositoryError,
   DailyGitActions,
+  SYNC_CONFIRM_NEVER_AGAIN,
+  SYNC_CONFIRM_OK,
   commitMessagePlaceholder,
 } from "./dailyGitActions.js";
 export type {

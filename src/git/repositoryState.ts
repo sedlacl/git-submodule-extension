@@ -473,6 +473,27 @@ export function repositorySyncLabel(
   return `${head.behind ?? 0}↓ ${head.ahead ?? 0}↑`;
 }
 
+/**
+ * Built-in Git `Repository.syncTooltip` (vscode 1.96.0): status-bar / Sync
+ * button hover. Uses plural "commits" even when the count is 1.
+ */
+export function repositorySyncTooltip(
+  head: RepositoryHead | undefined,
+  remotes: readonly RepositoryRemote[] = [],
+): string {
+  if (!head?.name || !head.commit || !head.upstream || !(head.ahead || head.behind)) {
+    return "Synchronize Changes";
+  }
+  const remote = remotes.find((entry) => entry.name === head.upstream!.remote);
+  if (remote?.isReadOnly || !head.ahead) {
+    return `Pull ${head.behind} commits from ${head.upstream.remote}/${head.upstream.name}`;
+  }
+  if (!head.behind) {
+    return `Push ${head.ahead} commits to ${head.upstream.remote}/${head.upstream.name}`;
+  }
+  return `Pull ${head.behind} and push ${head.ahead} commits between ${head.upstream.remote}/${head.upstream.name}`;
+}
+
 function mapChanges(repoRoot: string, changes: readonly ChangeLike[] | undefined): ResourceChange[] {
   return (changes ?? []).map((change) => snapshotChange(repoRoot, change));
 }

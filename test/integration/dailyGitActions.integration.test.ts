@@ -400,10 +400,19 @@ class RecordingUi implements DailyGitActionsUi {
   nextConfirmation: string | undefined;
   nextInput: string | undefined;
   nextRemote: string | undefined;
+  confirmSync = true;
 
   async confirm(message: string, actions: readonly string[]): Promise<string | undefined> {
     this.confirmations.push({ message, actions });
     return this.nextConfirmation;
+  }
+
+  gitConfirmSync(): boolean {
+    return this.confirmSync;
+  }
+
+  async disableGitConfirmSync(): Promise<void> {
+    this.confirmSync = false;
   }
 
   async input(): Promise<string | undefined> {
@@ -472,4 +481,6 @@ const NO_PROMPT_UI: DailyGitActionsUi = {
   pickRemote: async () => undefined,
   pickBranch: async () => undefined,
   info: () => undefined,
+  gitConfirmSync: () => true,
+  disableGitConfirmSync: async () => undefined,
 };

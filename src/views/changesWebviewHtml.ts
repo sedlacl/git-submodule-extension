@@ -108,19 +108,34 @@ export function toChangesWebviewRows(
             : true)
         : false,
       repositoryRoot,
-      inlineActions: withSyncLabel(inlineActions(node.contextValue, state.config), node.syncLabel),
+      inlineActions: withSyncChrome(
+        inlineActions(node.contextValue, state.config),
+        node.syncLabel,
+        node.syncTooltip,
+      ),
       children,
     };
   });
 }
 
-function withSyncLabel(actions: readonly RowAction[], syncLabel: string | undefined): RowAction[] {
-  if (!syncLabel) {
+function withSyncChrome(
+  actions: readonly RowAction[],
+  syncLabel: string | undefined,
+  syncTooltip: string | undefined,
+): RowAction[] {
+  if (!syncLabel && !syncTooltip) {
     return [...actions];
   }
-  return actions.map((action) =>
-    action.command === COMMANDS.sync ? { ...action, label: syncLabel } : action,
-  );
+  return actions.map((action) => {
+    if (action.command !== COMMANDS.sync) {
+      return action;
+    }
+    return {
+      ...action,
+      ...(syncLabel ? { label: syncLabel } : {}),
+      title: syncTooltip ?? action.title,
+    };
+  });
 }
 
 export function renderChangesTree(rows: readonly ChangesWebviewRow[]): string {

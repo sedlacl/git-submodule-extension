@@ -106,6 +106,8 @@ class FakeUi implements DailyGitActionsUi {
   inputs: Array<{ value: string; placeHolder: string; prompt: string }> = [];
   infos: string[] = [];
   nextConfirmation: string | undefined;
+  confirmSync = true;
+  disableConfirmSyncCalls = 0;
   nextInput: string | undefined;
   nextRemote: string | undefined;
   nextBranch: string | undefined;
@@ -116,6 +118,15 @@ class FakeUi implements DailyGitActionsUi {
   async confirm(message: string, actions: readonly string[]): Promise<string | undefined> {
     this.confirmations.push({ message, actions });
     return this.nextConfirmation;
+  }
+
+  gitConfirmSync(): boolean {
+    return this.confirmSync;
+  }
+
+  async disableGitConfirmSync(): Promise<void> {
+    this.disableConfirmSyncCalls += 1;
+    this.confirmSync = false;
   }
 
   async input(options: { value: string; placeHolder: string; prompt: string }): Promise<string | undefined> {
@@ -423,8 +434,57 @@ describe("DailyGitActions repository commands", () => {
 
     await actions.sync(root);
 
+    expect(ui.confirmations).toEqual([
+      {
+        message: 'This action will pull and push commits from and to "origin/main".',
+        actions: ["OK", "OK, Don't Show Again"],
+      },
+    ]);
     expect(repository.calls.map((call) => call.operation)).toEqual(["pull", "push"]);
     expect(repository.calls[1]?.args).toEqual(["origin", "main", false, undefined]);
+  });
+
+  it("skips the Sync confirmation when git.confirmSync is false", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.confirmSync = false;
+    const { actions } = harness([repository], ui);
+
+    await actions.sync(root);
+
+    expect(ui.confirmations).toEqual([]);
+    expect(repository.calls.map((call) => call.operation)).toEqual(["pull", "push"]);
+  });
+
+  it("writes git.confirmSync false after OK, Don't Show Again then syncs", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextConfirmation = "OK, Don't Show Again";
+    const { actions } = harness([repository], ui);
+
+    await actions.sync(root);
+
+    expect(ui.disableConfirmSyncCalls).toBe(1);
+    expect(ui.confirmSync).toBe(false);
+    expect(repository.calls.map((call) => call.operation)).toEqual(["pull", "push"]);
+  });
+
+  it("skips the Sync confirmation for a read-only remote", async () => {
+    const root = "/ws/repo";
+    const state = snapshot(root);
+    const repository = new FakeRepository(root, {
+      ...state,
+      remotes: [{ name: "origin", isReadOnly: true }],
+    });
+    const ui = new FakeUi();
+    const { actions } = harness([repository], ui);
+
+    await actions.sync(root);
+
+    expect(ui.confirmations).toEqual([]);
+    expect(repository.calls.map((call) => call.operation)).toEqual(["pull", "push"]);
   });
 
   it("publishes the current branch with upstream through the selected writable remote", async () => {

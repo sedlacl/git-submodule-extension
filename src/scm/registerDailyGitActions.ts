@@ -159,10 +159,18 @@ async function resolveRepositoryRoot(
   return selected?.rootPath;
 }
 
+function gitConfig(): vscode.WorkspaceConfiguration {
+  return vscode.workspace.getConfiguration("git");
+}
+
 function createUi(gitApi: VsCodeGitApiAdapter): DailyGitActionsUi {
   return {
     confirm: async (message, actions) =>
       await vscode.window.showWarningMessage(message, { modal: true }, ...actions),
+    gitConfirmSync: () => gitConfig().get("confirmSync") === true,
+    disableGitConfirmSync: async () => {
+      await gitConfig().update("confirmSync", false, vscode.ConfigurationTarget.Global);
+    },
     input: async (options) =>
       await vscode.window.showInputBox({
         value: options.value,

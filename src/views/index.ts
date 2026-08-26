@@ -13,6 +13,7 @@ export {
   hasPropagatedSubmoduleChanges,
   repoHasOwnCommitChanges,
   propagatedSubmoduleDecoration,
+  restoreBlockedSummary,
   submoduleIcon,
   submoduleStatusSummary,
   treeCollapsibleMode,

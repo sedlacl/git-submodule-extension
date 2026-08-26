@@ -24,7 +24,8 @@ are the machine-checked source for labels and the deviation list below.
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
 - Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); Checkout/Fetch/Pull live in the row context menu
-- Repository Sync toolbar button shows the built-in Git `syncLabel` (`N↓ M↑`, including zeros) when the branch is ahead or behind its upstream; click still runs Sync (pull then push)
+- Repository Sync toolbar button shows the built-in Git `syncLabel` (`N↓ M↑`, including zeros) when the branch is ahead or behind its upstream; hover uses `syncTooltip` (`Push N commits to origin/branch`, including the plural for 1); click still runs Sync (pull then push)
+- Sync confirmation matches built-in `git.sync`: modal pull/push warning with **OK** / **OK, Don't Show Again**, gated by `git.confirmSync` (skipped for read-only remotes)
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
 - Status letters and the active file icon theme on webview rows when that theme ships SVG `iconPath` entries (Material Icon Theme, vscode-icons). UI chrome uses packaged `@vscode/codicons`
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,

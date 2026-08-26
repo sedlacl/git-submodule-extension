@@ -8,6 +8,7 @@ import {
   headDescription,
   isRenameChange,
   repositorySyncLabel,
+  repositorySyncTooltip,
   resourceStatusLetter,
   resourceStatusText,
   resourceStatusThemeColorId,
@@ -193,6 +194,31 @@ describe("tree and command layer interfaces", () => {
     ).toBe("1↓");
     expect(repositorySyncLabel(snapshotHead({ type: 0, name: "main", commit: "abc" }))).toBe("");
     expect(repositorySyncLabel(undefined)).toBe("");
+  });
+
+  it("formats the built-in Git syncTooltip including plural commits for 1", () => {
+    const base = {
+      type: 0 as const,
+      name: "feature/t1-deployment",
+      commit: "abc123",
+      upstream: { remote: "origin", name: "feature/t1-deployment" },
+    };
+    expect(repositorySyncTooltip(snapshotHead({ ...base, ahead: 0, behind: 0 }))).toBe("Synchronize Changes");
+    expect(repositorySyncTooltip(snapshotHead({ ...base, ahead: 1, behind: 0 }))).toBe(
+      "Push 1 commits to origin/feature/t1-deployment",
+    );
+    expect(repositorySyncTooltip(snapshotHead({ ...base, ahead: 0, behind: 23 }))).toBe(
+      "Pull 23 commits from origin/feature/t1-deployment",
+    );
+    expect(repositorySyncTooltip(snapshotHead({ ...base, ahead: 2, behind: 1 }))).toBe(
+      "Pull 1 and push 2 commits between origin/feature/t1-deployment",
+    );
+    expect(
+      repositorySyncTooltip(snapshotHead({ ...base, ahead: 2, behind: 1 }), [
+        { name: "origin", isReadOnly: true },
+      ]),
+    ).toBe("Pull 1 commits from origin/feature/t1-deployment");
+    expect(repositorySyncTooltip(undefined)).toBe("Synchronize Changes");
   });
 });
 

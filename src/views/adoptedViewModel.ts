@@ -4,6 +4,7 @@ import {
   indexSnapshots,
   lookupSnapshot,
   repositorySyncLabel,
+  repositorySyncTooltip,
   ResourceStatus,
   resourceStatusLetter,
   resourceStatusText,
@@ -80,6 +81,8 @@ export interface AdoptedTreeNode {
   description?: string;
   /** Built-in Git sync status-bar label (`N↓ M↑`) for the Sync toolbar button. */
   syncLabel?: string;
+  /** Built-in Git `syncTooltip` for the Sync toolbar button hover. */
+  syncTooltip?: string;
   tooltip: string;
   collapsible: boolean;
   expandByDefault: boolean;
@@ -311,6 +314,7 @@ function buildWorkspaceRootNode(
   const submoduleCount = root.children.length;
   const fallback = submoduleCount === 0 ? undefined : submoduleCount === 1 ? "1 submodule" : `${submoduleCount} submodules`;
   const syncLabel = repositorySyncLabel(snapshot?.head, snapshot?.remotes) || undefined;
+  const syncTooltip = repositorySyncTooltip(snapshot?.head, snapshot?.remotes);
   return {
     id: `root:${root.rootPath}`,
     kind: "workspace-root",
@@ -318,6 +322,7 @@ function buildWorkspaceRootNode(
     label: root.displayName,
     description: branch || fallback,
     syncLabel,
+    syncTooltip,
     tooltip: root.rootPath,
     collapsible: children.length > 0,
     expandByDefault: children.length > 0,
@@ -340,6 +345,7 @@ function buildSubmoduleTreeNode(
   const icon = repoRowIcon(node.workingState);
   const children = repoChildNodes(node, groups, snapshots, settings);
   const syncLabel = repositorySyncLabel(snapshot?.head, snapshot?.remotes) || undefined;
+  const syncTooltip = repositorySyncTooltip(snapshot?.head, snapshot?.remotes);
   return {
     id: `sub:${node.rootPath}`,
     kind: "submodule",
@@ -347,6 +353,7 @@ function buildSubmoduleTreeNode(
     label: node.displayName,
     description: branch || submoduleStatusSummary(node.workingState, node.branch.name, node.pins.checkoutHeadSha),
     syncLabel,
+    syncTooltip,
     tooltip: submoduleTooltip(node),
     collapsible: children.length > 0,
     expandByDefault: false,
@@ -881,12 +888,31 @@ function overlayRestore(
     ...node,
     children,
     restoreResult: result,
-    description: [node.description, "restore blocked"].filter(Boolean).join(" · "),
+    description: [node.description, `restore blocked: ${restoreBlockedSummary(result.detail)}`]
+      .filter(Boolean)
+      .join(" · "),
     tooltip: `${node.tooltip}\nrestore: ${result.detail}`,
     contextValue: `${CONTEXT.submodule}.restoreBlocked`,
     iconId: node.iconId === "sync~spin" ? node.iconId : "warning",
     themeColorId: "list.warningForeground",
   };
+}
+
+const MAX_RESTORE_SUMMARY_LENGTH = 60;
+
+/**
+ * Row-level reason for a blocked restore. Git CLI failures can be multi-line and
+ * remediation hints live after `;`, so only the leading clause reaches the row;
+ * the tooltip keeps the untruncated detail.
+ */
+export function restoreBlockedSummary(detail: string): string {
+  const clause = (detail.split(/\r?\n/, 1)[0] ?? "").split(";", 1)[0]!.trim().replace(/\.$/, "");
+  if (!clause) {
+    return "unknown reason";
+  }
+  return clause.length > MAX_RESTORE_SUMMARY_LENGTH
+    ? `${clause.slice(0, MAX_RESTORE_SUMMARY_LENGTH - 1).trimEnd()}…`
+    : clause;
 }
 
 export function treeCollapsibleMode(node: AdoptedTreeNode): "none" | "collapsed" | "expanded" {

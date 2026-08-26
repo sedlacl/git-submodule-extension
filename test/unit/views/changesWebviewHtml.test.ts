@@ -431,6 +431,7 @@ describe("changes webview HTML", () => {
       label: "app",
       description: "master*",
       syncLabel: "23↓ 0↑",
+      syncTooltip: "Pull 23 commits from origin/master",
       repositoryRoot: "/ws/app",
       contextValue: `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`,
       children: [group("workingTree", 1)],
@@ -449,6 +450,8 @@ describe("changes webview HTML", () => {
     expect(html).toContain('data-command="gitSubmodule.sync"');
     expect(html).toContain("inline-btn-labeled");
     expect(html).toContain('class="sync-label">23↓ 0↑<');
+    expect(html).toContain('title="Pull 23 commits from origin/master"');
+    expect(html).not.toContain('data-command="gitSubmodule.sync" title="Sync"');
     expect(html).not.toContain('class="branch">23↓ 0↑');
 
     const page = changesWebviewPage({ nonce: "n", cspSource: "https://example", codiconCssHref: "codicon.css" });

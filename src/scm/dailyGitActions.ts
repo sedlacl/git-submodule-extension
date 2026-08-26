@@ -26,6 +26,9 @@ import type { AdoptedTreeNode, ChangeFileRef } from "../views/adoptedViewModel.j
 export type DailyGitRepositoryHandle = GitRepositoryHandle;
 export type DailyGitRepositoryProvider = GitRepositoryProvider;
 
+export const SYNC_CONFIRM_OK = "OK";
+export const SYNC_CONFIRM_NEVER_AGAIN = "OK, Don't Show Again";
+
 export interface DailyGitActionsUi {
   confirm(message: string, actions: readonly string[]): Promise<string | undefined>;
   input(options: { value: string; placeHolder: string; prompt: string }): Promise<string | undefined>;
@@ -34,6 +37,10 @@ export interface DailyGitActionsUi {
     branches: readonly { name: string; description?: string; current?: boolean }[],
   ): Promise<string | undefined>;
   info(message: string): void;
+  /** Built-in `git.confirmSync`. When true, Sync shows the pull/push warning. */
+  gitConfirmSync(): boolean;
+  /** Persist `git.confirmSync = false` (user/global), matching built-in "Don't Show Again". */
+  disableGitConfirmSync(): Promise<void>;
   generateCommitSubject?(rootPath: string): Promise<GenerateCommitSubjectResult>;
 }
 
@@ -293,13 +300,20 @@ export class DailyGitActions {
         return;
       }
 
-      const message = `This action will pull and push commits from and to "${head.upstream.remote}/${head.upstream.name}".`;
-      if ((await this.ui.confirm(message, ["OK"])) !== "OK") {
-        outcome = cancelled("confirmation dismissed", {
-          branch: head.upstream.name,
-          remote: head.upstream.remote,
-        });
-        return;
+      const remote = target.snapshot().remotes.find((entry) => entry.name === head.upstream!.remote);
+      const shouldPrompt = !remote?.isReadOnly && this.ui.gitConfirmSync();
+      if (shouldPrompt) {
+        const message = `This action will pull and push commits from and to "${head.upstream.remote}/${head.upstream.name}".`;
+        const pick = await this.ui.confirm(message, [SYNC_CONFIRM_OK, SYNC_CONFIRM_NEVER_AGAIN]);
+        if (pick === SYNC_CONFIRM_NEVER_AGAIN) {
+          await this.ui.disableGitConfirmSync();
+        } else if (pick !== SYNC_CONFIRM_OK) {
+          outcome = cancelled("confirmation dismissed", {
+            branch: head.upstream.name,
+            remote: head.upstream.remote,
+          });
+          return;
+        }
       }
 
       await target.operations().pull();
