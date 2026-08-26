@@ -7,6 +7,7 @@ import {
   formatAheadBehind,
   headDescription,
   isRenameChange,
+  repositorySyncLabel,
   resourceStatusLetter,
   resourceStatusText,
   resourceStatusThemeColorId,
@@ -172,6 +173,26 @@ describe("tree and command layer interfaces", () => {
     });
     expect(formatAheadBehind(head!)).toBe("1↓ 2↑");
     expect(headDescription(head)).toBe("main ↔ origin/main 1↓ 2↑");
+  });
+
+  it("formats the built-in Git syncLabel including zeros and read-only remotes", () => {
+    const base = {
+      type: 0 as const,
+      name: "main",
+      commit: "abc123",
+      upstream: { remote: "origin", name: "main" },
+    };
+    expect(repositorySyncLabel(snapshotHead({ ...base, ahead: 0, behind: 0 }))).toBe("");
+    expect(repositorySyncLabel(snapshotHead({ ...base, ahead: 0, behind: 23 }))).toBe("23↓ 0↑");
+    expect(repositorySyncLabel(snapshotHead({ ...base, ahead: 1, behind: 0 }))).toBe("0↓ 1↑");
+    expect(repositorySyncLabel(snapshotHead({ ...base, ahead: 2, behind: 1 }))).toBe("1↓ 2↑");
+    expect(
+      repositorySyncLabel(snapshotHead({ ...base, ahead: 2, behind: 1 }), [
+        { name: "origin", isReadOnly: true },
+      ]),
+    ).toBe("1↓");
+    expect(repositorySyncLabel(snapshotHead({ type: 0, name: "main", commit: "abc" }))).toBe("");
+    expect(repositorySyncLabel(undefined)).toBe("");
   });
 });
 

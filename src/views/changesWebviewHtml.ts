@@ -4,6 +4,7 @@ import { compactFolderDisplayLabel } from "./fileIconTheme.js";
 import { repoMapGet, repoSetHas } from "../git/pathUtils.js";
 import type { RowAction, RowActionConfig } from "./changesRowActions.js";
 import { inlineActions } from "./changesRowActions.js";
+import { COMMANDS } from "./constants.js";
 import type { ChangesRenderState } from "./changesRenderProtocol.js";
 
 export interface ChangesWebviewRow {
@@ -107,10 +108,19 @@ export function toChangesWebviewRows(
             : true)
         : false,
       repositoryRoot,
-      inlineActions: inlineActions(node.contextValue, state.config),
+      inlineActions: withSyncLabel(inlineActions(node.contextValue, state.config), node.syncLabel),
       children,
     };
   });
+}
+
+function withSyncLabel(actions: readonly RowAction[], syncLabel: string | undefined): RowAction[] {
+  if (!syncLabel) {
+    return [...actions];
+  }
+  return actions.map((action) =>
+    action.command === COMMANDS.sync ? { ...action, label: syncLabel } : action,
+  );
 }
 
 export function renderChangesTree(rows: readonly ChangesWebviewRow[]): string {
@@ -252,10 +262,13 @@ function renderRow(row: ChangesWebviewRow): string {
       ? `<span class="desc">${escapeHtml(row.description)}</span>`
       : "";
   const actions = row.inlineActions
-    .map(
-      (action) =>
-        `<button type="button" class="inline-btn" data-act="command" data-command="${escapeHtml(action.command)}" title="${escapeHtml(action.title)}"><i class="codicon ${codiconClass(action.icon)}"></i></button>`,
-    )
+    .map((action) => {
+      const label = action.label
+        ? `<span class="sync-label">${escapeHtml(action.label)}</span>`
+        : "";
+      const wide = action.label ? " inline-btn-labeled" : "";
+      return `<button type="button" class="inline-btn${wide}" data-act="command" data-command="${escapeHtml(action.command)}" title="${escapeHtml(action.title)}"><i class="codicon ${codiconClass(action.icon)}"></i>${label}</button>`;
+    })
     .join("");
   const generate = row.generateCommitMessageSupported
     ? `<button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>`
@@ -273,7 +286,7 @@ function renderRow(row: ChangesWebviewRow): string {
   const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label) : row.label;
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
     <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
-      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="inline">${actions}</span>${status}
+      ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="tail"><span class="inline">${actions}</span>${status}</span>
     </div>
     ${chrome}${kids}
   </div>`;
@@ -405,6 +418,18 @@ body {
   box-sizing: border-box;
   border-radius: 5px;
 }
+.inline-btn-labeled {
+  width: auto;
+  min-width: 20px;
+  padding: 0 4px;
+  gap: 3px;
+}
+.sync-label {
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+}
 .inline-btn > .codicon {
   display: block;
   line-height: 16px;
@@ -472,6 +497,13 @@ body {
   flex: none;
   background: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
+.tail {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  flex: none;
+  position: relative;
+}
 .inline {
   display: inline-flex;
   align-items: center;
@@ -479,10 +511,24 @@ body {
   flex: none;
   height: 20px;
 }
-.row:not(.repo-row) .inline { opacity: 0; }
+/* Hover-only toolbars claim no row width; they overlay the label once visible. */
+.row:not(.repo-row) .inline {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  background: var(--vscode-list-hoverBackground);
+}
 .row:not(.repo-row):hover .inline,
 .row:not(.repo-row):focus-within .inline,
-.row:not(.repo-row).selected .inline { opacity: 1; }
+.row:not(.repo-row).selected .inline {
+  opacity: 1;
+  pointer-events: auto;
+}
+.row:not(.repo-row).selected .inline { background: var(--vscode-list-activeSelectionBackground); }
 .row.repo-row .inline { opacity: 1; }
 .commit-chrome { display: flex; flex-direction: column; gap: 4px; padding: 2px 8px 6px; }
 .commit-input-wrap { position: relative; }
@@ -567,11 +613,12 @@ function applyAdoptedCount(msg) {
   if (!nodeEl) return;
   const row = nodeEl.querySelector(":scope > .row");
   if (!row) return;
-  let status = Array.from(row.children).find((child) => child.classList.contains("row-status"));
+  const tail = row.querySelector(":scope > .tail") || row;
+  let status = Array.from(tail.children).find((child) => child.classList.contains("row-status"));
   if (!status) {
     status = document.createElement("span");
     status.className = "row-status";
-    row.appendChild(status);
+    tail.appendChild(status);
   }
   let indicator = status.querySelector("[data-adopted-count], .adopted-count");
   if (!indicator) {

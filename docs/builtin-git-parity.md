@@ -23,7 +23,8 @@ are the machine-checked source for labels and the deviation list below.
 - Status letters, tooltip text, and `gitDecoration.*` colors from
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
-- Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); upstream details are omitted and Checkout/Fetch/Pull live in the row context menu
+- Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); Checkout/Fetch/Pull live in the row context menu
+- Repository Sync toolbar button shows the built-in Git `syncLabel` (`N↓ M↑`, including zeros) when the branch is ahead or behind its upstream; click still runs Sync (pull then push)
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
 - Status letters and the active file icon theme on webview rows when that theme ships SVG `iconPath` entries (Material Icon Theme, vscode-icons). UI chrome uses packaged `@vscode/codicons`
 - `git.openDiffOnClick`, `git.showInlineOpenFileAction`, `scm.defaultViewMode`,
@@ -31,7 +32,8 @@ are the machine-checked source for labels and the deviation list below.
 - Menu titles and row toolbar / context slots for Open / Stage / Unstage / Discard /
   Commit / Refresh / Sync / Publish (command IDs are `gitSubmodule.*`; actions are HTML, not `view/item/context`)
 - Repository rows expose the same toolbar as the built-in Git repo header:
-  Commit, Sync (or Publish without an upstream), Refresh — always visible, not hover-only
+  Commit, Sync (or Publish without an upstream), Refresh — always visible, not hover-only.
+  Sync mirrors the REPOSITORIES status-bar affordance: icon plus `syncLabel` when diverged
 - File, folder, and change-group inline icons are hover-only, matching built-in Changes
 - Expanded dirty repositories show a branch label, commit message box, Generate Commit Message sparkle, and Commit button before their groups. Collapsing hides the commit chrome with the subtree; the draft remains in `repository.inputBoxValue`
 - The sparkle uses a public built-in/Copilot generate-commit-message command for the subject when available, then appends the submodule chore body from pointer diffs; without a public AI command it only generates that chore

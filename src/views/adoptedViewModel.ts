@@ -3,6 +3,7 @@ import type { AdoptedChangeKind, AdoptedDiffSpec, SubmoduleViewModel } from "../
 import {
   indexSnapshots,
   lookupSnapshot,
+  repositorySyncLabel,
   ResourceStatus,
   resourceStatusLetter,
   resourceStatusText,
@@ -77,6 +78,8 @@ export interface AdoptedTreeNode {
   changeGroup?: ChangeGroupKind;
   label: string;
   description?: string;
+  /** Built-in Git sync status-bar label (`N↓ M↑`) for the Sync toolbar button. */
+  syncLabel?: string;
   tooltip: string;
   collapsible: boolean;
   expandByDefault: boolean;
@@ -307,12 +310,14 @@ function buildWorkspaceRootNode(
   const branch = repositoryBranchDescription(snapshot?.head, groups);
   const submoduleCount = root.children.length;
   const fallback = submoduleCount === 0 ? undefined : submoduleCount === 1 ? "1 submodule" : `${submoduleCount} submodules`;
+  const syncLabel = repositorySyncLabel(snapshot?.head, snapshot?.remotes) || undefined;
   return {
     id: `root:${root.rootPath}`,
     kind: "workspace-root",
     repositoryRoot: root.rootPath,
     label: root.displayName,
     description: branch || fallback,
+    syncLabel,
     tooltip: root.rootPath,
     collapsible: children.length > 0,
     expandByDefault: children.length > 0,
@@ -334,12 +339,14 @@ function buildSubmoduleTreeNode(
   const branch = snapshot?.head ? repositoryBranchDescription(snapshot.head, groups) : undefined;
   const icon = repoRowIcon(node.workingState);
   const children = repoChildNodes(node, groups, snapshots, settings);
+  const syncLabel = repositorySyncLabel(snapshot?.head, snapshot?.remotes) || undefined;
   return {
     id: `sub:${node.rootPath}`,
     kind: "submodule",
     repositoryRoot: node.rootPath,
     label: node.displayName,
     description: branch || submoduleStatusSummary(node.workingState, node.branch.name, node.pins.checkoutHeadSha),
+    syncLabel,
     tooltip: submoduleTooltip(node),
     collapsible: children.length > 0,
     expandByDefault: false,

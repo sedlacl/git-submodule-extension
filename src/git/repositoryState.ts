@@ -454,6 +454,25 @@ export function formatAheadBehind(head: RepositoryHead): string {
   return parts.join(" ");
 }
 
+/**
+ * Built-in Git `Repository.syncLabel` (vscode 1.96.0): shown next to the Sync
+ * status-bar / repo-row icon when the branch is ahead or behind its upstream.
+ * Includes zeros (`23↓ 0↑`); read-only remotes omit the push count.
+ */
+export function repositorySyncLabel(
+  head: RepositoryHead | undefined,
+  remotes: readonly RepositoryRemote[] = [],
+): string {
+  if (!head?.name || !head.commit || !head.upstream || !(head.ahead || head.behind)) {
+    return "";
+  }
+  const remote = remotes.find((entry) => entry.name === head.upstream!.remote);
+  if (remote?.isReadOnly) {
+    return `${head.behind ?? 0}↓`;
+  }
+  return `${head.behind ?? 0}↓ ${head.ahead ?? 0}↑`;
+}
+
 function mapChanges(repoRoot: string, changes: readonly ChangeLike[] | undefined): ResourceChange[] {
   return (changes ?? []).map((change) => snapshotChange(repoRoot, change));
 }

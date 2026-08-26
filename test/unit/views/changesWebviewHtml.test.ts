@@ -374,10 +374,11 @@ describe("changes webview HTML", () => {
 
   it("uses compact fixed action targets while preserving hover and keyboard states", () => {
     const page = changesWebviewPage({ nonce: "n", cspSource: "https://example", codiconCssHref: "codicon.css" });
-    expect(page).toContain(".row:not(.repo-row) .inline { opacity: 0; }");
     expect(page).toContain(".row:not(.repo-row):hover .inline");
     expect(page).toContain(".row.repo-row .inline { opacity: 1; }");
     expect(page).toMatch(/\.inline-btn \{[\s\S]*?width: 20px;[\s\S]*?min-width: 20px;[\s\S]*?height: 20px;[\s\S]*?box-sizing: border-box;/);
+    expect(page).toContain(".inline-btn-labeled");
+    expect(page).toContain(".sync-label");
     expect(page).toMatch(/\.inline \{[\s\S]*?gap: 2px;[\s\S]*?flex: none;[\s\S]*?height: 20px;/);
     expect(page).toContain(".inline-btn:hover");
     expect(page).toContain("--vscode-toolbar-hoverBackground");
@@ -388,6 +389,63 @@ describe("changes webview HTML", () => {
     expect(page).toContain("--vscode-scm-providerCountBadge-background");
     expect(page).toContain(".sparkle-btn");
     expect(page).toContain("width: 100%");
+  });
+
+  it("overlays hover-only row actions instead of reserving width next to the label", () => {
+    const page = changesWebviewPage({ nonce: "n", cspSource: "https://example", codiconCssHref: "codicon.css" });
+    expect(page).toMatch(/\.tail \{[\s\S]*?align-self: stretch;[\s\S]*?flex: none;[\s\S]*?position: relative;/);
+    expect(page).toMatch(
+      /\.row:not\(\.repo-row\) \.inline \{[\s\S]*?position: absolute;[\s\S]*?right: 100%;[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;/,
+    );
+    expect(page).toMatch(/:hover \.inline,[\s\S]*?opacity: 1;[\s\S]*?pointer-events: auto;/);
+
+    const file = repo({
+      id: "root:/ws/app",
+      kind: "workspace-root",
+      label: "app",
+      repositoryRoot: "/ws/app",
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([file], {
+        expanded: new Set(["root:/ws/app", "group:workingTree"]),
+        selected: new Set(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+    expect(html).toMatch(/data-id="file:workingTree:0"[\s\S]*?class="tail"><span class="inline">/);
+    expect(html).toMatch(/data-id="group:workingTree"[\s\S]*?class="tail"[\s\S]*?class="inline"[\s\S]*?class="row-status"/);
+    expect(html).toContain('class="label">file-0.ts</span>');
+  });
+
+  it("renders ahead/behind counts on the Sync button without changing the branch checkout label", () => {
+    const dirty = repo({
+      id: "root:/ws/app",
+      kind: "workspace-root",
+      label: "app",
+      description: "master*",
+      syncLabel: "23↓ 0↑",
+      repositoryRoot: "/ws/app",
+      contextValue: `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`,
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([dirty], {
+        expanded: new Set(),
+        selected: new Set(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+    expect(html).toContain('class="branch"');
+    expect(html).toContain(">master*<");
+    expect(html).toContain('data-command="gitSubmodule.sync"');
+    expect(html).toContain("inline-btn-labeled");
+    expect(html).toContain('class="sync-label">23↓ 0↑<');
+    expect(html).not.toContain('class="branch">23↓ 0↑');
   });
 
   it("keeps group actions before a far-right count without layout jumps", () => {
@@ -411,7 +469,6 @@ describe("changes webview HTML", () => {
 
     expect(html).toMatch(/group-row[\s\S]*class="label">Changes<[\s\S]*class="grow"[\s\S]*class="inline"[\s\S]*class="row-status"[\s\S]*class="count-pill">7</);
     expect(page).toContain(".grow { flex: 1 1 auto; min-width: 4px; margin-left: auto; }");
-    expect(page).toContain(".row:not(.repo-row) .inline { opacity: 0; }");
     expect(page).toMatch(/\.row-status \{[\s\S]*?flex: none;[\s\S]*?min-width: 16px;[\s\S]*?margin-left: 2px;[\s\S]*?padding-right: 6px;/);
     expect(page).toMatch(/\.branch \{[\s\S]*?flex: 0 1 auto;[\s\S]*?min-width: 0;[\s\S]*?max-width: 180px;[\s\S]*?text-overflow: ellipsis;/);
   });

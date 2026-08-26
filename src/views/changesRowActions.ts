@@ -23,6 +23,8 @@ export interface RowAction {
   icon: string;
   group: RowActionGroup;
   order: number;
+  /** Optional text beside the icon (built-in Git Sync `N↓ M↑`). */
+  label?: string;
 }
 
 const REPO = /gitSubmodule\.(workspaceRoot|submodule)/;

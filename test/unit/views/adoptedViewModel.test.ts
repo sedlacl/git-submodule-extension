@@ -364,6 +364,52 @@ describe("bootstrap repo nodes", () => {
     expect(nodes[0]?.id).toBe("root:/ws/httpendpoint");
     expect(nodes[0]?.label).toBe("httpendpoint");
     expect(nodes[0]?.description).toBe("main*");
+    expect(nodes[0]?.syncLabel).toBeUndefined();
     expect(nodes[0]?.children.some((child) => child.kind === "change-group" && child.label === "Changes")).toBe(true);
+  });
+
+  it("attaches the built-in syncLabel from ahead/behind without changing the branch description", () => {
+    const child = submodule({
+      rootPath: "/ws/app/mod",
+      parentRootPath: "/ws/app",
+      relativePath: "mod",
+      pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: HEAD },
+    });
+    const [root] = buildAdoptedTree(
+      { roots: [workspaceRoot("/ws/app", [child])] },
+      [
+        {
+          rootPath: "/ws/app",
+          head: {
+            name: "master",
+            commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            upstream: { remote: "origin", name: "master" },
+            ahead: 0,
+            behind: 23,
+            detached: false,
+          },
+          remotes: [{ name: "origin", isReadOnly: false }],
+          groups: emptyChangeGroups(),
+        },
+        {
+          rootPath: "/ws/app/mod",
+          head: {
+            name: "feature/t1-deployment",
+            commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            upstream: { remote: "origin", name: "feature/t1-deployment" },
+            ahead: 1,
+            behind: 0,
+            detached: false,
+          },
+          remotes: [{ name: "origin", isReadOnly: false }],
+          groups: emptyChangeGroups(),
+        },
+      ],
+    );
+    expect(root?.description).toBe("master");
+    expect(root?.syncLabel).toBe("23↓ 0↑");
+    const sub = byLabel(root?.children, "mod");
+    expect(sub?.description).toBe("feature/t1-deployment");
+    expect(sub?.syncLabel).toBe("0↓ 1↑");
   });
 });
