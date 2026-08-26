@@ -398,6 +398,10 @@ describe("changes webview HTML", () => {
       /\.row:not\(\.repo-row\) \.inline \{[\s\S]*?position: absolute;[\s\S]*?right: 100%;[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;/,
     );
     expect(page).toMatch(/:hover \.inline,[\s\S]*?opacity: 1;[\s\S]*?pointer-events: auto;/);
+    expect(page).toMatch(/\.row:not\(\.repo-row\) \.inline \{[\s\S]*?background-color: var\(--vscode-sideBar-background/);
+    expect(page).toMatch(
+      /\.row:not\(\.repo-row\) \.inline \{[\s\S]*?background-image: linear-gradient\(var\(--vscode-list-hoverBackground/,
+    );
 
     const file = repo({
       id: "root:/ws/app",
@@ -446,6 +450,11 @@ describe("changes webview HTML", () => {
     expect(html).toContain("inline-btn-labeled");
     expect(html).toContain('class="sync-label">23↓ 0↑<');
     expect(html).not.toContain('class="branch">23↓ 0↑');
+
+    const page = changesWebviewPage({ nonce: "n", cspSource: "https://example", codiconCssHref: "codicon.css" });
+    expect(page).toMatch(/\.twistie, \.inline-btn, \.branch, \.commit-btn, \.sparkle-btn \{[\s\S]*?font: inherit;/);
+    expect(page).toMatch(/\.sync-label \{[\s\S]*?font-size: 12px;[\s\S]*?line-height: 16px;/);
+    expect(page).toMatch(/\.desc, \.branch \{[\s\S]*?font-size: 12px;/);
   });
 
   it("keeps group actions before a far-right count without layout jumps", () => {

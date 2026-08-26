@@ -385,6 +385,9 @@ body {
   border: none;
   background: transparent;
   color: inherit;
+  /* Buttons do not inherit fonts by default; without this the UA font renders
+     digits and the ↓↑ glyphs from different fallbacks at mismatched sizes. */
+  font: inherit;
   padding: 0;
   cursor: pointer;
 }
@@ -425,7 +428,7 @@ body {
   gap: 3px;
 }
 .sync-label {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
   color: var(--vscode-descriptionForeground);
@@ -519,8 +522,11 @@ body {
   transform: translateY(-50%);
   opacity: 0;
   pointer-events: none;
+  padding: 0 3px;
   border-radius: 4px;
-  background: var(--vscode-list-hoverBackground);
+  /* Opaque base under the translucent list state color so the label cannot bleed through. */
+  background-color: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  background-image: linear-gradient(var(--vscode-list-hoverBackground), var(--vscode-list-hoverBackground));
 }
 .row:not(.repo-row):hover .inline,
 .row:not(.repo-row):focus-within .inline,
@@ -528,7 +534,12 @@ body {
   opacity: 1;
   pointer-events: auto;
 }
-.row:not(.repo-row).selected .inline { background: var(--vscode-list-activeSelectionBackground); }
+.row:not(.repo-row).selected .inline {
+  background-image: linear-gradient(
+    var(--vscode-list-activeSelectionBackground),
+    var(--vscode-list-activeSelectionBackground)
+  );
+}
 .row.repo-row .inline { opacity: 1; }
 .commit-chrome { display: flex; flex-direction: column; gap: 4px; padding: 2px 8px 6px; }
 .commit-input-wrap { position: relative; }
