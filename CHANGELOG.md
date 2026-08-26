@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-26
+
+### Added
+
+- Per-repository HEAD, group, and count diagnostics are logged when refresh completes.
+- Explicit `gitSubmodule.refresh` logs the `repository.status()` start and outcome.
+
+### Changed
+
+- Removed the custom WebviewView/Activity Bar badge so the count is owned only by built-in Git.
+
 ## [0.2.0] - 2026-08-26
 
 ### Added
@@ -68,7 +79,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.0...v0.1.2
