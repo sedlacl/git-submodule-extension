@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
+### Added
+
+- Repository Sync button shows the built-in Git `syncLabel` (`N↓ M↑`, including zeros) when the branch is ahead or behind its upstream.
+- Sync hover uses the built-in Git `syncTooltip` (for example `Push 1 commits to origin/feature/x`) instead of the generic "Sync" command title.
+
+### Changed
+
+- Sync confirmation matches built-in `git.sync`: it is gated by `git.confirmSync`, skipped for read-only remotes, and offers **OK, Don't Show Again**, which turns the prompt off for the built-in Changes panel too.
+- Blocked branch restore names the reason on the row (for example `restore blocked: pinned commit is not an ancestor of origin/aflex/6.3`) while the tooltip keeps the untruncated Git detail.
+
 ## [0.1.3] - 2026-08-25
 
 ### Fixed
@@ -56,7 +68,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.0.1...v0.1.0
