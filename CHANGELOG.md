@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-27
+
+### Added
+
+- **Adopted Changes** now expands nested submodule pointers recursively. A gitlink row inside an adopted diff (for example `uu_energygateway_datagatewayg01` under `usy_idsmari_commong01`) is collapsible, carries the `S` badge, and reveals its own Adopted Changes group built from the historical tree SHAs instead of the live pin.
+
+### Changed
+
+- Adopted diffs are read with `git diff --raw --no-abbrev`, so file modes and both object SHAs survive the parse and gitlink pointers are no longer flattened into plain file modifications.
+- Adopted groups discovered by lazy expansion get their change counts hydrated, so a newly revealed nested group no longer keeps a loading indicator.
+
 ## [0.3.0] - 2026-08-27
 
 ### Changed

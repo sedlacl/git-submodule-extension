@@ -10,9 +10,9 @@ First public release and every follow-up use the same flow. `package.json` `vers
 
 ## Release steps (maintainer)
 
-1. **Bump version** (no git tag from npm):
+1. **Bump version** (no git tag from npm). Bump conservatively — `patch` is the default, even for incremental features; reserve `minor` for a larger feature set:
    ```bash
-   npm run version:minor    # or version:patch / version:major
+   npm run version:patch    # or version:minor / version:major
    npm run version:set -- 0.1.0   # explicit semver when needed
    ```
 2. **Update `CHANGELOG.md`** — new `[X.Y.Z]` section with date and user-facing notes.

@@ -9,14 +9,15 @@ alwaysApply: false
 
 ## Před každým release / publish
 
-1. **Bump verze** — nikdy nepublikovat bez změny verze:
-   - `npm run version:patch` — opravy
-   - `npm run version:minor` — nové funkce (první veřejný release: `npm run version:set -- 0.1.0`)
+1. **Bump verze** — nikdy nepublikovat bez změny verze. Zvedej **konzervativně**, `patch` je výchozí volba:
+   - `npm run version:patch` — opravy, jednotlivá vylepšení a přírůstkové featury (i když přidávají chování)
+   - `npm run version:minor` — jen ucelený větší feature set, ne jedna funkce
    - `npm run version:major` — breaking změny
    - `npm run version:set -- X.Y.Z` — explicitní semver
    Skripty volají `npm version --no-git-tag-version` — **bez** git tagu a commitu.
+   Když si nejsi jistý mezi `patch` a `minor`, ptej se — nebo vezmi `patch`.
 2. **CHANGELOG.md** — povinný záznam pod `[X.Y.Z]` s datem (Keep a Changelog + semver). Žádné neexistující featury.
-3. Commit a tag dělá maintainer (`vX.Y.Z`), ne agent v chatu.
+3. Commit `chore: release X.Y.Z` a tag `vX.Y.Z` patří maintainerovi; agent je udělá jen na výslovné vyžádání v chatu.
 
 ## Publish
 
