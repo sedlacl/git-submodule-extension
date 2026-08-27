@@ -17,10 +17,10 @@ First public release and every follow-up use the same flow. `package.json` `vers
    ```
 2. **Update `CHANGELOG.md`** — new `[X.Y.Z]` section with date and user-facing notes.
 3. **Commit** version + changelog (+ README/screenshot if changed).
-4. **Tag and push**:
+4. **Tag and push** — always an **annotated** tag (`git tag -a`). Lightweight tags are ignored by `git push --follow-tags`, so the Release workflow would not start until you push the tag separately. On PowerShell, pass `-m` rather than a bash heredoc:
    ```bash
-   git tag v0.1.0
-   git push origin main --tags
+   git tag -a v0.1.0 -m "v0.1.0"
+   git push origin HEAD --follow-tags
    ```
 5. GitHub Actions workflow **Release** (trigger: tag `v*`) runs `npm ci`, lint, typecheck, test, `npm run package:ci`, uploads the `.vsix` to the GitHub Release, and publishes to Open VSX with `OVSX_PAT`.
 

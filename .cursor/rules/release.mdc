@@ -18,6 +18,12 @@ alwaysApply: false
    Když si nejsi jistý mezi `patch` a `minor`, ptej se — nebo vezmi `patch`.
 2. **CHANGELOG.md** — povinný záznam pod `[X.Y.Z]` s datem (Keep a Changelog + semver). Žádné neexistující featury.
 3. Commit `chore: release X.Y.Z` a tag `vX.Y.Z` patří maintainerovi; agent je udělá jen na výslovné vyžádání v chatu.
+4. **Tag je vždy anotovaný** (`git tag -a`), nikdy lightweight. `git push --follow-tags` posílá jen anotované tagy — lightweight tag workflow nespustí, dokud ho nepošleš zvlášť. Na PowerShellu nepoužívej bash heredoc; zprávu tagu i commitu předávej přes `-m`.
+
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z"
+   git push origin HEAD --follow-tags
+   ```
 
 ## Publish
 

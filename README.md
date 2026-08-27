@@ -114,7 +114,7 @@ npm run version:major    # 0.1.0 → 1.0.0
 npm run version:set -- 0.1.0
 ```
 
-Add a [CHANGELOG.md](CHANGELOG.md) entry, then tag `vX.Y.Z` and push. Open VSX publish runs in CI — see [`docs/publishing.md`](docs/publishing.md).
+Add a [CHANGELOG.md](CHANGELOG.md) entry, then create an annotated tag `vX.Y.Z` (`git tag -a`) and `git push origin HEAD --follow-tags`. Open VSX publish runs in CI — see [`docs/publishing.md`](docs/publishing.md).
 
 ## Development
 
