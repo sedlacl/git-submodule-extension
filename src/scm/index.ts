@@ -13,9 +13,13 @@ export type {
 export {
   DEFAULT_SUBMODULE_CHORE_SUBJECT,
   MAX_SUBMODULE_COMMIT_SUBJECTS,
-  UNSTAGED_SUBMODULE_CHORE_NOTE,
+  MAX_NESTED_SUBMODULE_DEPTH,
+  buildDeterministicChoreSubject,
   buildSubmoduleChoreMessage,
+  collectLeafCommits,
+  needsAiSubjectForChore,
   shortSha,
+  submoduleUpdateHeaderLine,
 } from "./submoduleChoreMessage.js";
 export {
   KNOWN_GENERATE_COMMIT_MESSAGE_COMMANDS,

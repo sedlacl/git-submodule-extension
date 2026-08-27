@@ -209,13 +209,14 @@ describe("generated fixture topologies", () => {
     const chore = new SubmoduleChoreReadService(createGitCli());
     const preview = await chore.preview(http!.rootPath);
     expect(preview).not.toBeNull();
-    expect(preview?.subject).toBe("chore: update submodules");
     expect(preview?.message).toContain("submodules/uu_energygateway_httpendpointg01");
     expect(preview?.message).toContain("submodules/usy_idsmari_commong01");
     expect(preview?.updates.some((update) => update.staged)).toBe(true);
     expect(preview?.updates.some((update) => !update.staged)).toBe(true);
-    expect(preview?.hasUnstagedUpdates).toBe(true);
-    expect(preview?.unstagedNote).toBeTruthy();
+    expect(preview?.message).toContain("nested submodule submodules/usy_idsmari_commong01/submodules/uu_energygateway_datagatewayg01");
+    expect(preview?.message).toContain("T8054 - Add SaveMessagePipelineProcessor tests and savePayloadType support");
+    expect(preview?.message).not.toContain("Note:");
+    expect(preview?.message).not.toMatch(/not staged/i);
     expect(shaOrEmpty(http!.rootPath)).toBe(before);
   }, 60_000);
 });

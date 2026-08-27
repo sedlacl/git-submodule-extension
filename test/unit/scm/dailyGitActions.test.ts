@@ -544,11 +544,13 @@ describe("DailyGitActions repository commands", () => {
           beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           branch: "main",
-          subjects: ["feat: child"],
+          commits: [{
+            sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            subject: "feat: child",
+            nestedUpdates: [],
+          }],
           staged: true,
         }],
-        hasUnstagedUpdates: false,
-        unstagedNote: null,
       }),
     };
     const { actions } = harness([repository], ui, chore);
@@ -558,7 +560,7 @@ describe("DailyGitActions repository commands", () => {
     expect(ui.inputs).toEqual([]);
     expect(ui.generateCalls).toEqual([]);
     expect(repository.inputBoxValue).toContain("chore: update service pointers");
-    expect(repository.inputBoxValue).toContain("- feat: child");
+    expect(repository.inputBoxValue).toContain("- bbbbbbbb feat: child");
     expect(repository.calls).toEqual([]);
 
     ui.nextConfirmation = undefined;
@@ -583,18 +585,19 @@ describe("DailyGitActions repository commands", () => {
     const chore: SubmoduleChoreReadService = {
       preview: async () => ({
         subject: "chore: update submodules",
-        body: "\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- feat: child",
-        message: "chore: update submodules\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- feat: child",
+        body: "\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- bbbbbbbb feat: child\n- cccccccc fix: follow-up",
+        message: "chore: update submodules\n\nsubmodule (aaaaaaaa -> bbbbbbbb, main)\n- bbbbbbbb feat: child\n- cccccccc fix: follow-up",
         updates: [{
           path: "submodule",
           beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           branch: "main",
-          subjects: ["feat: child"],
+          commits: [
+            { sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", subject: "feat: child", nestedUpdates: [] },
+            { sha: "cccccccccccccccccccccccccccccccccccccccc", subject: "fix: follow-up", nestedUpdates: [] },
+          ],
           staged: true,
         }],
-        hasUnstagedUpdates: false,
-        unstagedNote: null,
       }),
     };
     const { actions } = harness([repository], ui, chore);
@@ -603,7 +606,7 @@ describe("DailyGitActions repository commands", () => {
 
     expect(ui.generateCalls).toEqual([root]);
     expect(repository.inputBoxValue.startsWith("feat: from copilot")).toBe(true);
-    expect(repository.inputBoxValue).toContain("- feat: child");
+    expect(repository.inputBoxValue).toContain("- bbbbbbbb feat: child");
     expect(ui.infos).toEqual([]);
   });
 
@@ -648,8 +651,8 @@ describe("DailyGitActions repository commands", () => {
     ]);
     expect(lines).toEqual([
       "[action #1] generate message started (repository: usy_aflex_initdatag01#t1)",
-      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
       "[action #1] submodule chore preview 0ms (pointer updates: 0; result: empty)",
+      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
       "[action #1] generate message unavailable 0ms (reason: AI target unsupported; merge: unchanged; pointer updates: 0; draft changed: false; AI result: unsupported target)",
     ]);
     expect(lines.join("\n")).not.toContain("cancelled");
@@ -667,18 +670,16 @@ describe("DailyGitActions repository commands", () => {
     const chore: SubmoduleChoreReadService = {
       preview: async () => ({
         subject: "chore: update submodules",
-        body: `\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment) (not staged)`,
-        message: `chore: update submodules\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment) (not staged)`,
+        body: `\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment)`,
+        message: `chore: update submodules\n\n${relativePath} (aaaaaaaa -> bbbbbbbb, feature/t1-deployment)`,
         updates: [{
           path: relativePath,
           beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           branch: "feature/t1-deployment",
-          subjects: [],
+          commits: [],
           staged: false,
         }],
-        hasUnstagedUpdates: true,
-        unstagedNote: "not staged",
       }),
     };
     const { actions } = harness([repository], ui, chore);
@@ -698,8 +699,8 @@ describe("DailyGitActions repository commands", () => {
     expect(repository.inputBoxValue).toContain(relativePath);
     expect(lines).toEqual([
       "[action #1] generate message started (repository: infra-deploy)",
-      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
       "[action #1] submodule chore preview 0ms (pointer updates: 1; result: generated)",
+      "[action #1] generate message AI 0ms (provider: cursor.generateGitCommitMessage; result: unsupported target)",
       "[action #1] generate message completed 0ms (merge: replaced empty draft; pointer updates: 1; draft changed: true)",
     ]);
   });
@@ -761,11 +762,12 @@ describe("DailyGitActions repository commands", () => {
           beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           branch: "main",
-          subjects: ["secret child subject"],
+          commits: [
+            { sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", subject: "secret child subject", nestedUpdates: [] },
+            { sha: "cccccccccccccccccccccccccccccccccccccccc", subject: "another secret subject", nestedUpdates: [] },
+          ],
           staged: true,
         }],
-        hasUnstagedUpdates: false,
-        unstagedNote: null,
       }),
     };
     const lines: string[] = [];
@@ -777,8 +779,8 @@ describe("DailyGitActions repository commands", () => {
 
     expect(lines).toEqual([
       "[action #1] generate message started (repository: repo)",
-      "[action #1] generate message AI 0ms (provider: git.generateCommitMessage; result: generated)",
       "[action #1] submodule chore preview 0ms (pointer updates: 1; result: generated)",
+      "[action #1] generate message AI 0ms (provider: git.generateCommitMessage; result: generated)",
       "[action #1] generate message completed 0ms (merge: AI subject + appended chore; pointer updates: 1; draft changed: true)",
     ]);
     expect(lines.join("\n")).not.toContain("secret generated subject");

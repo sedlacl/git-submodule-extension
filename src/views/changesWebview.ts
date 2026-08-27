@@ -7,7 +7,7 @@ import { isPublicCommitMessageTargetSupported } from "../scm/generateCommitMessa
 import type { AdoptedCountPatch, AdoptedTreeController } from "./adoptedTreeController.js";
 import { buildBootstrapRepoNodes, treeItemCommand, type AdoptedTreeNode } from "./adoptedViewModel.js";
 import { type RowActionConfig, contextActions } from "./changesRowActions.js";
-import { readChangesTreeSettings, type ChangesTreeSettings } from "./changesTreeSettings.js";
+import { type ChangesTreeSettings } from "./changesTreeSettings.js";
 import {
   changesWebviewErrorHtml,
   changesWebviewLoadingHtml,
@@ -49,6 +49,7 @@ export interface ChangesWebviewProviderOptions {
   gitApi: VsCodeGitApiAdapter;
   extensionUri: vscode.Uri;
   writeDiagnostic: ChangesDiagnosticWriter;
+  getTreeSettings: () => ChangesTreeSettings;
   getGenerateCommitMessageCommand?(): string | undefined;
   onViewVisible?(): void;
 }
@@ -629,9 +630,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private treeSettings(): ChangesTreeSettings {
-    return readChangesTreeSettings((section, key, fallback) =>
-      vscode.workspace.getConfiguration(section).get(key, fallback),
-    );
+    return this.options.getTreeSettings();
   }
 
   private async hydrate(nodes: AdoptedTreeNode[]): Promise<AdoptedTreeNode[]> {

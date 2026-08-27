@@ -18,7 +18,7 @@ const chore = buildSubmoduleChoreMessage({
       beforeHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       afterHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       branch: "main",
-      subjects: ["feat: child"],
+      commits: [{ sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", subject: "feat: child", nestedUpdates: [] }],
       staged: true,
     },
   ],
@@ -239,7 +239,7 @@ describe("mergeCommitDraftWithChore", () => {
     const merged = mergeCommitDraftWithChore("feat: keep me\n\nnotes", chore);
     expect(firstCommitLine(merged)).toBe("feat: keep me");
     expect(merged).toContain("notes");
-    expect(merged).toContain("- feat: child");
+    expect(merged).toContain("- bbbbbbbb feat: child");
   });
 
   it("does not duplicate an already appended chore body", () => {

@@ -17,7 +17,7 @@ import {
 import type { AdoptedTreeNode, ChangeFileRef } from "./adoptedViewModel.js";
 import { changeOpenTarget } from "./changeOpenPlan.js";
 import type { ChangesDiagnosticWriter, ChangesLoadReason } from "./changesLoadDiagnostics.js";
-import { readChangesTreeSettings, type ScmViewMode } from "./changesTreeSettings.js";
+import { readChangesTreeSettings, parseSessionViewMode, SESSION_VIEW_MODE_KEY, withSessionViewMode, type ScmViewMode } from "./changesTreeSettings.js";
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
 import { ChangesWebviewProvider } from "./changesWebview.js";
@@ -29,19 +29,24 @@ export interface RegisterAdoptedViewOptions {
   cli: GitCli;
   restoreStatus?: RestoreStatusStore;
   extensionUri: vscode.Uri;
+  workspaceState: vscode.Memento;
   writeDiagnostic: ChangesDiagnosticWriter;
   actionDiagnostics: ActionDiagnostics;
 }
 
 export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode.Disposable {
+  const readConfig = (section: string, key: string, fallback: unknown): unknown =>
+    vscode.workspace.getConfiguration(section).get(key, fallback);
+  const sessionViewMode = (): ScmViewMode | undefined =>
+    parseSessionViewMode(options.workspaceState.get(SESSION_VIEW_MODE_KEY));
+  const getTreeSettings = (): ReturnType<typeof readChangesTreeSettings> =>
+    withSessionViewMode(readChangesTreeSettings(readConfig), sessionViewMode());
+
   const controller = new AdoptedTreeController(
     options.model,
     (childRootPath) => options.restoreStatus?.get(childRootPath),
     () => options.gitApi.snapshotAll(),
-    () =>
-      readChangesTreeSettings((section, key, fallback) =>
-        vscode.workspace.getConfiguration(section).get(key, fallback),
-      ),
+    getTreeSettings,
     (timing) => {
       if (timing.phase === "roots") {
         return;
@@ -70,12 +75,21 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     gitApi: options.gitApi,
     extensionUri: options.extensionUri,
     writeDiagnostic: options.writeDiagnostic,
+    getTreeSettings,
     getGenerateCommitMessageCommand: () => generateCommitMessageCommand,
     onViewVisible: refreshGenerateCommitMessageCommand,
   });
 
   const refresh = (reason: ChangesLoadReason, rediscover: boolean | (() => boolean)): void => {
     webviewProvider.refresh(reason, rediscover);
+  };
+  const syncViewModeContext = (): void => {
+    void vscode.commands.executeCommand("setContext", "gitSubmodule.viewMode", getTreeSettings().viewMode);
+  };
+  const setSessionViewMode = async (mode: ScmViewMode): Promise<void> => {
+    await options.workspaceState.update(SESSION_VIEW_MODE_KEY, mode);
+    syncViewModeContext();
+    refresh("config change", false);
   };
   refreshGenerateCommitMessageCommand();
   const consumeLatestRepositoryStates = (): void => {
@@ -118,8 +132,8 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
         openSelected(options.gitApi, controller, node, selected),
     ),
-    vscode.commands.registerCommand(COMMANDS.viewAsTree, () => setScmViewMode("tree")),
-    vscode.commands.registerCommand(COMMANDS.viewAsList, () => setScmViewMode("list")),
+    vscode.commands.registerCommand(COMMANDS.viewAsTree, () => setSessionViewMode("tree")),
+    vscode.commands.registerCommand(COMMANDS.viewAsList, () => setSessionViewMode("list")),
     options.gitApi.subscribe({
       onOpenRepository: (rootPath) =>
         refresh("repository opened", () => controller.repositoryOpenNeedsRediscovery(rootPath)),
@@ -136,6 +150,9 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       if (event.affectsConfiguration("workbench.iconTheme")) {
         void webviewProvider.reloadFileIcons();
         return;
+      }
+      if (event.affectsConfiguration("scm.defaultViewMode")) {
+        void options.workspaceState.update(SESSION_VIEW_MODE_KEY, undefined);
       }
       if (
         event.affectsConfiguration("git.untrackedChanges") ||
@@ -165,21 +182,6 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
       disposable.dispose();
     }
   });
-}
-
-function currentViewMode(): ScmViewMode {
-  return readChangesTreeSettings((section, key, fallback) =>
-    vscode.workspace.getConfiguration(section).get(key, fallback),
-  ).viewMode;
-}
-
-function syncViewModeContext(): void {
-  void vscode.commands.executeCommand("setContext", "gitSubmodule.viewMode", currentViewMode());
-}
-
-async function setScmViewMode(mode: ScmViewMode): Promise<void> {
-  await vscode.workspace.getConfiguration("scm").update("defaultViewMode", mode, vscode.ConfigurationTarget.Workspace);
-  syncViewModeContext();
 }
 
 async function openChange(gitApi: VsCodeGitApiAdapter, node: AdoptedTreeNode | undefined): Promise<void> {

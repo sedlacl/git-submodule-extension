@@ -1,15 +1,21 @@
+export interface SubmoduleCommitEntry {
+  sha: string;
+  subject: string;
+  nestedUpdates: readonly SubmodulePointerUpdate[];
+}
+
 export interface SubmodulePointerUpdate {
   path: string;
   beforeHead: string;
   afterHead: string;
   branch: string;
-  subjects: readonly string[];
   /** True when the pointer change is staged (HEAD → index). */
   staged: boolean;
+  commits: readonly SubmoduleCommitEntry[];
 }
 
 export interface SubmoduleChorePreviewOptions {
-  /** Optional subject line for Quick Input wiring; defaults to `chore: update submodules`. */
+  /** Optional subject line for Quick Input wiring; defaults to a deterministic or fallback subject. */
   subject?: string;
 }
 
@@ -18,8 +24,6 @@ export interface SubmoduleChorePreview {
   body: string;
   message: string;
   updates: readonly SubmodulePointerUpdate[];
-  hasUnstagedUpdates: boolean;
-  unstagedNote: string | null;
 }
 
 export interface SubmoduleChoreReadService {

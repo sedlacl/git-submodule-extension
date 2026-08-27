@@ -216,10 +216,21 @@ function buildHttpendpointTopology(
   checkout(httpAbs, stagedSha);
 
   checkout(mariAbs, "development/AFLEX");
-  const unstagedSha = commitFile(mariAbs, "notes.txt", "fixture pointer bump\n", "pointer bump");
+  checkout(nestedAbs, "aflex/6.3-production");
+  commitFile(
+    nestedAbs,
+    "src/SaveMessage.test.js",
+    "test('save payload type', () => {});\n",
+    "T8054 - Add SaveMessagePipelineProcessor tests and savePayloadType support",
+  );
+  runGit(mariAbs, ["add", nestedRelativePath]);
+  writeFile(path.join(mariAbs, "notes.txt"), "fixture pointer bump\n");
+  const unstagedSha = commitAll(
+    mariAbs,
+    "chore: update submodule uu_energygateway_datagatewayg01 to latest commit 9ee3d41",
+  );
   checkout(mariAbs, unstagedSha);
 
-  checkout(nestedAbs, "aflex/6.3-production");
   writeFile(path.join(nestedAbs, "dirty-local.txt"), "uncommitted nested change\n");
   const nestedUnstagedSha = runGit(nestedAbs, ["rev-parse", "HEAD~1"]);
   runGit(nestedAbs, ["checkout", "--detach", nestedUnstagedSha]);

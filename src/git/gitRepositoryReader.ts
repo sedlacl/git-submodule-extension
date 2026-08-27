@@ -95,6 +95,25 @@ export class GitRepositoryReader {
     }
   }
 
+  async readTreeGitlinks(cwd: string, treeish: string): Promise<GitlinkEntry[]> {
+    try {
+      const result = await this.cli.run({
+        cwd,
+        args: ["ls-tree", "-r", "-z", treeish],
+        allowedExitCodes: [0, 128],
+      });
+      if (result.exitCode !== 0) {
+        return [];
+      }
+      return parseLsTreeGitlinks(result.stdout);
+    } catch (error) {
+      if (error instanceof GitCliError) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   async readStatus(cwd: string): Promise<PorcelainStatus> {
     const result = await this.cli.run({
       cwd,

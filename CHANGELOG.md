@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-27
+
+### Changed
+
+- **Generate Submodule Chore** for nested submodules builds a deterministic commit body from nested gitlink pointers (no "Note" or "not staged" lines). A single updated leaf uses subject `chore: update <direct>: <leaf subject>`; AI generation runs only for the default multi-leaf message, without a custom prompt.
+- **View as Tree / List** no longer writes `scm.defaultViewMode` into workspace or `.vscode` settings. The choice is kept for the session in workspace state; the view still reads `scm.defaultViewMode` (default tree).
+
 ## [0.2.1] - 2026-08-26
 
 ### Added

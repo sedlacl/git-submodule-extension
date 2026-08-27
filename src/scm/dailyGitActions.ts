@@ -19,7 +19,7 @@ import {
   mergeCommitDraftWithChore,
   type GenerateCommitSubjectResult,
 } from "./generateCommitMessage.js";
-import { buildSubmoduleChoreMessage } from "./submoduleChoreMessage.js";
+import { buildSubmoduleChoreMessage, needsAiSubjectForChore } from "./submoduleChoreMessage.js";
 import type { SubmoduleChoreReadService } from "./submoduleChoreTypes.js";
 import type { AdoptedTreeNode, ChangeFileRef } from "../views/adoptedViewModel.js";
 
@@ -221,7 +221,21 @@ export class DailyGitActions {
       const existing = target.inputBoxValue;
       let aiSubject: string | undefined;
       let aiResult: GenerateCommitSubjectResult = { result: "unavailable" };
-      if (!existing.trim() && this.ui.generateCommitSubject) {
+
+      const choreStartedAt = action?.mark();
+      const preview = this.choreService ? await this.choreService.preview(rootPath) : null;
+      if (choreStartedAt !== undefined) {
+        action?.phase("submodule chore preview", choreStartedAt, {
+          "pointer updates": preview?.updates.length ?? 0,
+          result: preview ? "generated" : "empty",
+        });
+      }
+
+      if (
+        !existing.trim()
+        && this.ui.generateCommitSubject
+        && (!preview || needsAiSubjectForChore(preview.updates))
+      ) {
         const aiStartedAt = action?.mark();
         aiResult = await this.ui.generateCommitSubject(rootPath);
         aiSubject = aiResult.result === "generated" ? aiResult.subject.trim() || undefined : undefined;
@@ -234,14 +248,6 @@ export class DailyGitActions {
         }
       }
 
-      const choreStartedAt = action?.mark();
-      const preview = this.choreService ? await this.choreService.preview(rootPath) : null;
-      if (choreStartedAt !== undefined) {
-        action?.phase("submodule chore preview", choreStartedAt, {
-          "pointer updates": preview?.updates.length ?? 0,
-          result: preview ? "generated" : "empty",
-        });
-      }
       if (preview) {
         const seed = existing.trim() ? existing : (aiSubject ?? "");
         const chore = buildSubmoduleChoreMessage({

@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { CHANGE_GROUP_LABELS, ResourceStatus } from "../../../src/git/repositoryState.js";
 import {
   DEFAULT_CHANGES_TREE_SETTINGS,
+  parseSessionViewMode,
+  resolveViewMode,
+  withSessionViewMode,
+  readChangesTreeSettings,
   applyUntrackedSettings,
   emptyChangeGroups,
-  readChangesTreeSettings,
   repositoryBranchDescription,
   visibleTreeGroups,
   type ChangesTreeSettings,
@@ -144,5 +147,31 @@ describe("readChangesTreeSettings", () => {
     expect(settings.compactFolders).toBe(false);
     expect(settings.alwaysShowStagedChangesResourceGroup).toBe(false);
     expect(settings.openDiffOnClick).toBe(true);
+  });
+});
+
+describe("session view mode", () => {
+  it("defaults to tree when scm.defaultViewMode is unset", () => {
+    const settings = readChangesTreeSettings((_section, _key, fallback) => fallback);
+    expect(settings.viewMode).toBe("tree");
+    expect(resolveViewMode(settings.viewMode, undefined)).toBe("tree");
+  });
+
+  it("prefers session override over scm.defaultViewMode", () => {
+    const settings = readChangesTreeSettings((_section, key) => (key === "defaultViewMode" ? "tree" : undefined));
+    expect(withSessionViewMode(settings, "list").viewMode).toBe("list");
+    expect(resolveViewMode(settings.viewMode, "list")).toBe("list");
+  });
+
+  it("reads scm.defaultViewMode when no session override is stored", () => {
+    const settings = readChangesTreeSettings((_section, key) => (key === "defaultViewMode" ? "list" : undefined));
+    expect(withSessionViewMode(settings, undefined).viewMode).toBe("list");
+  });
+
+  it("parses stored session values and ignores invalid entries", () => {
+    expect(parseSessionViewMode("tree")).toBe("tree");
+    expect(parseSessionViewMode("list")).toBe("list");
+    expect(parseSessionViewMode("grid")).toBeUndefined();
+    expect(parseSessionViewMode(undefined)).toBeUndefined();
   });
 });

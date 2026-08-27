@@ -53,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       cli,
       restoreStatus: restore.status,
       extensionUri: context.extensionUri,
+      workspaceState: context.workspaceState,
       writeDiagnostic,
       actionDiagnostics,
     }),

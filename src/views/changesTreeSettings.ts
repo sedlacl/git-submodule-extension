@@ -15,6 +15,9 @@ export type UntrackedChangesMode = "mixed" | "separate" | "hidden";
 /** Built-in `scm.defaultViewMode`. */
 export type ScmViewMode = "list" | "tree";
 
+/** Extension workspace-state key for the view-title tree/list toggle (never written to settings). */
+export const SESSION_VIEW_MODE_KEY = "gitSubmodule.sessionViewMode";
+
 export interface ChangesTreeSettings {
   readonly untrackedChanges: UntrackedChangesMode;
   readonly alwaysShowStagedChangesResourceGroup: boolean;
@@ -157,6 +160,27 @@ function shortCommit(commit: string | undefined): string {
   return commit && commit.length >= 8 ? commit.slice(0, 8) : (commit ?? "");
 }
 
+export function parseSessionViewMode(value: unknown): ScmViewMode | undefined {
+  if (value === "list" || value === "tree") {
+    return value;
+  }
+  return undefined;
+}
+
+export function resolveViewMode(configViewMode: ScmViewMode, sessionOverride: ScmViewMode | undefined): ScmViewMode {
+  return sessionOverride ?? configViewMode;
+}
+
+export function withSessionViewMode(
+  settings: ChangesTreeSettings,
+  sessionOverride: ScmViewMode | undefined,
+): ChangesTreeSettings {
+  if (sessionOverride === undefined) {
+    return settings;
+  }
+  return { ...settings, viewMode: sessionOverride };
+}
+
 export function readChangesTreeSettings(get: (section: string, key: string, fallback: unknown) => unknown): ChangesTreeSettings {
   return {
     untrackedChanges: readEnum(get("git", "untrackedChanges", DEFAULT_CHANGES_TREE_SETTINGS.untrackedChanges), [
@@ -178,5 +202,8 @@ export function readChangesTreeSettings(get: (section: string, key: string, fall
 }
 
 function readEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
-  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    return fallback;
+  }
+  return value as T;
 }
