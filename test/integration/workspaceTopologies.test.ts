@@ -7,6 +7,7 @@ import { toSubmoduleViewModel } from "../../src/git/interfaces.js";
 import type { SubmoduleNode } from "../../src/git/types.js";
 import { CHANGE_GROUP_LABELS } from "../../src/git/repositoryState.js";
 import { SubmoduleChoreReadService } from "../../src/scm/submoduleChoreService.js";
+import { AdoptedTreeController } from "../../src/views/adoptedTreeController.js";
 import { buildAdoptedTree, type AdoptedTreeNode } from "../../src/views/adoptedViewModel.js";
 import { DEFAULT_CHANGES_TREE_SETTINGS } from "../../src/views/changesTreeSettings.js";
 import { collectRepositorySnapshots, createGitCli, makeTempRoot, removeTempRoot } from "./helpers.js";
@@ -93,6 +94,17 @@ describe("generated fixture topologies", () => {
       kind: "unstaged",
     });
     expect(unstagedFiles.some((entry) => entry.path.replace(/\\/g, "/").includes("notes.txt"))).toBe(true);
+    const nestedGitlinkEntry = unstagedFiles.find(
+      (entry) => entry.path.replace(/\\/g, "/") === "submodules/uu_energygateway_datagatewayg01",
+    );
+    expect(nestedGitlinkEntry).toMatchObject({
+      status: "modified",
+      oldMode: "160000",
+      newMode: "160000",
+    });
+    expect(nestedGitlinkEntry?.oldSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(nestedGitlinkEntry?.newSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(nestedGitlinkEntry?.oldSha).not.toBe(nestedGitlinkEntry?.newSha);
 
     const nestedFiles = await model.listNameStatus({
       repoRoot: nested!.rootPath,
@@ -101,6 +113,14 @@ describe("generated fixture topologies", () => {
       kind: "unstaged",
     });
     expect(nestedFiles.length).toBeGreaterThan(0);
+
+    const historicalNestedFiles = await model.listNameStatus({
+      repoRoot: nested!.rootPath,
+      fromSha: nestedGitlinkEntry!.oldSha!,
+      toSha: nestedGitlinkEntry!.newSha!,
+      kind: "unstaged",
+    });
+    expect(historicalNestedFiles.some((entry) => entry.path.includes("SaveMessage"))).toBe(true);
   }, 60_000);
 
   it("keeps repeated source checkouts independent across branches", async () => {
@@ -167,6 +187,26 @@ describe("generated fixture topologies", () => {
     const nested = byLabel(commonNode, "uu_energygateway_datagatewayg01");
     expect(byKind(nested, "adopted-group")).toEqual([]);
     expect(nested?.children.some((child) => child.kind === "change-group")).toBe(true);
+
+    const controller = new AdoptedTreeController(model, () => undefined, () => collectRepositorySnapshots(snapshot));
+    await controller.refresh();
+    const controllerRoots = await controller.getRootNodes();
+    const controllerHttp = controllerRoots.find((node) => node.label === "httpendpoint");
+    const controllerChanges = byLabel(controllerHttp, CHANGE_GROUP_LABELS.workingTree);
+    const controllerCommonGitlink = findByRelativePath(controllerChanges, "submodules/usy_idsmari_commong01");
+    const commonAdopted = controllerCommonGitlink?.children[0];
+    expect(commonAdopted?.kind).toBe("adopted-group");
+    const commonAdoptedChildren = await controller.getChildren(commonAdopted!);
+    const historicalPointer = findPointerByPath(commonAdoptedChildren, "submodules/uu_energygateway_datagatewayg01");
+    expect(historicalPointer?.decoration?.badge).toBe("S");
+    expect(historicalPointer?.children[0]?.kind).toBe("adopted-group");
+    expect(historicalPointer?.children[0]?.diffSpec?.repoRoot).toBe(nested?.repositoryRoot);
+    const nestedAdoptedFiles = await controller.getChildren(historicalPointer!.children[0]!);
+    expect(
+      nestedAdoptedFiles.some((node) =>
+        collectLabels(node).some((label) => label.includes("SaveMessage")),
+      ),
+    ).toBe(true);
   }, 60_000);
 
   it("keeps infra-deploy nested checkouts and multi-root siblings without parent Adopted Changes", async () => {
@@ -247,6 +287,23 @@ function findByRelativePath(node: AdoptedTreeNode | undefined, relativePath: str
     }
   }
   return undefined;
+}
+
+function findPointerByPath(nodes: readonly AdoptedTreeNode[], relativePath: string): AdoptedTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.kind === "pointer" && (node.pointerPath === relativePath || node.label === relativePath.split("/").pop())) {
+      return node;
+    }
+    const nested = findPointerByPath(node.children, relativePath);
+    if (nested) {
+      return nested;
+    }
+  }
+  return undefined;
+}
+
+function collectLabels(node: AdoptedTreeNode): string[] {
+  return [node.label, node.fileDiff?.path ?? "", ...node.children.flatMap(collectLabels)].filter(Boolean);
 }
 
 function byKind(node: AdoptedTreeNode | undefined, kind: AdoptedTreeNode["kind"]): AdoptedTreeNode[] {

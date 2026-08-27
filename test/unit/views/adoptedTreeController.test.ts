@@ -4,7 +4,7 @@ import type { AdoptedDiffReader, AdoptedDiffSpec, GitModelProvider } from "../..
 import { ResourceStatus, type RepositoryStateSnapshot } from "../../../src/git/repositoryState.js";
 import type { GitRepoNode, NameStatusEntry, RepoPins, SubmoduleNode, WorkspaceGitModel, WorkspaceRootNode } from "../../../src/git/types.js";
 import { AdoptedTreeController } from "../../../src/views/adoptedTreeController.js";
-import { treeItemCommand } from "../../../src/views/adoptedViewModel.js";
+import { treeItemCommand, type AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
 import { DEFAULT_CHANGES_TREE_SETTINGS, emptyChangeGroups, type ChangesTreeSettings } from "../../../src/views/changesTreeSettings.js";
 import { COMMANDS } from "../../../src/views/constants.js";
 
@@ -166,6 +166,93 @@ describe("AdoptedTreeController", () => {
     expect(fromParent).toHaveLength(3);
     const fromSubmodule = await controller.filesForOpenAll(lib!);
     expect(fromSubmodule).toHaveLength(0);
+  });
+
+  it("expands historical nested gitlinks under Adopted Changes using tree SHAs", async () => {
+    const nestedFrom = "dddddddddddddddddddddddddddddddddddddddd";
+    const nestedTo = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    const liveCheckout = "ffffffffffffffffffffffffffffffffffffffff";
+    const nested = submodule("/ws/http/lib/data", "/ws/http/lib", "submodules/uu_energygateway_datagatewayg01", {
+      headGitlinkSha: nestedFrom,
+      indexGitlinkSha: nestedFrom,
+      checkoutHeadSha: liveCheckout,
+    });
+    nested.workingState = {
+      ...nested.workingState,
+      detached: true,
+      pointerMismatch: true,
+    };
+    const parent = submodule("/ws/http/lib", "/ws/http", "lib", {
+      headGitlinkSha: HEAD,
+      indexGitlinkSha: INDEX,
+      checkoutHeadSha: CHECKOUT,
+    });
+    parent.children = [nested];
+    const root: WorkspaceRootNode = {
+      id: "/ws/http",
+      kind: "workspace-root",
+      rootPath: "/ws/http",
+      workspaceFolderPath: "/ws/http",
+      displayName: "http",
+      children: [parent],
+    };
+    const snapshot: WorkspaceGitModel = {
+      roots: [root],
+      nodesByRootPath: new Map<string, GitRepoNode>([
+        [root.rootPath, root],
+        [parent.rootPath, parent],
+        [nested.rootPath, nested],
+      ]),
+    };
+    const fake = new FakeModel(snapshot);
+    fake.nameStatusImpl = async (spec) => {
+      if (spec.repoRoot === "/ws/http/lib") {
+        return [
+          {
+            status: "modified",
+            path: "submodules/uu_energygateway_datagatewayg01",
+            oldMode: "160000",
+            newMode: "160000",
+            oldSha: nestedFrom,
+            newSha: nestedTo,
+          },
+        ];
+      }
+      if (spec.repoRoot === "/ws/http/lib/data") {
+        expect(spec.fromSha).toBe(nestedFrom);
+        expect(spec.toSha).toBe(nestedTo);
+        expect(spec.fromSha).not.toBe(liveCheckout);
+        expect(spec.toSha).not.toBe(liveCheckout);
+        return [{ status: "added", path: "gateway.txt" }];
+      }
+      return [];
+    };
+    const controller = new AdoptedTreeController(fake);
+    const roots = await controller.getRootNodes();
+    const stagedAdopted = roots[0]?.children
+      .find((node) => node.changeGroup === "index")
+      ?.children[0]?.children[0];
+    expect(stagedAdopted?.kind).toBe("adopted-group");
+
+    const level1 = await controller.getChildren(stagedAdopted!);
+    const pointer = findDescendant(level1, (node) => node.kind === "pointer");
+    expect(pointer?.decoration?.badge).toBe("S");
+    expect(pointer?.description).toBe(`${nestedFrom.slice(0, 7)} → ${nestedTo.slice(0, 7)}`);
+    expect(pointer?.children[0]?.diffSpec).toEqual({
+      repoRoot: "/ws/http/lib/data",
+      fromSha: nestedFrom,
+      toSha: nestedTo,
+      kind: "staged",
+    });
+
+    const nestedFiles = await controller.getChildren(pointer!.children[0]!);
+    expect(nestedFiles.map((node) => node.fileDiff?.path)).toEqual(["gateway.txt"]);
+    expect(fake.nameStatusCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ repoRoot: "/ws/http/lib", fromSha: HEAD, toSha: INDEX }),
+        expect.objectContaining({ repoRoot: "/ws/http/lib/data", fromSha: nestedFrom, toSha: nestedTo }),
+      ]),
+    );
   });
 
   it("coalesces duplicate lazy loads and hydrates independent adopted groups in parallel", async () => {
@@ -482,3 +569,19 @@ describe("AdoptedTreeController", () => {
     expect(controller.workspaceFoldersNeedRediscovery()).toBe(false);
   });
 });
+
+function findDescendant(
+  nodes: readonly AdoptedTreeNode[],
+  predicate: (node: AdoptedTreeNode) => boolean,
+): AdoptedTreeNode | undefined {
+  for (const node of nodes) {
+    if (predicate(node)) {
+      return node;
+    }
+    const nested = findDescendant(node.children, predicate);
+    if (nested) {
+      return nested;
+    }
+  }
+  return undefined;
+}

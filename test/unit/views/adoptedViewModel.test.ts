@@ -295,6 +295,90 @@ describe("fileNodesFromNameStatus", () => {
     expect(treeItemFileKindIcon(nodes[1]!.children[0]!)).toBe("file");
     expect(nodes[1]?.children.map((child) => child.label)).toEqual(["index.ts", "new.ts"]);
   });
+
+  it("renders historical gitlinks as recursive pointer rows using tree SHAs, not live pins", () => {
+    const nestedFrom = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    const nestedTo = "ffffffffffffffffffffffffffffffffffffffff";
+    const liveCheckout = CHECKOUT;
+    const child = submodule({
+      rootPath: "/ws/http/common/data",
+      parentRootPath: "/ws/http/common",
+      relativePath: "submodules/uu_energygateway_datagatewayg01",
+      pins: { headGitlinkSha: NESTED_HEAD, indexGitlinkSha: NESTED_HEAD, checkoutHeadSha: liveCheckout },
+      workingState: { detached: true, pointerMismatch: true },
+    });
+    const commonSpec = {
+      repoRoot: "/ws/http/common",
+      fromSha: HEAD,
+      toSha: INDEX,
+      kind: "unstaged" as const,
+    };
+    const nodes = fileNodesFromNameStatus(
+      commonSpec,
+      [
+        {
+          status: "modified",
+          path: "submodules/uu_energygateway_datagatewayg01",
+          oldMode: "160000",
+          newMode: "160000",
+          oldSha: nestedFrom,
+          newSha: nestedTo,
+        },
+        { status: "modified", path: "notes.txt", oldMode: "100644", newMode: "100644", oldSha: HEAD, newSha: INDEX },
+      ],
+      { ...DEFAULT_CHANGES_TREE_SETTINGS, viewMode: "list" },
+      [child],
+    );
+
+    const pointer = nodes.find((node) => node.kind === "pointer");
+    expect(pointer).toMatchObject({
+      kind: "pointer",
+      label: "submodules/uu_energygateway_datagatewayg01",
+      description: `${nestedFrom.slice(0, 7)} → ${nestedTo.slice(0, 7)}`,
+      decoration: { badge: "S", tooltip: "Submodule" },
+      collapsible: true,
+      contextValue: CONTEXT.adoptedPointer,
+    });
+    expect(pointer?.diffSpec).toBeUndefined();
+    expect(pointer?.children[0]).toMatchObject({
+      kind: "adopted-group",
+      label: "Adopted Changes",
+      expandByDefault: false,
+      diffSpec: {
+        repoRoot: "/ws/http/common/data",
+        fromSha: nestedFrom,
+        toSha: nestedTo,
+        kind: "unstaged",
+      },
+    });
+    expect(pointer?.children[0]?.diffSpec?.fromSha).not.toBe(liveCheckout);
+    expect(pointer?.children[0]?.diffSpec?.toSha).not.toBe(liveCheckout);
+    expect(treeCollapsibleMode(pointer!)).toBe("expanded");
+    expect(treeItemFileKindIcon(pointer!)).toBe("file");
+    expect(nodes.find((node) => node.label === "notes.txt")?.kind).toBe("file");
+  });
+
+  it("keeps unrecognized gitlink rows as ordinary files when the child is missing", () => {
+    const nodes = fileNodesFromNameStatus(
+      spec,
+      [
+        {
+          status: "modified",
+          path: "submodules/missing",
+          oldMode: "160000",
+          newMode: "160000",
+          oldSha: HEAD,
+          newSha: INDEX,
+        },
+      ],
+      { ...DEFAULT_CHANGES_TREE_SETTINGS, viewMode: "list" },
+      [],
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]?.kind).toBe("file");
+    expect(nodes[0]?.collapsible).toBe(false);
+    expect(nodes[0]?.decoration?.badge).toBe("M");
+  });
 });
 
 describe("submodule decorations", () => {

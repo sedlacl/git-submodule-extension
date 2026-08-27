@@ -1,8 +1,8 @@
 import type { AdoptedDiffReader, AdoptedDiffSpec, GitModelProvider } from "../git/interfaces.js";
 import { toSubmoduleViewModel } from "../git/interfaces.js";
-import { normalizeRepoPath } from "../git/pathUtils.js";
+import { normalizeRepoPath, repoMapGet } from "../git/pathUtils.js";
 import type { RepositoryStateSnapshot } from "../git/repositoryState.js";
-import type { NameStatusEntry, WorkspaceGitModel } from "../git/types.js";
+import type { NameStatusEntry, SubmoduleNode, WorkspaceGitModel } from "../git/types.js";
 import type { RestoreResult } from "../restore/branchRestoreService.js";
 import {
   DEFAULT_CHANGES_TREE_SETTINGS,
@@ -348,11 +348,21 @@ export class AdoptedTreeController {
     }
     const cached = await this.loadFileList(node.diffSpec);
     this.applyAdoptedCount(node, cached);
-    return nodesFromCache(node.diffSpec, cached, this.settings());
+    return nodesFromCache(node.diffSpec, cached, this.settings(), this.childReposFor(node.diffSpec.repoRoot));
   }
 
   private async loadFileNodes(spec: AdoptedDiffSpec): Promise<AdoptedTreeNode[]> {
-    return nodesFromCache(spec, await this.loadFileList(spec), this.settings());
+    return nodesFromCache(
+      spec,
+      await this.loadFileList(spec),
+      this.settings(),
+      this.childReposFor(spec.repoRoot),
+    );
+  }
+
+  private childReposFor(repoRoot: string): readonly SubmoduleNode[] {
+    const node = this.cachedModel ? repoMapGet(this.cachedModel.nodesByRootPath, repoRoot) : undefined;
+    return node?.children ?? [];
   }
 
   private async loadFileList(spec: AdoptedDiffSpec, observer?: FileLoadObserver): Promise<CachedFileList> {
@@ -469,8 +479,13 @@ function cacheKey(spec: AdoptedDiffSpec): string {
   return `${spec.repoRoot}|${spec.kind}|${spec.fromSha}|${spec.toSha}`;
 }
 
-function nodesFromCache(spec: AdoptedDiffSpec, cached: CachedFileList, settings: ChangesTreeSettings): AdoptedTreeNode[] {
-  return cached.ok ? fileNodesFromNameStatus(spec, cached.entries, settings) : cached.nodes;
+function nodesFromCache(
+  spec: AdoptedDiffSpec,
+  cached: CachedFileList,
+  settings: ChangesTreeSettings,
+  childRepos: readonly SubmoduleNode[] = [],
+): AdoptedTreeNode[] {
+  return cached.ok ? fileNodesFromNameStatus(spec, cached.entries, settings, childRepos) : cached.nodes;
 }
 
 function collectAdoptedGroups(nodes: readonly AdoptedTreeNode[]): AdoptedTreeNode[] {

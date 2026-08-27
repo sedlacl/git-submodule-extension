@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import { GitCliError, type GitCli } from "./gitCli.js";
 import { parseGitmodules } from "./gitmodulesParser.js";
 import { parseLsFilesGitlinks, parseLsTreeGitlinks } from "./gitlinkParser.js";
-import { parseNameStatusZ } from "./nameStatusParser.js";
+import { parseRawDiffZ } from "./nameStatusParser.js";
 import { parsePorcelainV2, GIT_IN_PROGRESS_MARKERS } from "./repoStatus.js";
 import { assertSha } from "./sha.js";
 import { sameRepoPath } from "./pathUtils.js";
@@ -143,8 +143,8 @@ export class GitRepositoryReader {
     const to = assertSha(toSha, "toSha");
     const result = await this.cli.run({
       cwd,
-      args: ["diff", "--name-status", "-z", "--find-renames", from, to],
+      args: ["diff", "--raw", "-z", "--no-abbrev", "--find-renames", from, to],
     });
-    return parseNameStatusZ(result.stdout);
+    return parseRawDiffZ(result.stdout);
   }
 }

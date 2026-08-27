@@ -93,6 +93,14 @@ export interface NameStatusEntry {
   path: string;
   oldPath?: string;
   similarity?: number;
+  /** Octal mode from `git diff --raw` (e.g. `100644`, `160000`). */
+  oldMode?: string;
+  /** Octal mode from `git diff --raw` (e.g. `100644`, `160000`). */
+  newMode?: string;
+  /** Full object name from the left side of a raw diff (nulled as `0…0` when absent). */
+  oldSha?: string;
+  /** Full object name from the right side of a raw diff (nulled as `0…0` when absent). */
+  newSha?: string;
 }
 
 interface GitNodeBase {

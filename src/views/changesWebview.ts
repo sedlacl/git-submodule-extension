@@ -687,6 +687,8 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     }
     const html = this.measureSerialization(generation, () => this.renderTreeHtml(hydrated, true));
     await this.publishRender(generation, "final", html);
+    // Nested historical gitlinks may introduce new Adopted Changes groups; hydrate their counts.
+    void this.hydrateAdoptedCounts(generation, view, hydrated);
   }
 
   private hasExpandedAdopted(nodes: readonly AdoptedTreeNode[]): boolean {

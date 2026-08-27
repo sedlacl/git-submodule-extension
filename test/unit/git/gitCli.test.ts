@@ -81,4 +81,32 @@ describe("GitRepositoryReader.listNameStatus", () => {
       /fromSha/,
     );
   });
+
+  it("runs raw diff so gitlink modes and SHAs survive", async () => {
+    const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const INDEX = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const calls: string[][] = [];
+    const reader = new GitRepositoryReader({
+      run: async (request) => {
+        calls.push([...request.args]);
+        return {
+          stdout: [`:160000 160000 ${HEAD} ${INDEX} M`, "submodules/uu_energygateway_datagatewayg01", ""].join("\0"),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    });
+
+    await expect(reader.listNameStatus("/tmp/repo", HEAD, INDEX)).resolves.toEqual([
+      {
+        status: "modified",
+        path: "submodules/uu_energygateway_datagatewayg01",
+        oldMode: "160000",
+        newMode: "160000",
+        oldSha: HEAD,
+        newSha: INDEX,
+      },
+    ]);
+    expect(calls).toEqual([["diff", "--raw", "-z", "--no-abbrev", "--find-renames", HEAD, INDEX]]);
+  });
 });

@@ -95,6 +95,8 @@ export interface AdoptedTreeNode {
   adoptedCountError?: string;
   fileDiff?: AdoptedFileDiff;
   change?: ChangeFileRef;
+  /** Relative POSIX path for historical gitlink rows nested under Adopted Changes. */
+  pointerPath?: string;
   resourceUri?: string;
   clickCommand?: { command: string; title: string };
   restoreTarget?: RestoreCommandContext;
@@ -277,12 +279,14 @@ export function fileNodesFromNameStatus(
   spec: AdoptedDiffSpec,
   entries: readonly NameStatusEntry[],
   settings: ChangesTreeSettings = DEFAULT_CHANGES_TREE_SETTINGS,
+  childRepos: readonly SubmoduleNode[] = [],
 ): AdoptedTreeNode[] {
   if (entries.length === 0) {
     return [];
   }
 
-  const files = entries.map((entry) => toFileNode(spec, entry));
+  const gitlinks = gitlinkByPath(childRepos);
+  const files = entries.map((entry) => toAdoptedEntryNode(spec, entry, gitlinks.get(entry.path)));
   return settings.viewMode === "tree"
     ? nestNodesByPath(files, settings.compactFolders, (relativePath, children) =>
         buildPathFolderNode(spec.repoRoot, relativePath, children),
@@ -543,7 +547,7 @@ interface FolderTrie {
 }
 
 function nestPath(node: AdoptedTreeNode): string {
-  return node.fileDiff?.path ?? node.change?.resource.relativePath ?? node.label;
+  return node.fileDiff?.path ?? node.change?.resource.relativePath ?? node.pointerPath ?? node.label;
 }
 
 function nestNodesByPath(
@@ -724,6 +728,91 @@ function gitlinkTooltip(
   return lines.join("\n");
 }
 
+function toAdoptedEntryNode(
+  spec: AdoptedDiffSpec,
+  entry: NameStatusEntry,
+  gitlink: SubmoduleNode | undefined,
+): AdoptedTreeNode {
+  if (isHistoricalGitlinkPointer(entry) && gitlink) {
+    return toHistoricalGitlinkNode(spec, entry, gitlink);
+  }
+  return toFileNode(spec, entry);
+}
+
+/** Mode `160000` on both sides with distinct SHAs — recurse into the child commit range. */
+export function isHistoricalGitlinkPointer(entry: NameStatusEntry): boolean {
+  return (
+    entry.oldMode === "160000" &&
+    entry.newMode === "160000" &&
+    Boolean(entry.oldSha) &&
+    Boolean(entry.newSha) &&
+    entry.oldSha !== entry.newSha
+  );
+}
+
+function toHistoricalGitlinkNode(
+  parentSpec: AdoptedDiffSpec,
+  entry: NameStatusEntry,
+  gitlink: SubmoduleNode,
+): AdoptedTreeNode {
+  const nestedSpec: AdoptedDiffSpec = {
+    repoRoot: gitlink.rootPath,
+    fromSha: entry.oldSha!,
+    toSha: entry.newSha!,
+    kind: parentSpec.kind,
+  };
+  const adopted = buildHistoricalGitlinkAdoptedGroup(parentSpec, nestedSpec, entry.path);
+  return {
+    id: `pointer:${parentSpec.repoRoot}:${parentSpec.kind}:${entry.path}`,
+    kind: "pointer",
+    repositoryRoot: gitlink.rootPath,
+    label: entry.path,
+    description: `${shortSha(entry.oldSha)} → ${shortSha(entry.newSha)}`,
+    tooltip: historicalGitlinkTooltip(entry, nestedSpec),
+    collapsible: true,
+    expandByDefault: true,
+    contextValue: CONTEXT.adoptedPointer,
+    iconId: "file",
+    themeColorId: SUBMODULE_DECORATION.themeColorId,
+    decoration: SUBMODULE_DECORATION,
+    pointerPath: entry.path,
+    children: [adopted],
+  };
+}
+
+function buildHistoricalGitlinkAdoptedGroup(
+  parentSpec: AdoptedDiffSpec,
+  nestedSpec: AdoptedDiffSpec,
+  relativePath: string,
+): AdoptedTreeNode {
+  return {
+    id: `adopted:${parentSpec.repoRoot}:${parentSpec.kind}:${relativePath}`,
+    kind: "adopted-group",
+    repositoryRoot: nestedSpec.repoRoot,
+    label: "Adopted Changes",
+    description: undefined,
+    adoptedCountError: undefined,
+    tooltip:
+      nestedSpec.kind === "staged"
+        ? "HEAD gitlink → index gitlink (nested)"
+        : "index gitlink → checkout HEAD (nested)",
+    collapsible: true,
+    expandByDefault: false,
+    contextValue: CONTEXT.adoptedGroup,
+    iconId: "",
+    diffSpec: nestedSpec,
+    children: [],
+  };
+}
+
+function historicalGitlinkTooltip(entry: NameStatusEntry, spec: AdoptedDiffSpec): string {
+  return [
+    "Submodule",
+    entry.path,
+    `${spec.kind}: ${shortSha(spec.fromSha)} → ${shortSha(spec.toSha)}`,
+  ].join("\n");
+}
+
 function toFileNode(spec: AdoptedDiffSpec, entry: NameStatusEntry): AdoptedTreeNode {
   const decoration = fileDecoration(entry.status);
   const icon = FILE_ICON[entry.status];
@@ -841,7 +930,7 @@ export function repoHasOwnCommitChanges(node: AdoptedTreeNode): boolean {
 }
 
 export function usesThemeFileIcon(node: AdoptedTreeNode): boolean {
-  if (node.kind === "file" || node.kind === "folder") {
+  if (node.kind === "file" || node.kind === "folder" || node.kind === "pointer") {
     return true;
   }
   return node.kind === "change" && node.iconId === "file";

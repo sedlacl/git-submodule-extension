@@ -11,6 +11,7 @@ export {
   fileDecoration,
   fileNodesFromNameStatus,
   hasPropagatedSubmoduleChanges,
+  isHistoricalGitlinkPointer,
   repoHasOwnCommitChanges,
   propagatedSubmoduleDecoration,
   restoreBlockedSummary,
