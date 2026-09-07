@@ -28,7 +28,6 @@ export class BranchReconciler {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly parentLocks = new Map<string, Promise<void>>();
   private readonly childLocks = new Map<string, Promise<void>>();
-  private readonly errors = new Map<string, string>();
 
   constructor(
     private readonly cli: GitCli,
@@ -200,18 +199,10 @@ export class BranchReconciler {
     return generation === 0 || this.generations.get(parent) === generation;
   }
 
+  /** Publish every evaluated child, including an unchanged blocked reason. */
   private publish(parent: string, generation: number, result: RestoreResult): void {
     if (!this.current(parent, generation)) {
       return;
-    }
-    const key = `${parent}\0${result.path}`;
-    if (result.action === "blocked") {
-      if (this.errors.get(key) === result.detail) {
-        return;
-      }
-      this.errors.set(key, result.detail);
-    } else {
-      this.errors.delete(key);
     }
     this.onResult?.(result);
   }

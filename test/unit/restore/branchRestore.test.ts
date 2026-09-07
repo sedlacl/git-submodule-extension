@@ -172,7 +172,7 @@ describe("BranchReconciler event loop", () => {
     expect(results).toContain("committed .gitmodules has no branch");
   });
 
-  it("debounces/coalesces events and deduplicates identical blocked errors", async () => {
+  it("debounces/coalesces events and re-emits unchanged blocked results on retry", async () => {
     vi.useFakeTimers();
     const results: string[] = [];
     const restore: BranchRestoreExecutor = {
@@ -194,7 +194,7 @@ describe("BranchReconciler event loop", () => {
     await vi.advanceTimersByTimeAsync(25);
     expect(results).toEqual(["blocked:missing ref"]);
     await reconciler.retry(parent);
-    expect(results).toEqual(["blocked:missing ref"]);
+    expect(results).toEqual(["blocked:missing ref", "blocked:missing ref"]);
     vi.useRealTimers();
   });
 

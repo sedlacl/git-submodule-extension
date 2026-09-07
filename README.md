@@ -71,7 +71,7 @@ Blocked restore cases appear on the submodule row, in the **Git Submodule** outp
 
 Open **View → Output**, then select **Git Submodule**. Every line uses one local wall-clock timestamp. Load lines retain `[changes #N]`: they identify one load generation and its trigger, bootstrap work, recursive discovery, tree build, serialization/post/render acknowledgement, total usable-tree time, result, and slowest phase. A separate `adopted counts` line reports background count hydration, including cache hits, Git diff calls, and the four-call concurrency bound. `stale/cancelled` means a newer generation replaced the load; it never represents a final tree.
 
-User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text.
+User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text. Restore writes `[blocked]`, `[attached]`, or `[already-attached]` for every child it evaluates, including an unchanged blocked reason on retry.
 
 ```text
 [15:57:12.184] [action #14] generate message started (repository: web-app)
@@ -79,6 +79,8 @@ User actions use a process-wide, monotonically increasing `[action #N]` id with 
 [15:57:12.640] [action #14] generate message AI 428ms (provider: git.generateCommitMessage; result: generated)
 [15:57:12.642] [action #14] generate message completed 458ms (merge: AI subject + appended chore; pointer updates: 2)
 [15:59:00.100] [action #15] commit cancelled 1.20s (reason: empty message; staged: 2; unstaged: 0; smart commit: no)
+[12:20:09.326] [blocked] submodules/child: pinned commit is not an ancestor of origin/aflex/6.3
+[12:20:09.374] [action #11] retry restore completed 1.36s (repositories: 1; blocked: 1)
 ```
 
 Action coverage includes Generate Message/Submodule Chore, every stage/unstage/discard variant, commit, checkout, fetch, pull, sync, publish, refresh, retry restore, and explicit submodule-remote fetch. Open diff/file commands are omitted because they are high-frequency navigation and would add noise.
@@ -101,7 +103,7 @@ A child is attached (`git switch -C <branch> <pin>` plus upstream) only when all
 - the pin is an ancestor of `origin/<branch>`
 - the local branch has no unique commits versus `origin/<branch>`
 
-If any check fails, the child is left untouched and the reason is shown. Retry repeats the same checks. Fetch is a separate, confirmed command.
+If any check fails, the child is left untouched and the reason is shown on the row, status bar, and as a `[blocked] <path>: <reason>` line in the Git Submodule output. Retry repeats the same checks and logs the blocked reason again even when it has not changed. Fetch is a separate, confirmed command.
 
 ## Versioning
 

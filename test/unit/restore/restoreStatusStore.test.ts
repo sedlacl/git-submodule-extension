@@ -30,4 +30,20 @@ describe("RestoreStatusStore", () => {
     expect(store.isRunning).toBe(false);
     expect(ticks).toBeGreaterThanOrEqual(3);
   });
+
+  it("does not re-emit an unchanged blocked result", () => {
+    const store = new RestoreStatusStore();
+    let ticks = 0;
+    store.subscribe(() => {
+      ticks += 1;
+    });
+    store.put(result("blocked"));
+    const afterFirst = ticks;
+    store.put(result("blocked"));
+    expect(ticks).toBe(afterFirst);
+    expect(store.blocked()).toHaveLength(1);
+    store.put({ ...result("blocked"), detail: "pinned commit is not an ancestor of origin/main" });
+    expect(ticks).toBe(afterFirst + 1);
+    expect(store.get("/repo/mod")?.detail).toBe("pinned commit is not an ancestor of origin/main");
+  });
 });

@@ -91,10 +91,10 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
       onDidChangeRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
     }),
     vscode.commands.registerCommand(RESTORE_COMMANDS.retry, (arg?: unknown) =>
-      retryRestore(options.actionDiagnostics, coordinator, options.gitApi, arg),
+      retryRestore(options.actionDiagnostics, coordinator, options.gitApi, status, arg),
     ),
     vscode.commands.registerCommand(RESTORE_COMMANDS.fetch, (arg?: unknown) =>
-      fetchWithConfirmation(options.actionDiagnostics, coordinator, arg),
+      fetchWithConfirmation(options.actionDiagnostics, coordinator, status, arg),
     ),
   ];
 
@@ -131,16 +131,18 @@ async function retryRestore(
   diagnostics: ActionDiagnostics,
   coordinator: RestoreCoordinator,
   gitApi: VsCodeGitApiAdapter,
+  status: RestoreStatusStore,
   arg: unknown,
 ): Promise<void> {
   const target = asRestoreContext(arg);
   const roots = target ? [target.parentRootPath] : gitApi.getWorkspaceFolderPaths();
-  await runRetry(diagnostics, coordinator, roots, Boolean(target));
+  await runRetry(diagnostics, coordinator, status, roots, Boolean(target));
 }
 
 async function runRetry(
   diagnostics: ActionDiagnostics,
   coordinator: RestoreCoordinator,
+  status: RestoreStatusStore,
   roots: readonly string[],
   single: boolean,
 ): Promise<void> {
@@ -151,7 +153,7 @@ async function runRetry(
     } else {
       await coordinator.retryMany(roots);
     }
-    action.completed({ repositories: roots.length });
+    action.completed({ repositories: roots.length, blocked: status.blocked().length });
   } catch (error) {
     action.failed(error);
     throw error;
@@ -161,6 +163,7 @@ async function runRetry(
 async function fetchWithConfirmation(
   diagnostics: ActionDiagnostics,
   coordinator: RestoreCoordinator,
+  status: RestoreStatusStore,
   arg: unknown,
 ): Promise<void> {
   const target = asRestoreContext(arg);
@@ -210,7 +213,7 @@ async function fetchWithConfirmation(
     "Retry restore",
   );
   if (next === "Retry restore") {
-    await runRetry(diagnostics, coordinator, [target.parentRootPath], true);
+    await runRetry(diagnostics, coordinator, status, [target.parentRootPath], true);
   }
 }
 

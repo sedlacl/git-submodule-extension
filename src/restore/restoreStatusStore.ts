@@ -23,6 +23,10 @@ export class RestoreStatusStore {
   put(result: RestoreResult): void {
     const key = canonicalizeRepoPath(result.childRootPath);
     if (result.action === "blocked") {
+      const previous = this.byChild.get(key);
+      if (previous?.action === "blocked" && previous.detail === result.detail && previous.path === result.path) {
+        return;
+      }
       this.byChild.set(key, result);
     } else {
       this.byChild.delete(key);
