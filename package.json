@@ -102,6 +102,12 @@
         "icon": "$(arrow-down)"
       },
       {
+        "command": "gitSubmodule.pullRecurseSubmodules",
+        "title": "Pull (Recurse Submodules)",
+        "category": "Git Submodule",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "gitSubmodule.sync",
         "title": "Sync",
         "category": "Git Submodule",

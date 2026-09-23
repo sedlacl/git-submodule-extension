@@ -105,6 +105,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     vscode.workspace.registerTextDocumentContentProvider(GIT_SHOW_SCHEME, contentProvider),
     registerDailyGitActions({
       gitApi: options.gitApi,
+      cli: options.cli,
       choreService: new SubmoduleChoreReadService(options.cli),
       actionDiagnostics: options.actionDiagnostics,
       postActionRefresh: () => {

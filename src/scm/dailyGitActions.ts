@@ -5,6 +5,7 @@ import {
   type ActionOutcome,
   type ActionRun,
 } from "../actionDiagnostics.js";
+import type { GitCli } from "../git/gitCli.js";
 import { normalizeRepoPath } from "../git/pathUtils.js";
 import {
   ResourceStatus,
@@ -55,6 +56,9 @@ export function commitMessagePlaceholder(branchName: string | undefined): string
   return branchName ? `Message (commit on "${branchName}")` : "Commit message";
 }
 
+/** `git pull --recurse-submodules` also fetches every submodule, so 30 s is not enough. */
+export const RECURSE_PULL_TIMEOUT_MS = 10 * 60_000;
+
 const CONFLICT_STATUSES = new Set<ResourceStatus>([
   ResourceStatus.ADDED_BY_US,
   ResourceStatus.ADDED_BY_THEM,
@@ -69,7 +73,9 @@ type MutationKind = "stage" | "unstage" | "discard";
 
 /**
  * Repository-scoped daily Git operations. Every mutation is routed through a
- * public vscode.git repository handle; this layer never invokes Git commands.
+ * public vscode.git repository handle; the single exception is
+ * `pullRecurseSubmodules`, which the vscode.git API cannot express and which
+ * therefore runs `git pull --recurse-submodules` through the Git CLI.
  *
  * Behavioral reference: microsoft/vscode extensions/git/src/commands.ts,
  * tag 1.96.0 (stage, unstage, clean, smartCommit, sync, publish).
@@ -82,6 +88,7 @@ export class DailyGitActions {
     private readonly repositories: DailyGitRepositoryProvider,
     private readonly ui: DailyGitActionsUi,
     private readonly choreService?: SubmoduleChoreReadService,
+    private readonly cli?: GitCli,
   ) {}
 
   async stage(nodes: readonly AdoptedTreeNode[]): Promise<ActionOutcome> {
@@ -390,6 +397,42 @@ export class DailyGitActions {
       }
       await target.operations().pull();
       outcome = completed({ branch: upstream.name, remote: upstream.remote });
+    });
+    return outcome;
+  }
+
+  /**
+   * `git pull --recurse-submodules`: pulls the repository and fetches/checks out
+   * the submodules recorded by the incoming gitlinks. The vscode.git API has no
+   * option for this, so it goes through the CLI.
+   */
+  async pullRecurseSubmodules(rootPath: string): Promise<ActionOutcome> {
+    const repository = this.requireRepository(rootPath);
+    const cli = this.cli;
+    if (!cli) {
+      this.ui.info("The Git command line is not available, so submodules cannot be pulled recursively.");
+      return unavailable("no git cli");
+    }
+    let outcome: ActionOutcome = completed();
+    await this.runBusy([repository], async (target) => {
+      const upstream = target.snapshot().head?.upstream;
+      if (!upstream) {
+        this.ui.info("The current branch has no upstream to pull from.");
+        outcome = cancelled("no upstream");
+        return;
+      }
+      await cli.run({
+        cwd: target.rootPath,
+        args: ["pull", "--recurse-submodules"],
+        timeoutMs: RECURSE_PULL_TIMEOUT_MS,
+      });
+      // The CLI bypasses vscode.git, so ask it to re-read the repository.
+      await target.operations().status();
+      outcome = completed({
+        branch: upstream.name,
+        remote: upstream.remote,
+        "recurse submodules": true,
+      });
     });
     return outcome;
   }

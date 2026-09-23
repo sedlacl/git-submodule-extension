@@ -25,6 +25,7 @@ export const COMMANDS = {
   checkoutBranch: "gitSubmodule.checkoutBranch",
   fetch: "gitSubmodule.fetch",
   pull: "gitSubmodule.pull",
+  pullRecurseSubmodules: "gitSubmodule.pullRecurseSubmodules",
   sync: "gitSubmodule.sync",
   publish: "gitSubmodule.publish",
   viewAsTree: "gitSubmodule.viewAsTree",

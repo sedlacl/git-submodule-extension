@@ -119,7 +119,9 @@ export function contextActions(contextValue: string, config: RowActionConfig = D
     push(actions, COMMANDS.checkoutBranch, "Checkout Branch...", "git-branch", "context", 1);
     push(actions, COMMANDS.fetch, "Fetch", "cloud-download", "context", 2);
     if (REPO_UPSTREAM.test(contextValue)) {
+      // Same slot: `sortActions` breaks the tie on the command id, so plain Pull stays first.
       push(actions, COMMANDS.pull, "Pull", "arrow-down", "context", 3);
+      push(actions, COMMANDS.pullRecurseSubmodules, "Pull (Recurse Submodules)", "arrow-down", "context", 3);
     }
     push(actions, COMMANDS.generateSubmoduleChore, "Generate Submodule Chore", "git-commit", "context", 4);
     push(actions, COMMANDS.openAllChanges, BUILTIN_COMMAND_TITLES.openAllChanges, "diff-multiple", "context", 5);

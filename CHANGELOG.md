@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Git Submodule: Pull (Recurse Submodules)** in the repository row context menu, next to Pull. It runs `git pull --recurse-submodules` so the parent pull also fetches and checks out the submodules its incoming gitlinks point at. The action requires an upstream, runs under the same per-repository busy guard as the other daily actions, allows 10 minutes for the submodule fetches, and refreshes the `vscode.git` repository state afterwards.
+
 ## [0.3.2] - 2026-09-07
 
 ### Fixed

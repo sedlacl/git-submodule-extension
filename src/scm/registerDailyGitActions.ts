@@ -6,6 +6,7 @@ import {
   type ActionOutcome,
   type ActionRun,
 } from "../actionDiagnostics.js";
+import type { GitCli } from "../git/gitCli.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import type { AdoptedTreeNode } from "../views/adoptedViewModel.js";
 import { COMMANDS } from "../views/constants.js";
@@ -19,6 +20,7 @@ import type { SubmoduleChoreReadService } from "./submoduleChoreTypes.js";
 
 export interface RegisterDailyGitActionsOptions {
   gitApi: VsCodeGitApiAdapter;
+  cli: GitCli;
   choreService: SubmoduleChoreReadService;
   actionDiagnostics: ActionDiagnostics;
   postActionRefresh(): void;
@@ -26,7 +28,7 @@ export interface RegisterDailyGitActionsOptions {
 }
 
 export function registerDailyGitActions(options: RegisterDailyGitActionsOptions): vscode.Disposable {
-  const actions = new DailyGitActions(options.gitApi, createUi(options.gitApi), options.choreService);
+  const actions = new DailyGitActions(options.gitApi, createUi(options.gitApi), options.choreService, options.cli);
   const register = (
     command: string,
     actionKind: string,
@@ -67,7 +69,17 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     };
 
   const repositoryHandler =
-    (kind: "commit" | "prepareSubmoduleChore" | "checkoutBranch" | "fetch" | "pull" | "sync" | "publish") =>
+    (
+      kind:
+        | "commit"
+        | "prepareSubmoduleChore"
+        | "checkoutBranch"
+        | "fetch"
+        | "pull"
+        | "pullRecurseSubmodules"
+        | "sync"
+        | "publish",
+    ) =>
     async (
       node: AdoptedTreeNode | undefined,
       _selected: readonly AdoptedTreeNode[] | undefined,
@@ -108,6 +120,12 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
     register(COMMANDS.checkoutBranch, "checkout branch", "Checkout Branch", repositoryHandler("checkoutBranch")),
     register(COMMANDS.fetch, "fetch", "Fetch", repositoryHandler("fetch")),
     register(COMMANDS.pull, "pull", "Pull", repositoryHandler("pull")),
+    register(
+      COMMANDS.pullRecurseSubmodules,
+      "pull recurse submodules",
+      "Pull (Recurse Submodules)",
+      repositoryHandler("pullRecurseSubmodules"),
+    ),
     register(COMMANDS.sync, "sync", "Sync", repositoryHandler("sync")),
     register(COMMANDS.publish, "publish", "Publish Branch", repositoryHandler("publish")),
     register(COMMANDS.refresh, "refresh", "Refresh", async (node, _selected, action) => {

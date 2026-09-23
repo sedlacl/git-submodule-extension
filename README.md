@@ -34,7 +34,7 @@ The built-in Git **Changes** panel cannot be replaced or hidden through a stable
 
 This extension contributes an SCM webview named **CHANGES with submodules** that lists:
 
-- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` unstaged, `+` staged, `!` merge) and an always-visible toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch and Pull sit in the row context menu
+- workspace folders as sibling repositories (including multi-root workspaces), each with a clickable local branch label (`main*` unstaged, `+` staged, `!` merge) and an always-visible toolbar (Commit, Sync or Publish, Refresh); Checkout Branch, Fetch, Pull and Pull (Recurse Submodules) sit in the row context menu
 - **Merge Changes**, **Staged Changes**, **Changes**, and (when `git.untrackedChanges` is `separate`) **Untracked Changes**, using built-in names, pill-shaped file counts, file icons, and M/A/D/R/U decorations; folders use a dirty dot; gitlink rows use `S`
 - empty groups according to the same built-in settings (`git.alwaysShowStagedChangesResourceGroup`, `git.untrackedChanges`)
 - gitlink pointer diffs nested under the matching **Staged Changes** / **Changes** row as **Adopted Changes** (`HEAD → index` staged, `index → checkout` unstaged), always shown with a pill file count (including `0`) and the inner commit file list. The gitlink row shows `S` and a gray `commit → branch` (or `commit → commit`) label. **View as List** / **View as Tree** applies to those inner files as well; layout also respects `scm.defaultViewMode` and `scm.compactFolders` when set in user settings
@@ -61,9 +61,10 @@ The generated UI fixture workspace sets `gitSubmodule.restore.enabled` to `false
 - **Git Submodule: Refresh** — reload the tree
 - **Git Submodule: Retry Branch Restore** — explicit retry (never fetches)
 - **Git Submodule: Fetch Submodule Remote** — `git fetch origin <branch>` after a modal confirmation; never runs automatically
+- **Git Submodule: Pull (Recurse Submodules)** — `git pull --recurse-submodules` on the repository row; pulls the parent and updates the submodules its incoming gitlinks point at
 - Open Changes / Open File / Open All Changes — tree item actions
 
-Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
+Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. **Pull (Recurse Submodules)** is the one action that shells out to `git`, because the `vscode.git` API has no `--recurse-submodules` option; it needs an upstream, allows up to 10 minutes for the submodule fetches, and re-reads the repository afterwards. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
 
 Blocked restore cases appear on the submodule row, in the **Git Submodule** output channel, and on the status bar.
 
@@ -83,7 +84,7 @@ User actions use a process-wide, monotonically increasing `[action #N]` id with 
 [12:20:09.374] [action #11] retry restore completed 1.36s (repositories: 1; blocked: 1)
 ```
 
-Action coverage includes Generate Message/Submodule Chore, every stage/unstage/discard variant, commit, checkout, fetch, pull, sync, publish, refresh, retry restore, and explicit submodule-remote fetch. Open diff/file commands are omitted because they are high-frequency navigation and would add noise.
+Action coverage includes Generate Message/Submodule Chore, every stage/unstage/discard variant, commit, checkout, fetch, pull, pull recurse submodules, sync, publish, refresh, retry restore, and explicit submodule-remote fetch. Open diff/file commands are omitted because they are high-frequency navigation and would add noise.
 
 Action diagnostics include only repository basenames, counts, operation outcomes, smart-commit state, and useful branch/remote names. They never include commit-message text, file contents, authentication data, full remote URLs, environment values, or absolute repository paths. Error text is flattened, length-limited, and redacts credentials, authorization headers, and URLs.
 

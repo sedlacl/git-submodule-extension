@@ -40,6 +40,7 @@ describe("adopted-view contributions", () => {
         COMMANDS.checkoutBranch,
         COMMANDS.fetch,
         COMMANDS.pull,
+        COMMANDS.pullRecurseSubmodules,
         COMMANDS.sync,
         COMMANDS.publish,
         COMMANDS.viewAsTree,
@@ -72,9 +73,20 @@ describe("adopted-view contributions", () => {
     const repositoryOpenAll = contextActions(repoUpstream).find((action) => action.command === COMMANDS.openAllChanges);
     expect(repositoryOpenAll?.order).toBe(5);
     expect(contextActions(repoUpstream).map((action) => action.command)).toEqual(
-      expect.arrayContaining([COMMANDS.checkoutBranch, COMMANDS.fetch, COMMANDS.pull]),
+      expect.arrayContaining([
+        COMMANDS.checkoutBranch,
+        COMMANDS.fetch,
+        COMMANDS.pull,
+        COMMANDS.pullRecurseSubmodules,
+      ]),
+    );
+    expect(contextActions(repoUpstream).findIndex((action) => action.command === COMMANDS.pullRecurseSubmodules)).toBe(
+      contextActions(repoUpstream).findIndex((action) => action.command === COMMANDS.pull) + 1,
     );
     expect(contextActions(repoNoUpstream).some((action) => action.command === COMMANDS.pull)).toBe(false);
+    expect(contextActions(repoNoUpstream).some((action) => action.command === COMMANDS.pullRecurseSubmodules)).toBe(
+      false,
+    );
     expect(inlineActions(repoUpstream).some((action) => action.command === COMMANDS.sync)).toBe(true);
     expect(inlineActions(repoNoUpstream).some((action) => action.command === COMMANDS.publish)).toBe(true);
     expect(CONTEXT.adoptedGroup).toContain("adoptedGroup");
