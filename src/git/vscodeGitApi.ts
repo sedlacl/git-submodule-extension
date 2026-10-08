@@ -8,6 +8,7 @@ import {
   type GitRepositoryHandle,
   type RepositoryStateSnapshot,
 } from "./repositoryState.js";
+import { waitForGitApi } from "./gitApiReady.js";
 import type { WorkspaceGitModel } from "./types.js";
 
 export type { GitRepositoryHandle } from "./repositoryState.js";
@@ -140,7 +141,7 @@ export class VsCodeGitApiAdapter {
 
 export async function activateVsCodeGitApi(
   getExtension: typeof vscode.extensions.getExtension = vscode.extensions.getExtension.bind(vscode.extensions),
-  timeoutMs = 15_000,
+  timeoutMs?: number,
 ): Promise<VsCodeGitApiAdapter> {
   const extension = getExtension<GitExtension>("vscode.git");
   if (!extension) {
@@ -155,24 +156,4 @@ export async function activateVsCodeGitApi(
   const api = exported.getAPI(1);
   await waitForGitApi(api, timeoutMs);
   return new VsCodeGitApiAdapter(api);
-}
-
-export function waitForGitApi(api: API, timeoutMs: number): Promise<void> {
-  if (api.state === "initialized") {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      subscription.dispose();
-      reject(new Error("Timed out waiting for vscode.git API initialization."));
-    }, timeoutMs);
-    const subscription = api.onDidChangeState((state) => {
-      if (state === "initialized") {
-        clearTimeout(timer);
-        subscription.dispose();
-        resolve();
-      }
-    });
-  });
 }
