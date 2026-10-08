@@ -110,7 +110,8 @@ class FakeUi implements DailyGitActionsUi {
   disableConfirmSyncCalls = 0;
   nextInput: string | undefined;
   nextRemote: string | undefined;
-  nextBranch: string | undefined;
+  checkoutRoots: string[] = [];
+  nextCheckout = false;
   nextGeneratedSubject: string | undefined;
   nextGenerateResult: GenerateCommitSubjectResult | undefined;
   generateCalls: string[] = [];
@@ -138,10 +139,9 @@ class FakeUi implements DailyGitActionsUi {
     return this.nextRemote ?? remotes[0]?.name;
   }
 
-  async pickBranch(
-    branches: readonly { name: string; description?: string; current?: boolean }[],
-  ): Promise<string | undefined> {
-    return this.nextBranch ?? branches[0]?.name;
+  async checkoutRepository(rootPath: string): Promise<boolean> {
+    this.checkoutRoots.push(rootPath);
+    return this.nextCheckout;
   }
 
   info(message: string): void {
@@ -373,16 +373,32 @@ describe("DailyGitActions repository commands", () => {
     expect(repository.calls).toEqual([{ operation: "status", args: [] }]);
   });
 
-  it("checks out the branch selected from the repository branch picker", async () => {
+  it("delegates checkout to the built-in git checkout command for that repository", async () => {
     const root = "/ws/repo";
     const repository = new FakeRepository(root, snapshot(root));
     const ui = new FakeUi();
-    ui.nextBranch = "feature/test";
+    ui.nextCheckout = true;
     const { actions } = harness([repository], ui);
 
-    await actions.checkoutBranch(root);
+    const outcome = await actions.checkoutBranch(root);
 
-    expect(repository.calls).toEqual([{ operation: "checkout", args: ["feature/test"] }]);
+    expect(outcome.result).toBe("completed");
+    expect(ui.checkoutRoots).toEqual([root]);
+    expect(repository.calls).toEqual([]);
+  });
+
+  it("cancels checkout when the built-in branch picker is dismissed", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    const { actions } = harness([repository], ui);
+
+    const outcome = await actions.checkoutBranch(root);
+
+    expect(outcome.result).toBe("cancelled");
+    expect(outcome.reason).toBe("branch picker dismissed");
+    expect(ui.checkoutRoots).toEqual([root]);
+    expect(repository.calls).toEqual([]);
   });
 
   it("fetches and pulls the targeted repository independently", async () => {

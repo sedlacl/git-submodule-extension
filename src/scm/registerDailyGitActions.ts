@@ -38,24 +38,32 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       selected: readonly AdoptedTreeNode[] | undefined,
       action: ActionRun,
     ) => Promise<ActionOutcome>,
+    runOptions?: { progress?: boolean },
   ): vscode.Disposable =>
     vscode.commands.registerCommand(
       command,
       (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
-        runCommand(options.actionDiagnostics, actionKind, title, actionContext(node, selected), async (action) => {
-          const outcome = await handler(node, selected, action);
-          if (
-            outcome.result === "completed" &&
-            (actionKind !== "generate message" || outcome.details?.["draft changed"] === true)
-          ) {
-            if (actionKind === "refresh") {
-              options.explicitRefresh();
-            } else {
-              options.postActionRefresh();
+        runCommand(
+          options.actionDiagnostics,
+          actionKind,
+          title,
+          actionContext(node, selected),
+          async (action) => {
+            const outcome = await handler(node, selected, action);
+            if (
+              outcome.result === "completed" &&
+              (actionKind !== "generate message" || outcome.details?.["draft changed"] === true)
+            ) {
+              if (actionKind === "refresh") {
+                options.explicitRefresh();
+              } else {
+                options.postActionRefresh();
+              }
             }
-          }
-          return outcome;
-        }),
+            return outcome;
+          },
+          runOptions,
+        ),
     );
 
   const changeHandler =
@@ -117,7 +125,13 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       "Generate Submodule Chore",
       repositoryHandler("prepareSubmoduleChore"),
     ),
-    register(COMMANDS.checkoutBranch, "checkout branch", "Checkout Branch", repositoryHandler("checkoutBranch")),
+    register(
+      COMMANDS.checkoutBranch,
+      "checkout branch",
+      "Checkout Branch",
+      repositoryHandler("checkoutBranch"),
+      { progress: false },
+    ),
     register(COMMANDS.fetch, "fetch", "Fetch", repositoryHandler("fetch")),
     register(COMMANDS.pull, "pull", "Pull", repositoryHandler("pull")),
     register(
@@ -224,19 +238,9 @@ function createUi(gitApi: VsCodeGitApiAdapter): DailyGitActionsUi {
       );
       return selected?.name;
     },
-    pickBranch: async (branches) => {
-      const selected = await vscode.window.showQuickPick(
-        branches.map((branch) => ({
-          label: branch.current ? `$(check) ${branch.name}` : `$(git-branch) ${branch.name}`,
-          description: branch.description,
-          name: branch.name,
-        })),
-        {
-          placeHolder: "Choose a branch to check out",
-          matchOnDescription: true,
-        },
-      );
-      return selected?.name;
+    checkoutRepository: async (rootPath) => {
+      const result = await vscode.commands.executeCommand("git.checkout", vscode.Uri.file(rootPath));
+      return result === true;
     },
     info: (message) => {
       void vscode.window.showInformationMessage(message);
@@ -284,13 +288,17 @@ async function runCommand(
   title: string,
   context: ActionDetails,
   operation: (action: ActionRun) => Promise<ActionOutcome>,
+  options?: { progress?: boolean },
 ): Promise<void> {
   const action = diagnostics.start(kind, context);
   try {
-    const outcome = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `${title}…` },
-      async () => await operation(action),
-    );
+    const outcome =
+      options?.progress === false
+        ? await operation(action)
+        : await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: `${title}…` },
+            async () => await operation(action),
+          );
     finishAction(action, outcome);
   } catch (error) {
     if (error instanceof BusyRepositoryError) {

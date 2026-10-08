@@ -34,9 +34,11 @@ export interface DailyGitActionsUi {
   confirm(message: string, actions: readonly string[]): Promise<string | undefined>;
   input(options: { value: string; placeHolder: string; prompt: string }): Promise<string | undefined>;
   pickRemote(remotes: readonly { name: string; description?: string }[]): Promise<string | undefined>;
-  pickBranch(
-    branches: readonly { name: string; description?: string; current?: boolean }[],
-  ): Promise<string | undefined>;
+  /**
+   * Opens the built-in Git checkout picker for this repository (`git.checkout`).
+   * Resolves true when that command reports a checkout or branch create.
+   */
+  checkoutRepository(rootPath: string): Promise<boolean>;
   info(message: string): void;
   /** Built-in `git.confirmSync`. When true, Sync shows the pull/push warning. */
   gitConfirmSync(): boolean;
@@ -73,9 +75,10 @@ type MutationKind = "stage" | "unstage" | "discard";
 
 /**
  * Repository-scoped daily Git operations. Every mutation is routed through a
- * public vscode.git repository handle; the single exception is
- * `pullRecurseSubmodules`, which the vscode.git API cannot express and which
- * therefore runs `git pull --recurse-submodules` through the Git CLI.
+ * public vscode.git repository handle. Two actions cannot be expressed that way:
+ * `pullRecurseSubmodules` runs `git pull --recurse-submodules` through the Git CLI,
+ * and `checkoutBranch` delegates to the contributed `git.checkout` command so the
+ * picker stays the same as the built-in branch control.
  *
  * Behavioral reference: microsoft/vscode extensions/git/src/commands.ts,
  * tag 1.96.0 (stage, unstage, clean, smartCommit, sync, publish).
@@ -358,21 +361,8 @@ export class DailyGitActions {
     const repository = this.requireRepository(rootPath);
     let outcome: ActionOutcome = completed();
     await this.runBusy([repository], async (target) => {
-      const current = target.snapshot().head?.name;
-      const branches = await target.operations().getBranches();
-      const selected = await this.ui.pickBranch(
-        branches.map((branch) => ({
-          name: branch.name,
-          description: branch.commit?.slice(0, 8),
-          current: branch.name === current,
-        })),
-      );
-      if (!selected || selected === current) {
-        outcome = cancelled(selected ? "branch unchanged" : "branch picker dismissed");
-        return;
-      }
-      await target.operations().checkout(selected);
-      outcome = completed({ branch: selected });
+      const checkedOut = await this.ui.checkoutRepository(target.rootPath);
+      outcome = checkedOut ? completed() : cancelled("branch picker dismissed");
     });
     return outcome;
   }

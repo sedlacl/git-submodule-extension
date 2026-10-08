@@ -85,7 +85,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "mutation-handlers",
     summary:
-      "Daily mutations use only public vscode.git repository operations; conflict/deletion choices unavailable in that API are fail-closed rather than routed through internal git.* commands.",
+      "Daily mutations other than checkout use only public vscode.git repository operations. Checkout Branch delegates to the contributed git.checkout command. Conflict/deletion choices unavailable in that API are fail-closed rather than routed through other internal git.* commands.",
   },
   {
     id: "count-badge-scope",

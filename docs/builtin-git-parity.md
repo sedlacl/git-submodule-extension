@@ -24,6 +24,7 @@ are the machine-checked source for labels and the deviation list below.
   `Resource.getStatusLetter` / `getStatusText` / `getStatusColor`, plus `S` /
   `gitDecoration.submoduleResourceForeground` on gitlink rows
 - Compact clickable branch description (`name*` unstaged, `+` staged, `!` merge, matching built-in `headLabel`); Checkout/Fetch/Pull live in the row context menu
+- **Checkout Branch** runs the contributed `git.checkout` command for that repository, so the picker matches the built-in status-bar branch control: create a branch, create from another ref, checkout detached, and local, remote, and tag refs with author and commit details
 - Repository Sync toolbar button shows the built-in Git `syncLabel` (`N↓ M↑`, including zeros) when the branch is ahead or behind its upstream; hover uses `syncTooltip` (`Push N commits to origin/branch`, including the plural for 1); click still runs Sync (pull then push)
 - Sync confirmation matches built-in `git.sync`: modal pull/push warning with **OK** / **OK, Don't Show Again**, gated by `git.confirmSync` (skipped for read-only remotes)
 - Collapsed repository rows use `gitDecoration.submoduleResourceForeground` when a descendant gitlink or child checkout has changes, so submodule activity stays visible without expanding
@@ -52,7 +53,7 @@ are the machine-checked source for labels and the deviation list below.
 | `status-icons` | When `git.decorations.enabled` is false, status ThemeIcons are used instead of shipping copies of Git’s `status-*.svg` assets. |
 | `no-strikethrough` | Deleted files use the D decoration only; webview rows do not apply `SourceControlResourceDecorations.strikeThrough`. |
 | `gitlink-submoduleof` | Gitlink click uses public `toGitUri(uri, ref)` only; built-in `submoduleOf` git URIs are not part of the public API. Inner file diffs nest under the gitlink row. |
-| `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Conflict/deletion choices unavailable in that API fail closed instead of invoking internal `git.*` commands. |
+| `mutation-handlers` | Stage/unstage/discard/commit/sync/publish use only public `vscode.git` repository operations. Checkout Branch is the exception: it runs the contributed `git.checkout` command so the picker stays identical. Conflict/deletion choices unavailable in that API fail closed instead of invoking other internal `git.*` commands. |
 | `count-badge-scope` | The built-in Git extension remains the sole owner of the Source Control Activity Bar pending-change count; this WebviewView never sets `badge`. |
 | `file-icon-theme-webview` | Webview loads the active file icon theme's SVG icons for file/folder/change rows. Font-based themes such as Seti fall back to generic file/folder codicons. |
 | `compact-folder-posix` | Compact folder labels join with POSIX ` / ` on every platform instead of the OS path separator used by built-in SCM. |
