@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-08
+
 ### Fixed
 
 - Opening **CHANGES with submodules** in a large multi-root workspace no longer stops after 15 seconds of waiting for Git. That cutoff left the view empty and created no **Git Submodule** output channel. The extension now keeps waiting, writes the wait to that channel from the start, and opens the view when Git is ready. If the wait passes 15 seconds, the channel is shown.
