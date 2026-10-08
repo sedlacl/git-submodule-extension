@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-08
+
 ### Changed
 
 - **Checkout Branch** in CHANGES with submodules opens the same picker as the built-in Git branch control: create a branch, create from another ref, checkout detached, and local, remote, and tag refs with the author and commit message.
