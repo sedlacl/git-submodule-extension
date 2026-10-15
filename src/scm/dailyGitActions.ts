@@ -54,6 +54,11 @@ export class BusyRepositoryError extends Error {
   }
 }
 
+const UNSUPPORTED_TARGET_MESSAGE =
+  "The available AI provider cannot safely target this repository from a multi-repository view. Install Claude Code or GitLens, or use the sparkle in this repository's built-in Source Control input.";
+const NO_PROVIDER_MESSAGE =
+  "No AI commit-message provider is available. Use Cursor, or install the Claude Code or GitLens extension.";
+
 export function commitMessagePlaceholder(branchName: string | undefined): string {
   return branchName ? `Message (commit on "${branchName}")` : "Commit message";
 }
@@ -308,9 +313,7 @@ export class DailyGitActions {
         this.ui.info("No submodule pointer changes; AI commit message generation was cancelled.");
         outcome = cancelled("AI generation cancelled", details);
       } else if (aiResult.result === "unsupported target") {
-        this.ui.info(
-          "No submodule pointer changes. Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.",
-        );
+        this.ui.info(`No submodule pointer changes. ${UNSUPPORTED_TARGET_MESSAGE}`);
         outcome = unavailable("AI target unsupported", details);
       } else if (aiResult.result === "unavailable") {
         this.ui.info("No submodule pointer changes; no supported AI commit-message provider is available.");
@@ -318,6 +321,45 @@ export class DailyGitActions {
       } else {
         this.ui.info("No submodule pointer changes; AI did not generate a commit message.");
         outcome = completed({ reason: "no changes", ...details });
+      }
+    });
+    return outcome;
+  }
+
+  /** Fills the repository draft through the first available AI provider; never commits. */
+  async generateCommitMessage(rootPath: string, action?: ActionRun): Promise<ActionOutcome> {
+    const repository = this.requireRepository(rootPath);
+    let outcome: ActionOutcome = completed();
+    await this.runBusy([repository], async () => {
+      if (!this.ui.generateCommitSubject) {
+        this.ui.info(NO_PROVIDER_MESSAGE);
+        outcome = unavailable("AI provider unavailable");
+        return;
+      }
+      const startedAt = action?.mark();
+      const aiResult = await this.ui.generateCommitSubject(rootPath);
+      const details = { provider: aiResult.command ?? "none", "AI result": aiResult.result };
+      if (startedAt !== undefined) {
+        action?.phase("generate message AI", startedAt, {
+          ...details,
+          error: aiResult.result === "failed" ? safeError(aiResult.error) : undefined,
+        });
+      }
+      if (aiResult.result === "generated") {
+        outcome = completed({ ...details, "draft changed": true });
+      } else if (aiResult.result === "failed") {
+        outcome = { result: "failed", error: aiResult.error, details };
+      } else if (aiResult.result === "cancelled") {
+        outcome = cancelled("AI generation cancelled", details);
+      } else if (aiResult.result === "unsupported target") {
+        this.ui.info(UNSUPPORTED_TARGET_MESSAGE);
+        outcome = unavailable("AI target unsupported", details);
+      } else if (aiResult.result === "unavailable") {
+        this.ui.info(NO_PROVIDER_MESSAGE);
+        outcome = unavailable("AI provider unavailable", details);
+      } else {
+        this.ui.info("AI did not generate a commit message. Are there any changes?");
+        outcome = completed({ ...details, "draft changed": false });
       }
     });
     return outcome;

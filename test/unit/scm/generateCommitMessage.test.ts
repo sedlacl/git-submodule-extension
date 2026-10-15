@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildSubmoduleChoreMessage } from "../../../src/scm/submoduleChoreMessage.js";
 import {
   buildPublicGenerateCommitMessageCommandArgs,
+  CLAUDE_CLI_COMMIT_MESSAGE,
   CURSOR_GENERATE_GIT_COMMIT_MESSAGE,
+  GITLENS_GENERATE_COMMIT_MESSAGE,
   firstCommitLine,
   generateCommitSubject,
   isPublicCommitMessageTargetSupported,
   mergeCommitDraftWithChore,
+  parseCommitMessageProviderPreference,
   pickPublicGenerateCommitMessageCommand,
   supportsUriCommitMessageTargeting,
 } from "../../../src/scm/generateCommitMessage.js";
@@ -185,6 +188,14 @@ describe("buildPublicGenerateCommitMessageCommandArgs", () => {
       { scheme: "file", fsPath: ROOT },
     ]);
     expect(buildPublicGenerateCommitMessageCommandArgs("git.generateCommitMessage", ROOT, fileUri)).toEqual([]);
+    expect(buildPublicGenerateCommitMessageCommandArgs(CLAUDE_CLI_COMMIT_MESSAGE, ROOT, fileUri)).toEqual([]);
+  });
+
+  it("passes GitLens the repository as repoPath", () => {
+    const fileUri = (value: string) => ({ scheme: "file", fsPath: value });
+    expect(buildPublicGenerateCommitMessageCommandArgs(GITLENS_GENERATE_COMMIT_MESSAGE, ROOT, fileUri)).toEqual([
+      { repoPath: { scheme: "file", fsPath: ROOT }, source: "scm-input" },
+    ]);
   });
 });
 
@@ -216,6 +227,14 @@ describe("isPublicCommitMessageTargetSupported", () => {
       ),
     ).toBe(false);
   });
+
+  it("accepts any open repository for the Claude CLI and GitLens providers", () => {
+    const repositories = [{ rootPath: "/ws/parent" }, { rootPath: "/ws/parent/child" }];
+    for (const command of [CLAUDE_CLI_COMMIT_MESSAGE, GITLENS_GENERATE_COMMIT_MESSAGE]) {
+      expect(isPublicCommitMessageTargetSupported(repositories, "/ws/parent/child", command)).toBe(true);
+      expect(isPublicCommitMessageTargetSupported(repositories, "/ws/elsewhere", command)).toBe(false);
+    }
+  });
 });
 
 describe("pickPublicGenerateCommitMessageCommand", () => {
@@ -231,6 +250,34 @@ describe("pickPublicGenerateCommitMessageCommand", () => {
       pickPublicGenerateCommitMessageCommand(["other.generateGitCommitMessage", "gitSubmodule.generateCommitMessage"]),
     ).toBeUndefined();
     expect(pickPublicGenerateCommitMessageCommand(["gitSubmodule.generateCommitMessage"])).toBeUndefined();
+  });
+
+  it("prefers Cursor, then the Claude CLI, then GitLens, then untargeted commands", () => {
+    const all = [
+      "github.copilot.git.generateCommitMessage",
+      GITLENS_GENERATE_COMMIT_MESSAGE,
+      CLAUDE_CLI_COMMIT_MESSAGE,
+      CURSOR_GENERATE_GIT_COMMIT_MESSAGE,
+    ];
+    expect(pickPublicGenerateCommitMessageCommand(all)).toBe(CURSOR_GENERATE_GIT_COMMIT_MESSAGE);
+    expect(pickPublicGenerateCommitMessageCommand(all.slice(0, 3))).toBe(CLAUDE_CLI_COMMIT_MESSAGE);
+    expect(pickPublicGenerateCommitMessageCommand(all.slice(0, 2))).toBe(GITLENS_GENERATE_COMMIT_MESSAGE);
+    expect(pickPublicGenerateCommitMessageCommand(all.slice(0, 1))).toBe("github.copilot.git.generateCommitMessage");
+  });
+
+  it("honours an explicit provider preference without falling back", () => {
+    const all = [CURSOR_GENERATE_GIT_COMMIT_MESSAGE, CLAUDE_CLI_COMMIT_MESSAGE, GITLENS_GENERATE_COMMIT_MESSAGE];
+    expect(pickPublicGenerateCommitMessageCommand(all, "gitlens")).toBe(GITLENS_GENERATE_COMMIT_MESSAGE);
+    expect(pickPublicGenerateCommitMessageCommand(all, "claude")).toBe(CLAUDE_CLI_COMMIT_MESSAGE);
+    expect(pickPublicGenerateCommitMessageCommand([GITLENS_GENERATE_COMMIT_MESSAGE], "claude")).toBeUndefined();
+  });
+});
+
+describe("parseCommitMessageProviderPreference", () => {
+  it("falls back to auto for unknown values", () => {
+    expect(parseCommitMessageProviderPreference("claude")).toBe("claude");
+    expect(parseCommitMessageProviderPreference("copilot")).toBe("auto");
+    expect(parseCommitMessageProviderPreference(undefined)).toBe("auto");
   });
 });
 

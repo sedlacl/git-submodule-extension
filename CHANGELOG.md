@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Git Submodule: Generate Commit Message** command: fills a repository's commit draft with an AI message through the first available provider. Works from the Command Palette, the built-in Source Control title (VS Code), keybindings, and other extensions.
+- AI commit messages in VS Code: when Cursor AI is not available, the sparkle in CHANGES with submodules uses the Claude Code CLI (bundled with the Claude Code extension) or GitLens AI. Both target the clicked repository in multi-repository workspaces.
+- Settings `gitSubmodule.commitMessage.provider` (`auto`, `cursor`, `claude`, `gitlens`) and `gitSubmodule.commitMessage.claudeModel` (default `haiku`).
+
 ## [0.3.4] - 2026-10-08
 
 ### Changed

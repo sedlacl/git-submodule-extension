@@ -12,7 +12,13 @@ import type { AdoptedTreeNode } from "../views/adoptedViewModel.js";
 import { COMMANDS } from "../views/constants.js";
 import { BusyRepositoryError, DailyGitActions, type DailyGitActionsUi } from "./dailyGitActions.js";
 import {
+  generateCommitMessageWithClaude,
+  listCommitMessageProviderIds,
+  readCommitMessageProviderPreference,
+} from "./commitMessageProviders.js";
+import {
   buildPublicGenerateCommitMessageCommandArgs,
+  CLAUDE_CLI_COMMIT_MESSAGE,
   generateCommitSubject,
   isPublicCommitMessageTargetSupported,
 } from "./generateCommitMessage.js";
@@ -28,7 +34,12 @@ export interface RegisterDailyGitActionsOptions {
 }
 
 export function registerDailyGitActions(options: RegisterDailyGitActionsOptions): vscode.Disposable {
-  const actions = new DailyGitActions(options.gitApi, createUi(options.gitApi), options.choreService, options.cli);
+  const actions = new DailyGitActions(
+    options.gitApi,
+    createUi(options.gitApi, options.cli),
+    options.choreService,
+    options.cli,
+  );
   const register = (
     command: string,
     actionKind: string,
@@ -81,6 +92,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       kind:
         | "commit"
         | "prepareSubmoduleChore"
+        | "generateCommitMessage"
         | "checkoutBranch"
         | "fetch"
         | "pull"
@@ -97,8 +109,8 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       if (!rootPath) {
         return { result: "cancelled", reason: "repository picker dismissed" };
       }
-      return kind === "prepareSubmoduleChore"
-        ? await actions.prepareSubmoduleChore(rootPath, action)
+      return kind === "prepareSubmoduleChore" || kind === "generateCommitMessage"
+        ? await actions[kind](rootPath, action)
         : await actions[kind](rootPath);
     };
 
@@ -124,6 +136,13 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       "generate message",
       "Generate Submodule Chore",
       repositoryHandler("prepareSubmoduleChore"),
+    ),
+    register(
+      COMMANDS.generateCommitMessage,
+      "generate message",
+      "Generate Commit Message",
+      async (node, selected, action) =>
+        await repositoryHandler("generateCommitMessage")(repositoryNode(node), selected, action),
     ),
     register(
       COMMANDS.checkoutBranch,
@@ -195,7 +214,28 @@ function gitConfig(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration("git");
 }
 
-function createUi(gitApi: VsCodeGitApiAdapter): DailyGitActionsUi {
+/**
+ * Accepts a tree node, a built-in `SourceControl` (SCM title menu), a repository `Uri` or a path;
+ * anything else falls back to the repository picker.
+ */
+function repositoryNode(arg: unknown): AdoptedTreeNode | undefined {
+  if (typeof arg === "string") {
+    return { repositoryRoot: arg } as AdoptedTreeNode;
+  }
+  if (arg instanceof vscode.Uri) {
+    return { repositoryRoot: arg.fsPath } as AdoptedTreeNode;
+  }
+  const candidate = arg as { repositoryRoot?: unknown; rootUri?: unknown } | undefined;
+  if (typeof candidate?.repositoryRoot === "string") {
+    return candidate as AdoptedTreeNode;
+  }
+  if (candidate?.rootUri instanceof vscode.Uri) {
+    return { repositoryRoot: candidate.rootUri.fsPath } as AdoptedTreeNode;
+  }
+  return undefined;
+}
+
+function createUi(gitApi: VsCodeGitApiAdapter, cli: GitCli): DailyGitActionsUi {
   return {
     confirm: async (message, actions) =>
       await vscode.window.showWarningMessage(message, { modal: true }, ...actions),
@@ -213,8 +253,17 @@ function createUi(gitApi: VsCodeGitApiAdapter): DailyGitActionsUi {
     generateCommitSubject: async (rootPath) =>
       await generateCommitSubject(
         {
-          listCommands: async () => await vscode.commands.getCommands(true),
+          listCommands: listCommitMessageProviderIds,
+          preference: readCommitMessageProviderPreference(),
           executeCommand: async (command, targetRoot) => {
+            if (command === CLAUDE_CLI_COMMIT_MESSAGE) {
+              const message = await generateCommitMessageWithClaude(cli, targetRoot);
+              const target = gitApi.getRepositoryHandle(targetRoot);
+              if (message && target) {
+                target.inputBoxValue = message;
+              }
+              return;
+            }
             const args = buildPublicGenerateCommitMessageCommandArgs(command, targetRoot, vscode.Uri.file);
             await vscode.commands.executeCommand(command, ...args);
           },

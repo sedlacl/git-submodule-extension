@@ -43,7 +43,7 @@ This extension contributes an SCM webview named **CHANGES with submodules** that
 - file rows that open `vscode.diff` (or `vscode.changes` for Open All)
 - tree layout by default (reads `scm.defaultViewMode` when set); the view title toggles **View as List** / **View as Tree** for this workspace session without writing workspace or user settings
 
-The pane is a `WebviewView` (not a second SCM view). It renders the same `AdoptedTreeNode` model as HTML: 22px rows, 8px indent, status letters, count pills, and `@vscode/codicons`. Row toolbar and context actions call the existing `gitSubmodule.*` commands. Expanded dirty repositories (own staged/unstaged/untracked files) show the commit textarea (`repository.inputBoxValue`), Generate Commit Message sparkle, and Commit button before their groups; collapsing the repository hides that chrome with its subtree while preserving the draft. The sparkle builds a deterministic submodule chore from pointer diffs: nested gitlink updates appear indented under the parent submodule commit that moved them, each commit line includes a short SHA, and when the tree has exactly one leaf commit the subject becomes `chore: update <submodule>: <leaf subject>`. Staging is tracked only for preview range selection (`HEAD → index` vs `index → checkout`) and never appears in the generated commit message. When several leaf commits need summarizing, a public built-in/Copilot generate-commit-message command may supply the subject; without AI the fallback is `chore: update submodules`. Without pointer diffs the sparkle only runs that AI path (or reports nothing to generate). Expand state is kept while the view is hidden (`retainContextWhenHidden`).
+The pane is a `WebviewView` (not a second SCM view). It renders the same `AdoptedTreeNode` model as HTML: 22px rows, 8px indent, status letters, count pills, and `@vscode/codicons`. Row toolbar and context actions call the existing `gitSubmodule.*` commands. Expanded dirty repositories (own staged/unstaged/untracked files) show the commit textarea (`repository.inputBoxValue`), Generate Commit Message sparkle, and Commit button before their groups; collapsing the repository hides that chrome with its subtree while preserving the draft. The sparkle builds a deterministic submodule chore from pointer diffs: nested gitlink updates appear indented under the parent submodule commit that moved them, each commit line includes a short SHA, and when the tree has exactly one leaf commit the subject becomes `chore: update <submodule>: <leaf subject>`. Staging is tracked only for preview range selection (`HEAD → index` vs `index → checkout`) and never appears in the generated commit message. When several leaf commits need summarizing, the AI commit-message provider (see **Git Submodule: Generate Commit Message**) may supply the subject; without AI the fallback is `chore: update submodules`. Without pointer diffs the sparkle only runs that AI path (or reports nothing to generate). Expand state is kept while the view is hidden (`retainContextWhenHidden`).
 
 Built-in labels, menu slots, and intentional deviations (webview vs SourceControl, no proposed SCM API, `gitSubmodule.*` command IDs, no file-icon theme / `view/item/context`) are documented in [`docs/builtin-git-parity.md`](docs/builtin-git-parity.md).
 
@@ -53,6 +53,8 @@ Built-in labels, menu slots, and intentional deviations (webview vs SourceContro
 | --- | --- | --- |
 | `gitSubmodule.restore.enabled` | `true` | After parent Git checkout/commit/state-change events, run fail-closed branch restore. |
 | `gitSubmodule.restore.debounceMs` | `250` | Coalesce bursty Git events before a restore pass (`0`–`10000`). |
+| `gitSubmodule.commitMessage.provider` | `auto` | AI provider for Generate Commit Message: `auto`, `cursor`, `claude`, or `gitlens`. |
+| `gitSubmodule.commitMessage.claudeModel` | `haiku` | Model passed to the Claude Code CLI (`--model`). |
 
 The generated UI fixture workspace sets `gitSubmodule.restore.enabled` to `false` so detached/dirty scenarios stay visible. Product default remains **auto-safe on**.
 
@@ -62,7 +64,19 @@ The generated UI fixture workspace sets `gitSubmodule.restore.enabled` to `false
 - **Git Submodule: Retry Branch Restore** — explicit retry (never fetches)
 - **Git Submodule: Fetch Submodule Remote** — `git fetch origin <branch>` after a modal confirmation; never runs automatically
 - **Git Submodule: Pull (Recurse Submodules)** — `git pull --recurse-submodules` on the repository row; pulls the parent and updates the submodules its incoming gitlinks point at
+- **Git Submodule: Generate Commit Message** — fills the commit draft of a repository with an AI message; never stages or commits. Takes a repository `Uri`, a `SourceControl`, or a path (otherwise a repository picker), so it also works from keybindings and other extensions. In VS Code it appears in the built-in Source Control title when Claude Code or GitLens is the provider
 - Open Changes / Open File / Open All Changes — tree item actions
+
+### AI commit-message providers
+
+Generate Commit Message and the textarea sparkle use the first available provider that can target the requested repository (`gitSubmodule.commitMessage.provider: auto`):
+
+1. **Cursor AI** — `cursor.generateGitCommitMessage` with the repository root `Uri`
+2. **Claude Code CLI** — the `claude` binary bundled with the Claude Code extension (`resources/native-binary`) or a native `claude` on PATH. It runs headless (`claude -p --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence`) from the temp folder, so no tools, hooks, MCP servers, or `CLAUDE.md` load. The staged diff (or, with nothing staged, the working-tree diff plus untracked file names) and the last 10 commit subjects go to stdin; the diff is capped at 60 000 characters. It uses your Claude Code login, and the diff is sent to Anthropic
+3. **GitLens AI** — `gitlens.ai.generateCommitMessage` with `repoPath`; uses the provider configured in GitLens
+4. **Copilot / built-in** — `git.generateCommitMessage`, `github.copilot.*` only when a single repository is open, because they cannot target one
+
+A value other than `auto` uses only that provider.
 
 Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. **Pull (Recurse Submodules)** is the one action that shells out to `git`, because the `vscode.git` API has no `--recurse-submodules` option; it needs an upstream, allows up to 10 minutes for the submodule fetches, and re-reads the repository afterwards. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
 

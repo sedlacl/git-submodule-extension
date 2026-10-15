@@ -22,6 +22,7 @@ export const COMMANDS = {
   cleanAllUntracked: "gitSubmodule.cleanAllUntracked",
   commit: "gitSubmodule.commit",
   generateSubmoduleChore: "gitSubmodule.generateSubmoduleChore",
+  generateCommitMessage: "gitSubmodule.generateCommitMessage",
   checkoutBranch: "gitSubmodule.checkoutBranch",
   fetch: "gitSubmodule.fetch",
   pull: "gitSubmodule.pull",

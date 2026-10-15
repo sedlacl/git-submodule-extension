@@ -38,7 +38,7 @@ are the machine-checked source for labels and the deviation list below.
   Sync mirrors the REPOSITORIES status-bar affordance: icon plus `syncLabel` when diverged
 - File, folder, and change-group inline icons are hover-only, matching built-in Changes
 - Expanded dirty repositories show a branch label, commit message box, Generate Commit Message sparkle, and Commit button before their groups. Collapsing hides the commit chrome with the subtree; the draft remains in `repository.inputBoxValue`
-- The sparkle uses a public built-in/Copilot generate-commit-message command for the subject when available, then appends the submodule chore body from pointer diffs; without a public AI command it only generates that chore
+- The sparkle uses the AI commit-message provider chain (Cursor AI, Claude Code CLI, GitLens AI, then single-repository Copilot/built-in commands; see README) for the subject when available, then appends the submodule chore body from pointer diffs; without a provider it only generates that chore
 - Group headers (Merge / Staged / Changes / Untracked / Adopted Changes) show the file count in a pill badge immediately after the title; folders use a dirty dot; files keep the status letter
 
 ## Intentional deviations

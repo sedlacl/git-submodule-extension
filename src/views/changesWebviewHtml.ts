@@ -48,7 +48,7 @@ export interface ChangesWebviewTreeState {
 }
 
 export const UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP =
-  "Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.";
+  "No AI commit-message provider can safely target this repository from a multi-repository view. Install Claude Code or GitLens, or use the sparkle in this repository's built-in Source Control input.";
 
 export function toChangesWebviewRows(
   nodes: readonly AdoptedTreeNode[],
@@ -287,7 +287,7 @@ function renderRow(row: ChangesWebviewRow): string {
     .join("");
   const generate = row.generateCommitMessageSupported
     ? `<button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>`
-    : `<button type="button" class="sparkle-btn generate-info-btn" data-act="explain-generate" title="${escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP)}" aria-label="Cursor AI commit message unavailable"><i class="codicon codicon-info"></i></button>`;
+    : `<button type="button" class="sparkle-btn generate-info-btn" data-act="explain-generate" title="${escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP)}" aria-label="AI commit message unavailable"><i class="codicon codicon-info"></i></button>`;
   const chrome = row.showCommitChrome
     ? `<div class="commit-chrome" style="padding-left:${pad}px">
            <div class="commit-input-wrap">

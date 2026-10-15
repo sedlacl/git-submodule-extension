@@ -5,7 +5,7 @@ import type { AdoptedDiffReader, GitModelProvider } from "../git/interfaces.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import type { RestoreStatusStore } from "../restore/restoreStatusStore.js";
 import { registerDailyGitActions } from "../scm/registerDailyGitActions.js";
-import { pickPublicGenerateCommitMessageCommand } from "../scm/generateCommitMessage.js";
+import { refreshCommitMessageProvider } from "../scm/commitMessageProviders.js";
 import { SubmoduleChoreReadService } from "../scm/submoduleChoreService.js";
 import { AdoptedTreeController } from "./adoptedTreeController.js";
 import {
@@ -62,8 +62,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
   const contentProvider = new GitShowContentProvider(options.cli);
   let generateCommitMessageCommand: string | undefined;
   const refreshGenerateCommitMessageCommand = (): void => {
-    void vscode.commands.getCommands(true).then((commands) => {
-      const next = pickPublicGenerateCommitMessageCommand(commands);
+    void refreshCommitMessageProvider().then((next) => {
       if (next !== generateCommitMessageCommand) {
         generateCommitMessageCommand = next;
         webviewProvider.refresh("config change", false);
@@ -147,7 +146,12 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     vscode.workspace.onDidChangeWorkspaceFolders(() =>
       refresh("workspace folders changed", () => controller.workspaceFoldersNeedRediscovery()),
     ),
+    vscode.extensions.onDidChange(refreshGenerateCommitMessageCommand),
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("gitSubmodule.commitMessage")) {
+        refreshGenerateCommitMessageCommand();
+        return;
+      }
       if (event.affectsConfiguration("workbench.iconTheme")) {
         void webviewProvider.reloadFileIcons();
         return;

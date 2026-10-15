@@ -663,7 +663,7 @@ describe("DailyGitActions repository commands", () => {
 
     expect(outcome).toMatchObject({ result: "unavailable", reason: "AI target unsupported" });
     expect(ui.infos).toEqual([
-      "No submodule pointer changes. Cursor AI cannot safely target this repository from a multi-repository view. Use the sparkle in this repository's built-in Source Control input.",
+      "No submodule pointer changes. The available AI provider cannot safely target this repository from a multi-repository view. Install Claude Code or GitLens, or use the sparkle in this repository's built-in Source Control input.",
     ]);
     expect(lines).toEqual([
       "[action #1] generate message started (repository: usy_aflex_initdatag01#t1)",
@@ -831,5 +831,55 @@ describe("DailyGitActions repository commands", () => {
       "[action #2] commit cancelled 5ms (reason: empty message; staged: 1; unstaged: 1; smart commit: no)",
     );
     expect(lines).toContain("[action #3] sync completed 6ms (branch: main; remote: origin)");
+  });
+});
+
+describe("DailyGitActions generateCommitMessage", () => {
+  it("reports the provider that filled the draft", async () => {
+    const root = "/ws/infra-deploy";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.nextGenerateResult = { result: "generated", command: "claude-code.cli", subject: "feat: add x" };
+    const { actions } = harness([repository], ui);
+
+    const outcome = await actions.generateCommitMessage(root);
+
+    expect(ui.generateCalls).toEqual([root]);
+    expect(outcome).toMatchObject({
+      result: "completed",
+      details: { provider: "claude-code.cli", "AI result": "generated", "draft changed": true },
+    });
+    expect(ui.infos).toEqual([]);
+  });
+
+  it("explains a missing provider and an untargetable repository", async () => {
+    const root = "/ws/infra-deploy";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    const { actions } = harness([repository], ui);
+
+    await expect(actions.generateCommitMessage(root)).resolves.toMatchObject({
+      result: "unavailable",
+      reason: "AI provider unavailable",
+    });
+    ui.nextGenerateResult = { result: "unsupported target", command: "git.generateCommitMessage" };
+    await expect(actions.generateCommitMessage(root)).resolves.toMatchObject({
+      result: "unavailable",
+      reason: "AI target unsupported",
+    });
+    expect(ui.infos).toHaveLength(2);
+    expect(ui.infos[0]).toContain("No AI commit-message provider is available");
+    expect(ui.infos[1]).toContain("Install Claude Code or GitLens");
+  });
+
+  it("passes provider failures through as failed outcomes", async () => {
+    const root = "/ws/infra-deploy";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    const error = new Error("Claude CLI failed: not logged in");
+    ui.nextGenerateResult = { result: "failed", command: "claude-code.cli", error };
+    const { actions } = harness([repository], ui);
+
+    await expect(actions.generateCommitMessage(root)).resolves.toMatchObject({ result: "failed", error });
   });
 });

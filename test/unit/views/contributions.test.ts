@@ -37,6 +37,7 @@ describe("adopted-view contributions", () => {
         COMMANDS.clean,
         COMMANDS.commit,
         COMMANDS.generateSubmoduleChore,
+        COMMANDS.generateCommitMessage,
         COMMANDS.checkoutBranch,
         COMMANDS.fetch,
         COMMANDS.pull,

@@ -50,6 +50,28 @@
           "minimum": 0,
           "maximum": 10000,
           "description": "Delay in milliseconds before coalescing Git change events into a restore pass."
+        },
+        "gitSubmodule.commitMessage.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "cursor",
+            "claude",
+            "gitlens"
+          ],
+          "enumDescriptions": [
+            "First available provider that can target the repository: Cursor AI, then the Claude Code CLI, then GitLens AI; Copilot/built-in commands only when a single repository is open.",
+            "Cursor AI (cursor.generateGitCommitMessage).",
+            "Claude Code CLI, bundled with the Claude Code extension or found on PATH.",
+            "GitLens AI (gitlens.ai.generateCommitMessage)."
+          ],
+          "default": "auto",
+          "description": "AI provider behind Git Submodule: Generate Commit Message and the sparkle in CHANGES with submodules."
+        },
+        "gitSubmodule.commitMessage.claudeModel": {
+          "type": "string",
+          "default": "haiku",
+          "description": "Model alias or full model name passed to the Claude Code CLI (`--model`) when generating commit messages."
         }
       }
     },
@@ -80,6 +102,12 @@
       {
         "command": "gitSubmodule.generateSubmoduleChore",
         "title": "Generate Submodule Chore",
+        "category": "Git Submodule",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitSubmodule.generateCommitMessage",
+        "title": "Generate Commit Message",
         "category": "Git Submodule",
         "icon": "$(sparkle)"
       },
@@ -320,6 +348,13 @@
         {
           "command": "gitSubmodule.publish",
           "when": "false"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "gitSubmodule.generateCommitMessage",
+          "when": "scmProvider == git && gitSubmodule.commitMessageScmTitleAction",
+          "group": "navigation@10"
         }
       ],
       "view/title": [
