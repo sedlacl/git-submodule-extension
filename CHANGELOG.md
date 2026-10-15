@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-15
+
 ### Added
 
 - **Git Submodule: Generate Commit Message** command: fills a repository's commit draft with an AI message through the first available provider. Works from the Command Palette, the built-in Source Control title (VS Code), keybindings, and other extensions.
@@ -125,7 +127,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.4...v0.4.0
 [0.3.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.2.1...v0.3.0
