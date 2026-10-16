@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-16
+
 ### Added
 
 - Running actions are animated in CHANGES with submodules, like in the built-in Git view: the Sync button spins during Sync, Fetch, Pull and Publish, Refresh and Retry Branch Restore spin in place, and Commit, Generate Commit Message and other actions show a loading spinner. A running button ignores further clicks until it finishes.
@@ -136,7 +138,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.4...v0.4.0
 [0.3.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.0...v0.3.1
