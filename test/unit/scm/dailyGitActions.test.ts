@@ -112,6 +112,7 @@ class FakeUi implements DailyGitActionsUi {
   nextRemote: string | undefined;
   checkoutRoots: string[] = [];
   nextCheckout = false;
+  clipboard: string[] = [];
   nextGeneratedSubject: string | undefined;
   nextGenerateResult: GenerateCommitSubjectResult | undefined;
   generateCalls: string[] = [];
@@ -142,6 +143,10 @@ class FakeUi implements DailyGitActionsUi {
   async checkoutRepository(rootPath: string): Promise<boolean> {
     this.checkoutRoots.push(rootPath);
     return this.nextCheckout;
+  }
+
+  async copyToClipboard(text: string): Promise<void> {
+    this.clipboard.push(text);
   }
 
   info(message: string): void {
@@ -399,6 +404,27 @@ describe("DailyGitActions repository commands", () => {
     expect(outcome.reason).toBe("branch picker dismissed");
     expect(ui.checkoutRoots).toEqual([root]);
     expect(repository.calls).toEqual([]);
+  });
+
+  it("copies the checked-out branch name and refuses a detached HEAD", async () => {
+    const root = "/ws/repo";
+    const detachedRoot = "/ws/detached";
+    const detachedState = snapshot(detachedRoot);
+    const repository = new FakeRepository(root, snapshot(root));
+    const detached = new FakeRepository(detachedRoot, {
+      ...detachedState,
+      head: { ...detachedState.head!, name: undefined, detached: true },
+    });
+    const ui = new FakeUi();
+    const { actions } = harness([repository, detached], ui);
+
+    expect((await actions.copyBranchName(root)).result).toBe("completed");
+    expect(ui.clipboard).toEqual(["main"]);
+
+    expect((await actions.copyBranchName(detachedRoot)).result).toBe("cancelled");
+    expect(ui.clipboard).toEqual(["main"]);
+    expect(ui.infos[0]).toContain("detached HEAD");
+    expect([...repository.calls, ...detached.calls]).toEqual([]);
   });
 
   it("fetches and pulls the targeted repository independently", async () => {

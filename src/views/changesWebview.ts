@@ -73,6 +73,8 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private readonly expansion = new Map<string, boolean>();
   private readonly selected = new Set<string>();
+  /** Row id → command → number of invocations started from the view that have not finished yet. */
+  private readonly running = new Map<string, Map<string, number>>();
   private readonly nodes = new Map<string, AdoptedTreeNode>();
   private htmlReady = false;
   private lastTreeHtml: string | undefined;
@@ -250,7 +252,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.writeDraft(rootPath, message);
-    await vscode.commands.executeCommand(COMMANDS.commit, node);
+    await this.trackRunning(id, COMMANDS.commit, () => vscode.commands.executeCommand(COMMANDS.commit, node));
   }
 
   private writeDraft(rootPath: string, value: string): void {
@@ -265,7 +267,41 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     if (!node) {
       return;
     }
-    await vscode.commands.executeCommand(command, node, this.selectedNodes(id, additive));
+    const selected = this.selectedNodes(id, additive);
+    await this.trackRunning(id, command, () => vscode.commands.executeCommand(command, node, selected));
+  }
+
+  /** Animates the row's matching action icon while a command started from the view is running. */
+  private async trackRunning(id: string, command: string, run: () => Thenable<unknown>): Promise<void> {
+    this.adjustRunning(id, command, 1);
+    try {
+      await run();
+    } finally {
+      this.adjustRunning(id, command, -1);
+    }
+  }
+
+  private adjustRunning(id: string, command: string, delta: number): void {
+    const commands = this.running.get(id) ?? new Map<string, number>();
+    const count = (commands.get(command) ?? 0) + delta;
+    if (count > 0) {
+      commands.set(command, count);
+    } else {
+      commands.delete(command);
+    }
+    if (commands.size > 0) {
+      this.running.set(id, commands);
+    } else {
+      this.running.delete(id);
+    }
+    // Before the first tree load there is nothing to animate; `repaint` would start a reload instead.
+    if (this.view && this.lastRoots.length > 0) {
+      void this.repaint();
+    }
+  }
+
+  private runningCommands(): Map<string, Set<string>> {
+    return new Map([...this.running].map(([id, commands]) => [id, new Set(commands.keys())]));
   }
 
   private selectedNodes(id: string, additive: boolean): AdoptedTreeNode[] {
@@ -295,7 +331,10 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       { placeHolder: node.label },
     );
     if (picked) {
-      await vscode.commands.executeCommand(picked.action.command, node, this.selectedNodes(id, true));
+      const selected = this.selectedNodes(id, true);
+      await this.trackRunning(id, picked.action.command, () =>
+        vscode.commands.executeCommand(picked.action.command, node, selected),
+      );
     }
   }
 
@@ -467,6 +506,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         generateCommitMessageSupportedRoots: this.generateCommitMessageSupportedRoots(),
         fileIconSrc: this.fileIconSrcBound(),
         config: this.rowConfig(),
+        running: this.runningCommands(),
       }),
     );
     if (final) {

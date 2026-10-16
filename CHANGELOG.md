@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Running actions are animated in CHANGES with submodules, like in the built-in Git view: the Sync button spins during Sync, Fetch, Pull and Publish, Refresh and Retry Branch Restore spin in place, and Commit, Generate Commit Message and other actions show a loading spinner. A running button ignores further clicks until it finishes.
+- **Copy Branch Name** in the right-click menu of repository and submodule rows (and as **Git Submodule: Copy Branch Name** in the Command Palette).
+
+### Fixed
+
+- The order of right-click actions no longer depends on the system language.
+
 ## [0.4.0] - 2026-10-15
 
 ### Added

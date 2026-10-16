@@ -118,6 +118,12 @@
         "icon": "$(git-branch)"
       },
       {
+        "command": "gitSubmodule.copyBranchName",
+        "title": "Copy Branch Name",
+        "category": "Git Submodule",
+        "icon": "$(copy)"
+      },
+      {
         "command": "gitSubmodule.fetch",
         "title": "Fetch",
         "category": "Git Submodule",

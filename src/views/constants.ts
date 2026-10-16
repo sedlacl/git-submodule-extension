@@ -24,6 +24,7 @@ export const COMMANDS = {
   generateSubmoduleChore: "gitSubmodule.generateSubmoduleChore",
   generateCommitMessage: "gitSubmodule.generateCommitMessage",
   checkoutBranch: "gitSubmodule.checkoutBranch",
+  copyBranchName: "gitSubmodule.copyBranchName",
   fetch: "gitSubmodule.fetch",
   pull: "gitSubmodule.pull",
   pullRecurseSubmodules: "gitSubmodule.pullRecurseSubmodules",

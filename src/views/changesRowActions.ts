@@ -25,6 +25,8 @@ export interface RowAction {
   order: number;
   /** Optional text beside the icon (built-in Git Sync `N↓ M↑`). */
   label?: string;
+  /** True while this action, started from the view, is still running (animated icon, disabled). */
+  busy?: boolean;
 }
 
 const REPO = /gitSubmodule\.(workspaceRoot|submodule)/;
@@ -117,6 +119,8 @@ export function contextActions(contextValue: string, config: RowActionConfig = D
 
   if (REPO.test(contextValue)) {
     push(actions, COMMANDS.checkoutBranch, "Checkout Branch...", "git-branch", "context", 1);
+    // Same slot: the command-id tie-break keeps Checkout Branch first.
+    push(actions, COMMANDS.copyBranchName, "Copy Branch Name", "copy", "context", 1);
     push(actions, COMMANDS.fetch, "Fetch", "cloud-download", "context", 2);
     if (REPO_UPSTREAM.test(contextValue)) {
       // Same slot: `sortActions` breaks the tie on the command id, so plain Pull stays first.
@@ -188,5 +192,9 @@ function push(
 }
 
 function sortActions(actions: RowAction[]): RowAction[] {
-  return [...actions].sort((left, right) => left.order - right.order || left.command.localeCompare(right.command));
+  // Ordinal tie-break: `localeCompare` depends on the host locale (Czech sorts "ch" after "h").
+  return [...actions].sort(
+    (left, right) =>
+      left.order - right.order || (left.command < right.command ? -1 : left.command > right.command ? 1 : 0),
+  );
 }

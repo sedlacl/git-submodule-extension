@@ -39,6 +39,7 @@ describe("adopted-view contributions", () => {
         COMMANDS.generateSubmoduleChore,
         COMMANDS.generateCommitMessage,
         COMMANDS.checkoutBranch,
+        COMMANDS.copyBranchName,
         COMMANDS.fetch,
         COMMANDS.pull,
         COMMANDS.pullRecurseSubmodules,
@@ -81,6 +82,12 @@ describe("adopted-view contributions", () => {
         COMMANDS.pullRecurseSubmodules,
       ]),
     );
+    expect(contextActions(repoUpstream).slice(0, 2).map((action) => action.command)).toEqual([
+      COMMANDS.checkoutBranch,
+      COMMANDS.copyBranchName,
+    ]);
+    expect(contextActions(submodule).some((action) => action.command === COMMANDS.copyBranchName)).toBe(true);
+    expect(contextActions(CONTEXT.changeIndex).some((action) => action.command === COMMANDS.copyBranchName)).toBe(false);
     expect(contextActions(repoUpstream).findIndex((action) => action.command === COMMANDS.pullRecurseSubmodules)).toBe(
       contextActions(repoUpstream).findIndex((action) => action.command === COMMANDS.pull) + 1,
     );

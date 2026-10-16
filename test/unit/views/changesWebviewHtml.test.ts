@@ -13,7 +13,7 @@ import {
   UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP,
   webviewPagePaintsBeforeModel,
 } from "../../../src/views/changesWebviewHtml.js";
-import { CONTEXT } from "../../../src/views/constants.js";
+import { COMMANDS, CONTEXT } from "../../../src/views/constants.js";
 
 function repo(partial: Partial<AdoptedTreeNode> & Pick<AdoptedTreeNode, "id" | "kind" | "label">): AdoptedTreeNode {
   return {
@@ -458,6 +458,47 @@ describe("changes webview HTML", () => {
     expect(page).toMatch(/\.twistie, \.inline-btn, \.branch, \.commit-btn, \.sparkle-btn \{[\s\S]*?font: inherit;/);
     expect(page).toMatch(/\.sync-label \{[\s\S]*?font-size: 12px;[\s\S]*?line-height: 16px;/);
     expect(page).toMatch(/\.desc, \.branch \{[\s\S]*?font-size: 12px;/);
+  });
+
+  it("animates the icons of actions still running for a row, like the built-in Git view", () => {
+    const app = repo({
+      id: "root:/ws/app",
+      kind: "workspace-root",
+      label: "app",
+      description: "master",
+      repositoryRoot: "/ws/app",
+      contextValue: `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`,
+      children: [group("workingTree", 1)],
+    });
+    const render = (running: Map<string, Set<string>>): string =>
+      renderChangesTree(
+        toChangesWebviewRows([app], {
+          expanded: new Set([app.id]),
+          selected: new Set(),
+          drafts: new Map(),
+          placeholders: new Map(),
+          config: DEFAULT_ROW_ACTION_CONFIG,
+          running,
+        }),
+      );
+    const syncButton = (html: string): string =>
+      /<button[^>]*data-command="gitSubmodule\.sync"[^>]*>.*?<\/button>/.exec(html)?.[0] ?? "";
+
+    const idle = render(new Map());
+    expect(idle).not.toContain("codicon-modifier-spin");
+    expect(idle).not.toContain("aria-busy");
+
+    // A context-menu Pull spins the row's Sync glyph in place and blocks a second click.
+    const pulling = render(new Map([[app.id, new Set([COMMANDS.pull])]]));
+    expect(syncButton(pulling)).toContain("codicon-sync codicon-modifier-spin");
+    expect(syncButton(pulling)).toContain('disabled aria-busy="true"');
+
+    // Glyphs that do not rotate meaningfully switch to the loading spinner.
+    const committing = render(new Map([[app.id, new Set([COMMANDS.commit, COMMANDS.generateSubmoduleChore])]]));
+    expect(committing).toMatch(/data-command="gitSubmodule\.commit"[^>]*><i class="codicon codicon-loading codicon-modifier-spin">/);
+    expect(committing).toMatch(/class="sparkle-btn busy"[^>]*><i class="codicon codicon-loading codicon-modifier-spin">/);
+    expect(committing).toMatch(/class="commit-btn busy"[^>]*><i class="codicon codicon-loading codicon-modifier-spin">/);
+    expect(syncButton(committing)).not.toContain("codicon-modifier-spin");
   });
 
   it("keeps group actions before a far-right count without layout jumps", () => {

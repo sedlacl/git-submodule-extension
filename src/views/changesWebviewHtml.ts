@@ -32,6 +32,8 @@ export interface ChangesWebviewRow {
   commitPlaceholder: string;
   commitDraft: string;
   generateCommitMessageSupported: boolean;
+  generateBusy: boolean;
+  commitBusy: boolean;
   repositoryRoot?: string;
   inlineActions: RowAction[];
   children: ChangesWebviewRow[];
@@ -45,6 +47,24 @@ export interface ChangesWebviewTreeState {
   generateCommitMessageSupportedRoots?: ReadonlySet<string>;
   fileIconSrc?: (node: AdoptedTreeNode, expanded: boolean) => string | undefined;
   config: RowActionConfig;
+  /** Commands started from the view that are still running, keyed by row id. */
+  running?: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+/** Remote operations that spin the row's Sync button, like the built-in Git status bar item. */
+const REMOTE_COMMANDS: ReadonlySet<string> = new Set([
+  COMMANDS.fetch,
+  COMMANDS.pull,
+  COMMANDS.pullRecurseSubmodules,
+  COMMANDS.sync,
+  COMMANDS.publish,
+]);
+
+/** Circular glyphs rotate in place (`sync~spin`); any other glyph becomes the loading spinner. */
+const SPIN_IN_PLACE_ICONS: ReadonlySet<string> = new Set(["sync", "refresh", "debug-restart", "loading"]);
+
+export function busyIcon(icon: string): string {
+  return SPIN_IN_PLACE_ICONS.has(icon) ? `${icon}~spin` : "loading~spin";
 }
 
 export const UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP =
@@ -66,6 +86,7 @@ export function toChangesWebviewRows(
           ? "error"
           : "loading"
         : undefined;
+    const running = state.running?.get(node.id);
     const children = expanded ? toChangesWebviewRows(node.children, state, depth + 1) : [];
     if (
       expanded &&
@@ -107,15 +128,28 @@ export function toChangesWebviewRows(
             ? repoSetHas(state.generateCommitMessageSupportedRoots, repositoryRoot)
             : true)
         : false,
+      generateBusy: running?.has(COMMANDS.generateSubmoduleChore) ?? false,
+      commitBusy: running?.has(COMMANDS.commit) ?? false,
       repositoryRoot,
-      inlineActions: withSyncChrome(
-        inlineActions(node.contextValue, state.config),
-        node.syncLabel,
-        node.syncTooltip,
+      inlineActions: withBusyChrome(
+        withSyncChrome(inlineActions(node.contextValue, state.config), node.syncLabel, node.syncTooltip),
+        running,
       ),
       children,
     };
   });
+}
+
+function withBusyChrome(actions: RowAction[], running: ReadonlySet<string> | undefined): RowAction[] {
+  if (!running || running.size === 0) {
+    return actions;
+  }
+  const remote = [...running].some((command) => REMOTE_COMMANDS.has(command));
+  return actions.map((action) =>
+    running.has(action.command) || (remote && action.command === COMMANDS.sync)
+      ? { ...action, icon: busyIcon(action.icon), busy: true }
+      : action,
+  );
 }
 
 function withSyncChrome(
@@ -236,6 +270,8 @@ function lazyLoadingRow(parentId: string, depth: number): ChangesWebviewRow {
     commitPlaceholder: "Commit message",
     commitDraft: "",
     generateCommitMessageSupported: false,
+    generateBusy: false,
+    commitBusy: false,
     inlineActions: [],
     dirtyDot: false,
     children: [],
@@ -282,19 +318,26 @@ function renderRow(row: ChangesWebviewRow): string {
         ? `<span class="sync-label">${escapeHtml(action.label)}</span>`
         : "";
       const wide = action.label ? " inline-btn-labeled" : "";
-      return `<button type="button" class="inline-btn${wide}" data-act="command" data-command="${escapeHtml(action.command)}" title="${escapeHtml(action.title)}"><i class="codicon ${codiconClass(action.icon)}"></i>${label}</button>`;
+      const busy = action.busy ? " busy" : "";
+      const busyAttrs = action.busy ? ` disabled aria-busy="true"` : "";
+      return `<button type="button" class="inline-btn${wide}${busy}"${busyAttrs} data-act="command" data-command="${escapeHtml(action.command)}" title="${escapeHtml(action.title)}"><i class="codicon ${codiconClass(action.icon)}"></i>${label}</button>`;
     })
     .join("");
-  const generate = row.generateCommitMessageSupported
-    ? `<button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>`
-    : `<button type="button" class="sparkle-btn generate-info-btn" data-act="explain-generate" title="${escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP)}" aria-label="AI commit message unavailable"><i class="codicon codicon-info"></i></button>`;
+  const generate = row.generateBusy
+    ? `<button type="button" class="sparkle-btn busy" disabled aria-busy="true" title="Generating Commit Message…" aria-label="Generating Commit Message"><i class="codicon ${codiconClass(busyIcon("sparkle"))}"></i></button>`
+    : row.generateCommitMessageSupported
+      ? `<button type="button" class="sparkle-btn" data-act="generate" title="Generate Commit Message" aria-label="Generate Commit Message"><i class="codicon codicon-sparkle"></i></button>`
+      : `<button type="button" class="sparkle-btn generate-info-btn" data-act="explain-generate" title="${escapeHtml(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP)}" aria-label="AI commit message unavailable"><i class="codicon codicon-info"></i></button>`;
+  const commit = row.commitBusy
+    ? `<button type="button" class="commit-btn busy" disabled aria-busy="true"><i class="codicon ${codiconClass(busyIcon("check"))}"></i><span>Commit</span></button>`
+    : `<button type="button" class="commit-btn" data-act="commit"><i class="codicon codicon-check"></i><span>Commit</span></button>`;
   const chrome = row.showCommitChrome
     ? `<div class="commit-chrome" style="padding-left:${pad}px">
            <div class="commit-input-wrap">
              <textarea class="commit-input" data-act="draft" data-root="${escapeHtml(row.repositoryRoot ?? "")}" rows="2" placeholder="${escapeHtml(row.commitPlaceholder)}">${escapeHtml(row.commitDraft)}</textarea>
              ${generate}
            </div>
-           <button type="button" class="commit-btn" data-act="commit"><i class="codicon codicon-check"></i><span>Commit</span></button>
+           ${commit}
          </div>`
     : "";
   const kids = row.children.map((child) => renderRow(child)).join("");
@@ -595,6 +638,10 @@ body {
   border-radius: 2px;
 }
 .commit-btn:hover { background: var(--vscode-button-hoverBackground); }
+/* Running actions keep their colors (no disabled dimming) but stop reacting to the pointer. */
+.inline-btn.busy, .sparkle-btn.busy, .commit-btn.busy { cursor: default; }
+.inline-btn.busy:hover { background: transparent; }
+.commit-btn.busy:hover { background: var(--vscode-button-background); }
 `;
 
 const CHANGES_WEBVIEW_JS = `

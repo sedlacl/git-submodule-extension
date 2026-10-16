@@ -39,6 +39,7 @@ export interface DailyGitActionsUi {
    * Resolves true when that command reports a checkout or branch create.
    */
   checkoutRepository(rootPath: string): Promise<boolean>;
+  copyToClipboard(text: string): Promise<void>;
   info(message: string): void;
   /** Built-in `git.confirmSync`. When true, Sync shows the pull/push warning. */
   gitConfirmSync(): boolean;
@@ -407,6 +408,18 @@ export class DailyGitActions {
       outcome = checkedOut ? completed() : cancelled("branch picker dismissed");
     });
     return outcome;
+  }
+
+  /** Read-only: copies the checked-out branch name; not serialized with running Git operations. */
+  async copyBranchName(rootPath: string): Promise<ActionOutcome> {
+    const repository = this.requireRepository(rootPath);
+    const branch = repository.snapshot().head?.name;
+    if (!branch) {
+      this.ui.info("No branch is checked out (detached HEAD).");
+      return cancelled("no branch");
+    }
+    await this.ui.copyToClipboard(branch);
+    return completed({ branch });
   }
 
   async fetch(rootPath: string): Promise<ActionOutcome> {

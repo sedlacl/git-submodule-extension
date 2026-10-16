@@ -49,7 +49,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       selected: readonly AdoptedTreeNode[] | undefined,
       action: ActionRun,
     ) => Promise<ActionOutcome>,
-    runOptions?: { progress?: boolean },
+    runOptions?: { progress?: boolean; refresh?: boolean },
   ): vscode.Disposable =>
     vscode.commands.registerCommand(
       command,
@@ -63,6 +63,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
             const outcome = await handler(node, selected, action);
             if (
               outcome.result === "completed" &&
+              runOptions?.refresh !== false &&
               (actionKind !== "generate message" || outcome.details?.["draft changed"] === true)
             ) {
               if (actionKind === "refresh") {
@@ -94,6 +95,7 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
         | "prepareSubmoduleChore"
         | "generateCommitMessage"
         | "checkoutBranch"
+        | "copyBranchName"
         | "fetch"
         | "pull"
         | "pullRecurseSubmodules"
@@ -150,6 +152,13 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       "Checkout Branch",
       repositoryHandler("checkoutBranch"),
       { progress: false },
+    ),
+    register(
+      COMMANDS.copyBranchName,
+      "copy branch name",
+      "Copy Branch Name",
+      repositoryHandler("copyBranchName"),
+      { progress: false, refresh: false },
     ),
     register(COMMANDS.fetch, "fetch", "Fetch", repositoryHandler("fetch")),
     register(COMMANDS.pull, "pull", "Pull", repositoryHandler("pull")),
@@ -290,6 +299,10 @@ function createUi(gitApi: VsCodeGitApiAdapter, cli: GitCli): DailyGitActionsUi {
     checkoutRepository: async (rootPath) => {
       const result = await vscode.commands.executeCommand("git.checkout", vscode.Uri.file(rootPath));
       return result === true;
+    },
+    copyToClipboard: async (text) => {
+      await vscode.env.clipboard.writeText(text);
+      vscode.window.setStatusBarMessage(`$(copy) Copied to clipboard: ${text}`, 3000);
     },
     info: (message) => {
       void vscode.window.showInformationMessage(message);

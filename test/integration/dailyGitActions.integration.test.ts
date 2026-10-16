@@ -427,6 +427,8 @@ class RecordingUi implements DailyGitActionsUi {
     return false;
   }
 
+  async copyToClipboard(): Promise<void> {}
+
   info(): void {}
 }
 
@@ -480,6 +482,7 @@ const NO_PROMPT_UI: DailyGitActionsUi = {
   input: async () => undefined,
   pickRemote: async () => undefined,
   checkoutRepository: async () => false,
+  copyToClipboard: async () => undefined,
   info: () => undefined,
   gitConfirmSync: () => true,
   disableGitConfirmSync: async () => undefined,
