@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sync** on a repository row now pulls with `git pull --recurse-submodules` (like **Pull (Recurse Submodules)**), so the submodules follow the incoming gitlinks before the push. The push still goes through `vscode.git`. The Sync hover ends with ` (Recurse Submodules)`, for example `Pull 1 commits from origin/main (Recurse Submodules)`.
+
 ## [0.4.1] - 2026-10-16
 
 ### Added

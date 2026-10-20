@@ -78,7 +78,7 @@ Generate Commit Message and the textarea sparkle use the first available provide
 
 A value other than `auto` uses only that provider.
 
-Stage, unstage, discard, commit, refresh, sync, and publish use the owning repository's public `vscode.git` API handle. **Pull (Recurse Submodules)** is the one action that shells out to `git`, because the `vscode.git` API has no `--recurse-submodules` option; it needs an upstream, allows up to 10 minutes for the submodule fetches, and re-reads the repository afterwards. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
+Stage, unstage, discard, commit, refresh, publish, and the push half of Sync use the owning repository's public `vscode.git` API handle. **Pull (Recurse Submodules)** and the pull half of **Sync** shell out to `git pull --recurse-submodules`, because the `vscode.git` API has no `--recurse-submodules` option; they need an upstream, allow up to 10 minutes for the submodule fetches, and re-read the repository afterwards. Destructive discard and conflict staging require confirmation. **Generate Submodule Chore** (the textarea sparkle) only prepares an editable commit message; it never stages or commits.
 
 Blocked restore cases appear on the submodule row, in the **Git Submodule** output channel, and on the status bar.
 

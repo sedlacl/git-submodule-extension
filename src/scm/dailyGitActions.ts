@@ -82,7 +82,7 @@ type MutationKind = "stage" | "unstage" | "discard";
 /**
  * Repository-scoped daily Git operations. Every mutation is routed through a
  * public vscode.git repository handle. Two actions cannot be expressed that way:
- * `pullRecurseSubmodules` runs `git pull --recurse-submodules` through the Git CLI,
+ * `pullRecurseSubmodules` and the pull half of `sync` run `git pull --recurse-submodules` through the Git CLI,
  * and `checkoutBranch` delegates to the contributed `git.checkout` command so the
  * picker stays the same as the built-in branch control.
  *
@@ -393,9 +393,18 @@ export class DailyGitActions {
         }
       }
 
-      await target.operations().pull();
+      // Pull through the CLI so submodules follow the incoming gitlinks; the push stays on vscode.git.
+      if (this.cli) {
+        await pullWithSubmodules(this.cli, target);
+      } else {
+        await target.operations().pull();
+      }
       await target.operations().push(head.upstream.remote, head.upstream.name, false);
-      outcome = completed({ branch: head.upstream.name, remote: head.upstream.remote });
+      outcome = completed({
+        branch: head.upstream.name,
+        remote: head.upstream.remote,
+        ...(this.cli ? { "recurse submodules": true } : {}),
+      });
     });
     return outcome;
   }
@@ -446,11 +455,7 @@ export class DailyGitActions {
     return outcome;
   }
 
-  /**
-   * `git pull --recurse-submodules`: pulls the repository and fetches/checks out
-   * the submodules recorded by the incoming gitlinks. The vscode.git API has no
-   * option for this, so it goes through the CLI.
-   */
+  /** Pull without the push half of Sync, recursing into submodules (see `pullWithSubmodules`). */
   async pullRecurseSubmodules(rootPath: string): Promise<ActionOutcome> {
     const repository = this.requireRepository(rootPath);
     const cli = this.cli;
@@ -466,13 +471,7 @@ export class DailyGitActions {
         outcome = cancelled("no upstream");
         return;
       }
-      await cli.run({
-        cwd: target.rootPath,
-        args: ["pull", "--recurse-submodules"],
-        timeoutMs: RECURSE_PULL_TIMEOUT_MS,
-      });
-      // The CLI bypasses vscode.git, so ask it to re-read the repository.
-      await target.operations().status();
+      await pullWithSubmodules(cli, target);
       outcome = completed({
         branch: upstream.name,
         remote: upstream.remote,
@@ -570,6 +569,21 @@ export class DailyGitActions {
       }
     }
   }
+}
+
+/**
+ * `git pull --recurse-submodules`: pulls the repository and fetches/checks out
+ * the submodules recorded by the incoming gitlinks. The vscode.git API has no
+ * option for this, so it goes through the CLI.
+ */
+async function pullWithSubmodules(cli: GitCli, repository: DailyGitRepositoryHandle): Promise<void> {
+  await cli.run({
+    cwd: repository.rootPath,
+    args: ["pull", "--recurse-submodules"],
+    timeoutMs: RECURSE_PULL_TIMEOUT_MS,
+  });
+  // The CLI bypasses vscode.git, so ask it to re-read the repository.
+  await repository.operations().status();
 }
 
 function actionChanges(

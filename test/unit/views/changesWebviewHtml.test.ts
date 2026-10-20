@@ -450,7 +450,7 @@ describe("changes webview HTML", () => {
     expect(html).toContain('data-command="gitSubmodule.sync"');
     expect(html).toContain("inline-btn-labeled");
     expect(html).toContain('class="sync-label">23↓ 0↑<');
-    expect(html).toContain('title="Pull 23 commits from origin/master"');
+    expect(html).toContain('title="Pull 23 commits from origin/master (Recurse Submodules)"');
     expect(html).not.toContain('data-command="gitSubmodule.sync" title="Sync"');
     expect(html).not.toContain('class="branch">23↓ 0↑');
 

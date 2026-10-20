@@ -12,6 +12,7 @@ import {
   type DailyGitActionsUi,
   type DailyGitRepositoryHandle,
 } from "../../../src/scm/dailyGitActions.js";
+import type { GitCli, GitRunOptions } from "../../../src/git/gitCli.js";
 import type { GenerateCommitSubjectResult } from "../../../src/scm/generateCommitMessage.js";
 import type { SubmoduleChoreReadService } from "../../../src/scm/submoduleChoreTypes.js";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
@@ -202,7 +203,12 @@ function containerNode(
   };
 }
 
-function harness(repositories: FakeRepository[], ui = new FakeUi(), chore?: SubmoduleChoreReadService) {
+function harness(
+  repositories: FakeRepository[],
+  ui = new FakeUi(),
+  chore?: SubmoduleChoreReadService,
+  cli?: GitCli,
+) {
   return {
     ui,
     actions: new DailyGitActions(
@@ -212,6 +218,7 @@ function harness(repositories: FakeRepository[], ui = new FakeUi(), chore?: Subm
       },
       ui,
       chore,
+      cli,
     ),
   };
 }
@@ -503,6 +510,27 @@ describe("DailyGitActions repository commands", () => {
     ]);
     expect(repository.calls.map((call) => call.operation)).toEqual(["pull", "push"]);
     expect(repository.calls[1]?.args).toEqual(["origin", "main", false, undefined]);
+  });
+
+  it("syncs by pulling with --recurse-submodules through the Git CLI, then pushing", async () => {
+    const root = "/ws/repo";
+    const repository = new FakeRepository(root, snapshot(root));
+    const ui = new FakeUi();
+    ui.confirmSync = false;
+    const runs: GitRunOptions[] = [];
+    const cli: GitCli = {
+      run: async (options) => {
+        runs.push(options);
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+    };
+    const { actions } = harness([repository], ui, undefined, cli);
+
+    const outcome = await actions.sync(root);
+
+    expect(runs.map((run) => [run.cwd, run.args])).toEqual([[root, ["pull", "--recurse-submodules"]]]);
+    expect(repository.calls.map((call) => call.operation)).toEqual(["status", "push"]);
+    expect(outcome.details?.["recurse submodules"]).toBe(true);
   });
 
   it("skips the Sync confirmation when git.confirmSync is false", async () => {

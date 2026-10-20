@@ -157,9 +157,6 @@ function withSyncChrome(
   syncLabel: string | undefined,
   syncTooltip: string | undefined,
 ): RowAction[] {
-  if (!syncLabel && !syncTooltip) {
-    return [...actions];
-  }
   return actions.map((action) => {
     if (action.command !== COMMANDS.sync) {
       return action;
@@ -167,7 +164,8 @@ function withSyncChrome(
     return {
       ...action,
       ...(syncLabel ? { label: syncLabel } : {}),
-      title: syncTooltip ?? action.title,
+      // Unlike built-in `git.sync`, the pull half runs `git pull --recurse-submodules`.
+      title: `${syncTooltip ?? action.title} (Recurse Submodules)`,
     };
   });
 }
