@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-20
+
 ### Changed
 
 - **Sync** on a repository row now pulls with `git pull --recurse-submodules` (like **Pull (Recurse Submodules)**), so the submodules follow the incoming gitlinks before the push. The push still goes through `vscode.git`. The Sync hover ends with ` (Recurse Submodules)`, for example `Pull 1 commits from origin/main (Recurse Submodules)`.
@@ -142,7 +144,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.4...v0.4.0
 [0.3.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.3.1...v0.3.2
