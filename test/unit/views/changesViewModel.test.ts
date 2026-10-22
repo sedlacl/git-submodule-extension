@@ -291,6 +291,32 @@ describe("buildAdoptedTree change groups", () => {
     expect(byLabel(root?.children, "mod")?.decoration?.themeColorId).toBeUndefined();
   });
 
+  it("links a dirty gitlink with an unchanged pointer to the submodule's own section", () => {
+    const child = submodule({
+      rootPath: "/ws/app/mod",
+      parentRootPath: "/ws/app",
+      relativePath: "mod",
+      pins: { headGitlinkSha: HEAD, indexGitlinkSha: HEAD, checkoutHeadSha: HEAD },
+    });
+    const [root] = buildAdoptedTree(
+      { roots: [workspaceRoot("/ws/app", [child])] },
+      [
+        snapshot("/ws/app", { workingTree: [resource("/ws/app", "mod", ResourceStatus.MODIFIED)] }),
+        snapshot("/ws/app/mod", {
+          index: [resource("/ws/app/mod", "a.txt", ResourceStatus.INDEX_ADDED)],
+          workingTree: [resource("/ws/app/mod", "b.txt", ResourceStatus.MODIFIED)],
+        }),
+      ],
+    );
+    const gitlink = findByRelativePath(root?.children, "mod");
+    expect(gitlink?.children.map((node) => [node.kind, node.label, node.description])).toEqual([
+      ["adopted-group", "Adopted Changes", "0"],
+      ["local-changes-link", "Local Changes", "2"],
+    ]);
+    const link = gitlink?.children[1];
+    expect(link?.revealTargetId).toBe(byLabel(root?.children, "mod")?.id);
+  });
+
   it("shows Untracked Changes separately and empty Staged when settings require it", () => {
     const settings: ChangesTreeSettings = {
       ...DEFAULT_CHANGES_TREE_SETTINGS,

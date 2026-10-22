@@ -48,7 +48,7 @@ are the machine-checked source for labels and the deviation list below.
 | `treeview-not-sourcecontrol` | Hierarchy uses an SCM webview named CHANGES with submodules; the built-in Git Changes panel is not replaced or hidden (no stable API). Hide it manually in the SCM view title menu. |
 | `no-proposed-scm-api` | No `scmActionButton`, `scmMultiDiffEditor`, `scmValidation`, merge editor, or internal `git.*` command/resource contracts. |
 | `command-ids` | Commands are `gitSubmodule.*` contributed on this view, not built-in `git.*` IDs. |
-| `adopted-changes-group` | Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. |
+| `adopted-changes-group` | Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. When the submodule checkout has uncommitted changes, the Changes gitlink row also gets a Local Changes link row with their count that expands and scrolls to the submodule's own section. |
 | `hierarchical-repos` | Child repositories nest under their gitlink parent instead of the built-in flat repository list. |
 | `status-icons` | When `git.decorations.enabled` is false, status ThemeIcons are used instead of shipping copies of Git’s `status-*.svg` assets. |
 | `no-strikethrough` | Deleted files use the D decoration only; webview rows do not apply `SourceControlResourceDecorations.strikeThrough`. |

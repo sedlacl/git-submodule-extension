@@ -223,7 +223,7 @@ export function changesWebviewPage(params: {
 }
 
 export function groupCountPill(node: AdoptedTreeNode): string | undefined {
-  if (node.kind !== "change-group" && node.kind !== "adopted-group") {
+  if (node.kind !== "change-group" && node.kind !== "adopted-group" && node.kind !== "local-changes-link") {
     return undefined;
   }
   return node.description !== undefined && /^\d+$/.test(node.description) ? node.description : undefined;
@@ -304,6 +304,7 @@ function renderRow(row: ChangesWebviewRow): string {
     : "";
   const isRepo = row.kind === "workspace-root" || row.kind === "submodule";
   const isGroup = row.kind === "change-group" || row.kind === "adopted-group";
+  const isLink = row.kind === "local-changes-link";
   const repoKind = isRepo ? `<span class="repo-kind">Git</span>` : "";
   const branch = isRepo && row.description
     ? `<button type="button" class="branch" data-act="branch" title="Checkout Branch...">${escapeHtml(row.description)}</button>`
@@ -341,7 +342,7 @@ function renderRow(row: ChangesWebviewRow): string {
   const kids = row.children.map((child) => renderRow(child)).join("");
   const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label) : row.label;
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
-    <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
+    <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}${isLink ? " link-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
       ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="tail"><span class="inline">${actions}</span>${status}</span>
     </div>
     ${chrome}${kids}
@@ -426,6 +427,9 @@ body {
 }
 .row:hover { background: var(--vscode-list-hoverBackground); }
 .row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.link-row:not(.selected) > .label,
+.link-row:not(.selected) > .codicon { color: var(--vscode-textLink-foreground); }
+.link-row:hover > .label { text-decoration: underline; }
 .row > .codicon,
 .file-theme-icon {
   width: 16px;
@@ -657,6 +661,12 @@ window.addEventListener("message", (event) => {
   if (msg.type === "adoptedCount") {
     if (msg.generation !== current.generation) return;
     applyAdoptedCount(msg);
+    return;
+  }
+  if (msg.type === "reveal") {
+    const nodeEl = Array.from(root.querySelectorAll(".node")).find((node) => node.getAttribute("data-id") === msg.id);
+    const row = nodeEl && nodeEl.querySelector(":scope > .row");
+    if (row) row.scrollIntoView({ block: "start", behavior: "smooth" });
     return;
   }
   if (msg.type !== "setTree") return;

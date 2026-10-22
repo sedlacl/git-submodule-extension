@@ -61,4 +61,5 @@ export const CONTEXT = {
   file: "gitSubmodule.file",
   folder: "gitSubmodule.folder",
   message: "gitSubmodule.message",
+  localChangesLink: "gitSubmodule.localChangesLink",
 } as const;

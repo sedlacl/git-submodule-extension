@@ -61,7 +61,7 @@ export const BUILTIN_GIT_DEVIATIONS = [
   {
     id: "adopted-changes-group",
     summary:
-      "Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group.",
+      "Inner gitlink commit diffs nest under the matching Staged/Changes gitlink row as Adopted Changes, always visible with a pill file count (including 0), with an S badge and a gray commit/branch pointer label; there is no parent-level Adopted Changes group. When the submodule checkout has uncommitted changes, the Changes gitlink row also gets a Local Changes link row with their count that expands and scrolls to the submodule's own section.",
   },
   {
     id: "hierarchical-repos",

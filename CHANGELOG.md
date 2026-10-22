@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A submodule's gitlink row under **Changes** now shows a **Local Changes** link with the number of uncommitted changes in that submodule. Clicking it expands the submodule's own section below and scrolls to it. Before, a gitlink whose pointer had not moved showed only **Adopted Changes 0**, and the dirty files inside the submodule were hard to find.
+
 ## [0.4.2] - 2026-10-20
 
 ### Changed

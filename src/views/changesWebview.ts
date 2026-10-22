@@ -225,6 +225,11 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async onClick(id: string, additive: boolean): Promise<void> {
+    const target = this.nodes.get(id)?.revealTargetId;
+    if (!additive && target) {
+      await this.reveal(target);
+      return;
+    }
     if (additive) {
       if (this.selected.has(id)) {
         this.selected.delete(id);
@@ -243,6 +248,25 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       }
     }
     await this.repaint();
+  }
+
+  /** Expands the row and its ancestors, selects it, then asks the page to scroll it into view. */
+  private async reveal(id: string): Promise<void> {
+    const path = findNodePath(this.lastRoots, id);
+    if (!path) {
+      return;
+    }
+    for (const node of path) {
+      if (node.collapsible) {
+        this.expansion.set(node.id, true);
+      }
+    }
+    this.selected.clear();
+    this.selected.add(id);
+    await this.repaint();
+    if (this.view && this.htmlReady) {
+      await this.view.webview.postMessage({ type: "reveal", id });
+    }
   }
 
   private async commit(id: string, message: string): Promise<void> {
@@ -967,6 +991,20 @@ function findNode(nodes: readonly AdoptedTreeNode[], id: string): AdoptedTreeNod
     const child = findNode(node.children, id);
     if (child) {
       return child;
+    }
+  }
+  return undefined;
+}
+
+/** The node with `id` preceded by its ancestors, root first. */
+function findNodePath(nodes: readonly AdoptedTreeNode[], id: string): AdoptedTreeNode[] | undefined {
+  for (const node of nodes) {
+    if (node.id === id) {
+      return [node];
+    }
+    const path = findNodePath(node.children, id);
+    if (path) {
+      return [node, ...path];
     }
   }
   return undefined;

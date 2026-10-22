@@ -45,7 +45,8 @@ export type AdoptedTreeKind =
   | "staged"
   | "unstaged"
   | "file"
-  | "message";
+  | "message"
+  | "local-changes-link";
 
 export interface AdoptedFileDiff {
   repoRoot: string;
@@ -101,6 +102,8 @@ export interface AdoptedTreeNode {
   clickCommand?: { command: string; title: string };
   restoreTarget?: RestoreCommandContext;
   restoreResult?: RestoreResult;
+  /** Row id the view expands to and scrolls into view when this row is clicked. */
+  revealTargetId?: string;
   children: AdoptedTreeNode[];
 }
 
@@ -467,18 +470,23 @@ function toChangeNode(
         kind: pointer.kind,
       }
     : undefined;
+  const id = `change:${rootPath}:${group}:${resource.relativePath}`;
   const childGroups = gitlink ? lookupSnapshot(gitlink.rootPath, snapshots)?.groups : undefined;
   const adopted = gitlink ? [buildGitlinkAdoptedGroup(rootPath, group, gitlink, spec)] : [];
+  // Dirty checkout content is reported in the parent's working tree, never in its index.
+  const local =
+    gitlink && group === "workingTree" ? buildLocalChangesLink(id, gitlink, childGroups, settings) : [];
+  const children = [...adopted, ...local];
   return {
-    id: `change:${rootPath}:${group}:${resource.relativePath}`,
+    id,
     kind: "change",
     repositoryRoot: rootPath,
     changeGroup: group,
     label: resource.relativePath,
     description: spec && gitlink ? gitlinkPointerDescription(gitlink, spec, childGroups) : undefined,
     tooltip: gitlinkTooltip(resource.relativePath, decoration.tooltip, gitlink, spec),
-    collapsible: adopted.length > 0,
-    expandByDefault: adopted.length > 0,
+    collapsible: children.length > 0,
+    expandByDefault: children.length > 0,
     contextValue: gitlink ? `${CHANGE_FILE_CONTEXT[group]}.${CONTEXT.gitlink}` : CHANGE_FILE_CONTEXT[group],
     iconId: useIcons ? icon.iconId : "file",
     themeColorId: useIcons ? icon.themeColorId : decoration.themeColorId,
@@ -488,8 +496,39 @@ function toChangeNode(
     clickCommand: settings.openDiffOnClick
       ? { command: COMMANDS.openChange, title: "Open Changes" }
       : { command: COMMANDS.openFile, title: "Open File" },
-    children: adopted,
+    children,
   };
+}
+
+/** Points from a gitlink row to the submodule's own section, where its uncommitted changes are listed. */
+function buildLocalChangesLink(
+  gitlinkRowId: string,
+  gitlink: SubmoduleNode,
+  groups: RepositoryChangeGroups | undefined,
+  settings: ChangesTreeSettings,
+): AdoptedTreeNode[] {
+  const count = groups
+    ? visibleTreeGroups(groups, settings).reduce((total, group) => total + group.resources.length, 0)
+    : 0;
+  if (count === 0) {
+    return [];
+  }
+  return [
+    {
+      id: `${gitlinkRowId}:local-changes`,
+      kind: "local-changes-link",
+      repositoryRoot: gitlink.rootPath,
+      label: "Local Changes",
+      description: String(count),
+      tooltip: `Uncommitted changes in ${gitlink.displayName} — click to show them below`,
+      collapsible: false,
+      expandByDefault: false,
+      contextValue: CONTEXT.localChangesLink,
+      iconId: "arrow-down",
+      revealTargetId: `sub:${gitlink.rootPath}`,
+      children: [],
+    },
+  ];
 }
 
 function buildGitlinkAdoptedGroup(
