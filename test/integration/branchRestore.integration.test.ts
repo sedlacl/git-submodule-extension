@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { checkout, commitFile, runGit, writeFile } from "../../scripts/lib/git-fixture.js";
 import { BranchReconciler } from "../../src/restore/branchReconciler.js";
 import { SafeBranchRestoreService } from "../../src/restore/branchRestoreService.js";
-import { RestoreCoordinator } from "../../src/restore/restoreCoordinator.js";
+import { cachedSuperprojectResolver, RestoreCoordinator } from "../../src/restore/restoreCoordinator.js";
 import {
   createGitCli,
   createRestoreRepos,
@@ -124,5 +124,27 @@ describe("branch restore integration", () => {
     const before = recording.calls.length;
     coordinator.onRepositoryEvent(repos.parent);
     expect(recording.calls.length).toBe(before);
+  }, 60_000);
+
+  it("reattaches a submodule detached at its pin when only the submodule reports a change", async () => {
+    const repos = createRestoreRepos(tempDir());
+    // Detaching at the pin leaves the parent's status unchanged, so no parent event would follow.
+    checkout(repos.child, repos.pin);
+    const cli = createGitCli();
+    const service = new SafeBranchRestoreService(cli);
+    let started = 0;
+    let ended = 0;
+    const reconciler = new BranchReconciler(cli, service, {
+      debounceMs: 0,
+      onRunStart: () => (started += 1),
+      onRunEnd: () => (ended += 1),
+    });
+    const coordinator = new RestoreCoordinator(reconciler, service, () => true, cachedSuperprojectResolver(cli));
+
+    coordinator.onRepositoryEvent(repos.child);
+    // One run for the child's own submodules (none) and one for its parent, which reattaches it.
+    await expect.poll(() => started === 2 && ended === 2, { timeout: 30_000, interval: 100 }).toBe(true);
+    expect(runGit(repos.child, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("main");
+    expect(sha(repos.child)).toBe(repos.pin);
   }, 60_000);
 });

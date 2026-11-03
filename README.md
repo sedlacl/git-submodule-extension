@@ -51,7 +51,7 @@ Built-in labels, menu slots, and intentional deviations (webview vs SourceContro
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `gitSubmodule.restore.enabled` | `true` | After parent Git checkout/commit/state-change events, run fail-closed branch restore. |
+| `gitSubmodule.restore.enabled` | `true` | After parent Git checkout/commit/state-change events, run fail-closed branch restore. A state change reported only by a submodule (for example a checkout that detached it at its pin) runs the restore of its parent too. |
 | `gitSubmodule.restore.debounceMs` | `250` | Coalesce bursty Git events before a restore pass (`0`–`10000`). |
 | `gitSubmodule.commitMessage.provider` | `auto` | AI provider for Generate Commit Message: `auto`, `cursor`, `claude`, or `gitlens`. |
 | `gitSubmodule.commitMessage.claudeModel` | `haiku` | Model passed to the Claude Code CLI (`--model`). |

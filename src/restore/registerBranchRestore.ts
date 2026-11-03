@@ -10,7 +10,7 @@ import type { GitCli } from "../git/gitCli.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { BranchReconciler } from "./branchReconciler.js";
 import { SafeBranchRestoreService, type RestoreRequest } from "./branchRestoreService.js";
-import { RestoreCoordinator } from "./restoreCoordinator.js";
+import { cachedSuperprojectResolver, RestoreCoordinator } from "./restoreCoordinator.js";
 import { RestoreStatusStore } from "./restoreStatusStore.js";
 import {
   fetchConfirmMessage,
@@ -54,7 +54,12 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
     onRunStart: () => status.beginRun(),
     onRunEnd: () => status.endRun(),
   });
-  const coordinator = new RestoreCoordinator(reconciler, restore, isAutoEnabled);
+  const coordinator = new RestoreCoordinator(
+    reconciler,
+    restore,
+    isAutoEnabled,
+    cachedSuperprojectResolver(options.cli),
+  );
 
   const renderStatusBar = (): void => {
     if (!isAutoEnabled()) {
