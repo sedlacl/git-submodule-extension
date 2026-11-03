@@ -9,6 +9,8 @@ export const COMMANDS = {
   openAllChanges: "gitSubmodule.openAllChanges",
   openFile: "gitSubmodule.openFile",
   openHEADFile: "gitSubmodule.openHEADFile",
+  copyPath: "gitSubmodule.copyPath",
+  copyRelativePath: "gitSubmodule.copyRelativePath",
   stage: "gitSubmodule.stage",
   stageAll: "gitSubmodule.stageAll",
   stageAllTracked: "gitSubmodule.stageAllTracked",

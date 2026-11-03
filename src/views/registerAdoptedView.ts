@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as vscode from "vscode";
 import type { ActionDiagnostics } from "../actionDiagnostics.js";
 import type { GitCli } from "../git/gitCli.js";
@@ -21,6 +22,7 @@ import { readChangesTreeSettings, parseSessionViewMode, SESSION_VIEW_MODE_KEY, w
 import { COMMANDS, GIT_SHOW_SCHEME, VIEW_ID } from "./constants.js";
 import { GitShowContentProvider } from "./gitShowContentProvider.js";
 import { ChangesWebviewProvider } from "./changesWebview.js";
+import { nodeFilePath, relativeCopyPath } from "./copyPaths.js";
 import { toVscodeUri } from "./submoduleTree.js";
 
 export interface RegisterAdoptedViewOptions {
@@ -126,6 +128,8 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     registerRowCommand(COMMANDS.openChange, (node, selected) => openSelected(options.gitApi, controller, node, selected)),
     registerRowCommand(COMMANDS.openFile, (node) => openFile(node)),
     registerRowCommand(COMMANDS.openHEADFile, (node) => openHeadFile(options.gitApi, node)),
+    registerRowCommand(COMMANDS.copyPath, (node, selected) => copyPaths(node, selected, false)),
+    registerRowCommand(COMMANDS.copyRelativePath, (node, selected) => copyPaths(node, selected, true)),
     registerRowCommand(COMMANDS.openAllChanges, (node, selected) =>
       openSelected(options.gitApi, controller, node, selected),
     ),
@@ -231,6 +235,29 @@ async function openFile(node: AdoptedTreeNode | undefined): Promise<void> {
     return;
   }
   await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(uri));
+}
+
+/** Explorer's Copy Path / Copy Relative Path for the row, or every selected row when it is part of the selection. */
+async function copyPaths(
+  node: AdoptedTreeNode | undefined,
+  selected: readonly AdoptedTreeNode[] | undefined,
+  relative: boolean,
+): Promise<void> {
+  if (!node) {
+    return;
+  }
+  const nodes = selected?.some((item) => item.id === node.id) ? selected : [node];
+  const paths = nodes.map(nodeFilePath).filter((filePath): filePath is string => Boolean(filePath));
+  if (paths.length === 0) {
+    return;
+  }
+  const separator = vscode.workspace.getConfiguration("explorer").get<string>("copyRelativePathSeparator", "auto");
+  const text = paths
+    .map((filePath) =>
+      relative ? relativeCopyPath(vscode.workspace.asRelativePath(filePath, false), separator) : filePath,
+    )
+    .join(os.EOL);
+  await vscode.env.clipboard.writeText(text);
 }
 
 async function openHeadFile(gitApi: VsCodeGitApiAdapter, node: AdoptedTreeNode | undefined): Promise<void> {

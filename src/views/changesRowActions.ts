@@ -39,6 +39,8 @@ const CHANGE_OR_FOLDER_UNSTAGE = /gitSubmodule\.(change|resourceFolder)\.index/;
 const CHANGE_OR_FOLDER_STAGE = /gitSubmodule\.(change|resourceFolder)\.(merge|workingTree|untracked)/;
 const CHANGE_OR_FOLDER_CLEAN = /gitSubmodule\.(change|resourceFolder)\.(workingTree|untracked)/;
 const NAV_CHANGE = /gitSubmodule\.change\.(index|workingTree|untracked)/;
+/** Rows backed by a file or folder on disk: changes, change folders, and adopted files and folders. */
+const HAS_PATH = /^gitSubmodule\.(change|resourceFolder|file|folder)(\.|$)/;
 const RESTORE_BLOCKED = /restoreBlocked/;
 const SUBMODULE = /gitSubmodule\.submodule/;
 
@@ -173,6 +175,11 @@ export function contextActions(contextValue: string, config: RowActionConfig = D
     push(actions, COMMANDS.clean, BUILTIN_COMMAND_TITLES.clean, "discard", "context", 30);
   }
 
+  if (HAS_PATH.test(contextValue)) {
+    push(actions, COMMANDS.copyPath, "Copy Path", "copy", "context", 40);
+    push(actions, COMMANDS.copyRelativePath, "Copy Relative Path", "copy", "context", 41);
+  }
+
   return sortActions(actions);
 }
 
@@ -187,7 +194,8 @@ export function contextMenuKey(command: string): string {
 
 /** `webview/context` group for a context action: separators follow the order decades. */
 export function contextMenuGroup(order: number): string {
-  const section = order < 10 ? "1_repository" : order < 20 ? "2_changeGroup" : order < 30 ? "3_open" : "4_change";
+  const section =
+    order < 10 ? "1_repository" : order < 20 ? "2_changeGroup" : order < 30 ? "3_open" : order < 40 ? "4_change" : "5_copy";
   return `${section}@${order}`;
 }
 

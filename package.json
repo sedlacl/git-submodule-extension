@@ -195,6 +195,16 @@
         "category": "Git Submodule"
       },
       {
+        "command": "gitSubmodule.copyPath",
+        "title": "Copy Path",
+        "category": "Git Submodule"
+      },
+      {
+        "command": "gitSubmodule.copyRelativePath",
+        "title": "Copy Relative Path",
+        "category": "Git Submodule"
+      },
+      {
         "command": "gitSubmodule.stage",
         "title": "Stage Changes",
         "category": "Git Submodule",
@@ -354,6 +364,14 @@
         {
           "command": "gitSubmodule.publish",
           "when": "false"
+        },
+        {
+          "command": "gitSubmodule.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "gitSubmodule.copyRelativePath",
+          "when": "false"
         }
       ],
       "scm/title": [
@@ -495,6 +513,16 @@
           "command": "gitSubmodule.unstage",
           "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.unstage",
           "group": "4_change@30"
+        },
+        {
+          "command": "gitSubmodule.copyPath",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.copyPath",
+          "group": "5_copy@40"
+        },
+        {
+          "command": "gitSubmodule.copyRelativePath",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.copyRelativePath",
+          "group": "5_copy@41"
         }
       ]
     },
