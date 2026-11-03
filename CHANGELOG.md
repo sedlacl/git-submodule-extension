@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-11-03
+
+### Changed
+
+- The Marketplace and Open VSX pages show an up-to-date description of the extension, and the VS Code Marketplace badge in the README no longer reads "retired badge".
+
 ## [0.4.9] - 2026-11-03
 
 ### Changed
@@ -184,7 +190,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...HEAD
+[0.4.10]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...v0.4.7

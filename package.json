@@ -2,7 +2,7 @@
   "name": "git-submodule-extension",
   "displayName": "Git Submodule Extension",
   "description": "Source Control view for Git submodules: nested repositories and gitlink diffs in one Changes tree, everyday Git actions, and safe reattach of detached submodules to their branch.",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "publisher": "qjohn",
   "icon": "media/icon.png",
   "license": "MIT",
