@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-03
+
+### Fixed
+
+- A row action run from the context menu or an inline button no longer adds the row to the selection, and it applies to the selection only when the row is part of it; before, a Discard on one row could also discard the rows selected earlier.
+
 ## [0.4.3] - 2026-10-22
 
 ### Added
@@ -150,7 +156,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.0...v0.4.1
