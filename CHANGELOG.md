@@ -5,7 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.6] - 2026-11-03
+
+### Changed
+
+- Branch restore only reattaches a submodule whose HEAD is detached at its gitlink commit. A submodule on any branch is left as it is and logged as `[skipped]`. Before, a clean submodule whose branch had moved past the gitlink commit, for example after a pull inside the submodule, was switched back to that commit. A submodule detached at another commit is now blocked (`detached at <sha>, not at the gitlink commit <sha>`) instead of being moved to the gitlink commit, so commits made on a detached HEAD are never left behind.
 
 ## [0.4.5] - 2026-11-03
 
@@ -162,7 +166,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.2...v0.4.3
