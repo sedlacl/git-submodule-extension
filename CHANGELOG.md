@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-11-03
+
+### Added
+
+- **Copy Path** and **Copy Relative Path** in the context menu of file and folder rows in CHANGES with submodules, including adopted files of a submodule. Like the Explorer, the relative path is relative to the workspace folder and follows `explorer.copyRelativePathSeparator`. With several rows selected, all their paths are copied, one per line.
+
 ## [0.4.7] - 2026-11-03
 
 ### Changed
@@ -172,7 +178,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...HEAD
+[0.4.8]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...v0.4.5
