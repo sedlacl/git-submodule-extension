@@ -6,7 +6,8 @@ First public release and every follow-up use the same flow. `package.json` `vers
 
 1. Create an [Open VSX access token](https://open-vsx.org/user-settings/tokens) for publisher **`qjohn`**.
 2. In GitHub → **Settings → Secrets and variables → Actions**, add repository secret **`OVSX_PAT`** with that token.
-3. Confirm `package.json` has valid `publisher`, `name`, `displayName`, `license`, `repository`, and `icon` fields.
+3. On the [VS Code Marketplace publisher page](https://marketplace.visualstudio.com/manage/publishers/qjohn) → **Trusted Publishing**, keep a GitHub Actions policy for owner `sedlacl`, repository `git-submodule-extension`, workflow `release.yml`, no environment. The workflow publishes with `vsce publish --oidc` and the `id-token: write` permission, so there is no Marketplace token to store. Azure DevOps PATs are not used.
+4. Confirm `package.json` has valid `publisher`, `name`, `displayName`, `license`, `repository`, and `icon` fields.
 
 ## Release steps (maintainer)
 
@@ -22,7 +23,7 @@ First public release and every follow-up use the same flow. `package.json` `vers
    git tag -a v0.1.0 -m "v0.1.0"
    git push origin HEAD --follow-tags
    ```
-5. GitHub Actions workflow **Release** (trigger: tag `v*`) runs `npm ci`, lint, typecheck, test, `npm run package:ci`, uploads the `.vsix` to the GitHub Release, and publishes to Open VSX with `OVSX_PAT`.
+5. GitHub Actions workflow **Release** (trigger: tag `v*`) runs `npm ci`, lint, typecheck, test, `npm run package:ci`, uploads the `.vsix` to the GitHub Release, and publishes that `.vsix` to the VS Code Marketplace (Trusted Publishing) and to Open VSX (`OVSX_PAT`). The two publish steps are independent: when one fails, the other still runs. A version already published to one registry cannot be published again, so after a partial failure republish only the missing one, for example by uploading the `.vsix` from the GitHub Release on the Marketplace publisher page.
 
 CI uses `package:ci`, which skips `build:icon` because the runner has no ImageMagick. After editing `media/icon.svg`, run `npm run build:icon` locally and commit the regenerated `media/icon.png`.
 
@@ -43,5 +44,6 @@ Expected VSIX name: `git-submodule-extension-<version>.vsix` (for example `git-s
 
 ## Install paths for users
 
-- **Open VSX** (after publish): search *Git Submodule Extension* or install `qjohn.git-submodule-extension`.
+- **VS Code Marketplace** (after publish): search *Git Submodule Extension* in the Extensions view or install [`qjohn.git-submodule-extension`](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension).
+- **Open VSX** (after publish, for Cursor and other forks): search *Git Submodule Extension* or install `qjohn.git-submodule-extension`.
 - **VSIX file**: download from GitHub Releases or `npm run package`, then *Extensions → … → Install from VSIX…*.

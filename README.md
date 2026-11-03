@@ -4,6 +4,7 @@
   <img src="media/icon.png" width="128" height="128" alt="Git Submodule Extension icon"/>
 </p>
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/qjohn.git-submodule-extension?label=vs%20code%20marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension)
 [![Open VSX](https://img.shields.io/open-vsx/v/qjohn/git-submodule-extension?label=open%20vsx&color=blue)](https://open-vsx.org/extension/qjohn/git-submodule-extension)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -25,7 +26,8 @@ Monorepos and deployment layouts with nested submodules are hard to read in the 
 
 ## Install
 
-- **Open VSX** (after release): search *Git Submodule Extension* or install [`qjohn.git-submodule-extension`](https://open-vsx.org/extension/qjohn/git-submodule-extension).
+- **VS Code Marketplace**: search *Git Submodule Extension* in the Extensions view or install [`qjohn.git-submodule-extension`](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension).
+- **Open VSX** (Cursor and other forks): search *Git Submodule Extension* or install [`qjohn.git-submodule-extension`](https://open-vsx.org/extension/qjohn/git-submodule-extension).
 - **VSIX**: download from [GitHub Releases](https://github.com/sedlacl/git-submodule-extension/releases) or build locally (`npm run package`), then *Extensions → … → Install from VSIX…*.
 
 ## What it shows
@@ -132,7 +134,7 @@ npm run version:major    # 0.1.0 → 1.0.0
 npm run version:set -- 0.1.0
 ```
 
-Add a [CHANGELOG.md](CHANGELOG.md) entry, then create an annotated tag `vX.Y.Z` (`git tag -a`) and `git push origin HEAD --follow-tags`. Open VSX publish runs in CI — see [`docs/publishing.md`](docs/publishing.md).
+Add a [CHANGELOG.md](CHANGELOG.md) entry, then create an annotated tag `vX.Y.Z` (`git tag -a`) and `git push origin HEAD --follow-tags`. Publishing to the VS Code Marketplace and Open VSX runs in CI — see [`docs/publishing.md`](docs/publishing.md).
 
 ## Development
 

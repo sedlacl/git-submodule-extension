@@ -1,5 +1,5 @@
 ---
-description: Version bump, changelog, and OpenVSX release via GitHub CI
+description: Version bump, changelog, and VS Code Marketplace + OpenVSX release via GitHub CI
 alwaysApply: false
 ---
 
@@ -27,8 +27,9 @@ alwaysApply: false
 
 ## Publish
 
-- Open VSX **jen přes GitHub Actions** (`.github/workflows/release.yml`) po pushi tagu `v*`.
-- Secret `OVSX_PAT` v repo settings — token z https://open-vsx.org/user-settings/tokens.
+- VS Code Marketplace i Open VSX **jen přes GitHub Actions** (`.github/workflows/release.yml`) po pushi tagu `v*`.
+- VS Code Marketplace: Trusted Publishing (`vsce publish --oidc`, oprávnění `id-token: write`), politika u publishera `qjohn` pro `sedlacl/git-submodule-extension` a `release.yml`. Žádný PAT ani secret.
+- Open VSX: secret `OVSX_PAT` v repo settings — token z https://open-vsx.org/user-settings/tokens.
 - **Nikdy** neposílat PAT do chatu, do kódu ani do logů. Lokální `ovsx publish` jen pro debug, ne jako release kanál.
 
 Podrobný checklist: [`docs/publishing.md`](../docs/publishing.md).
