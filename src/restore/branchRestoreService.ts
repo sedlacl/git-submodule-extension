@@ -5,7 +5,7 @@ import { sameRepoPath } from "../git/pathUtils.js";
 import { GIT_IN_PROGRESS_MARKERS, parsePorcelainV2 } from "../git/repoStatus.js";
 import { assertSha } from "../git/sha.js";
 
-export type RestoreAction = "attached" | "already-attached" | "blocked";
+export type RestoreAction = "attached" | "already-attached" | "blocked" | "skipped";
 
 export interface RestoreResult {
   readonly path: string;
@@ -31,6 +31,8 @@ export interface BranchRestoreExecutor {
 /**
  * Performs a single, fully revalidated branch attach. It intentionally has no
  * pull, push, commit, reset, checkout-discard, or implicit network operation.
+ * It only reattaches a HEAD detached at the gitlink commit: a checkout on any
+ * branch, or detached elsewhere, is the user's and stays as it is.
  */
 export class SafeBranchRestoreService implements BranchRestoreExecutor {
   constructor(
@@ -41,9 +43,22 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
   async reconcile(request: RestoreRequest): Promise<RestoreResult> {
     try {
       this.assertRequest(request);
-      const already = await this.inspect(request);
-      if (already) {
-        return this.result(request, "already-attached", `already on ${request.branch}@${shortSha(request.pin)}`);
+      await this.assertWorktreeRoot(request.childRootPath);
+      const current = await this.status(request.childRootPath);
+      if (!current.detached) {
+        if (
+          current.head === request.branch &&
+          current.oid === request.pin &&
+          current.upstream === `origin/${request.branch}`
+        ) {
+          return this.result(request, "already-attached", `already on ${request.branch}@${shortSha(request.pin)}`);
+        }
+        const at = current.oid ? `@${shortSha(current.oid)}` : "";
+        return this.result(request, "skipped", `on branch ${current.head ?? "(unborn)"}${at}; only a detached HEAD is reattached`);
+      }
+      if (current.oid !== request.pin) {
+        const at = current.oid ? shortSha(current.oid) : "an unknown commit";
+        throw new Error(`detached at ${at}, not at the gitlink commit ${shortSha(request.pin)}`);
       }
 
       // Revalidate immediately before the only two automatic writes.
@@ -66,18 +81,8 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
     await this.cli.run({ cwd: request.childRootPath, args: ["fetch", "origin", request.branch] });
   }
 
-  private async inspect(request: RestoreRequest): Promise<boolean> {
-    await this.assertSafeToAttach(request);
-    const status = await this.status(request.childRootPath);
-    return (
-      status.oid === request.pin &&
-      status.head === request.branch &&
-      status.upstream === `origin/${request.branch}`
-    );
-  }
-
-  private async assertSafeToAttach(request: RestoreRequest): Promise<void> {
-    const child = request.childRootPath;
+  /** Without this check, `git status` in an uninitialized submodule folder would read the parent. */
+  private async assertWorktreeRoot(child: string): Promise<void> {
     const workTree = await this.cli.run({
       cwd: child,
       args: ["rev-parse", "--is-inside-work-tree"],
@@ -91,11 +96,19 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
     if (!sameRepoPath(topLevel.stdout.trim(), child)) {
       throw new Error("submodule path is not its Git worktree root");
     }
+  }
+
+  private async assertSafeToAttach(request: RestoreRequest): Promise<void> {
+    const child = request.childRootPath;
+    await this.assertWorktreeRoot(child);
     if (await this.operationInProgress(child)) {
       throw new Error("a Git operation is in progress");
     }
 
     const status = await this.status(child);
+    if (!status.detached || status.oid !== request.pin) {
+      throw new Error("HEAD moved before the attach");
+    }
     if (status.dirty) {
       throw new Error("working tree is dirty");
     }

@@ -113,6 +113,20 @@ describe("SafeBranchRestoreService safety matrix", () => {
     }
   });
 
+  it("leaves a checkout on a branch as it is and blocks a HEAD detached away from the pin", async () => {
+    const onBranch = new FakeGit();
+    onBranch.status = statusOutput({ oid: LOCAL, head: "main" });
+    const skipped = await new SafeBranchRestoreService(onBranch, { exists: () => false }).reconcile(request);
+    expect(skipped).toMatchObject({ action: "skipped", detail: `on branch main@${LOCAL.slice(0, 8)}; only a detached HEAD is reattached` });
+    expect(onBranch.writes()).toEqual([]);
+
+    const elsewhere = new FakeGit();
+    elsewhere.status = statusOutput({ oid: LOCAL, head: "(detached)" });
+    const blocked = await new SafeBranchRestoreService(elsewhere, { exists: () => false }).reconcile(request);
+    expect(blocked).toMatchObject({ action: "blocked", detail: `detached at ${LOCAL.slice(0, 8)}, not at the gitlink commit ${PIN.slice(0, 8)}` });
+    expect(elsewhere.writes()).toEqual([]);
+  });
+
   it("does not mutate an already attached checkout and fetches only explicitly", async () => {
     const git = new FakeGit();
     git.status = statusOutput({ oid: PIN, head: "main" });

@@ -105,6 +105,25 @@ describe("branch restore integration", () => {
     expect(recording.verbs()).not.toContain("switch");
   }, 90_000);
 
+  it("never rewinds a submodule branch that moved past the gitlink commit", async () => {
+    const repos = createRestoreRepos(tempDir());
+    const pulled = commitFile(repos.source, "next.txt", "next\n", "next on origin");
+    runGit(repos.child, ["pull", "--ff-only"]);
+    expect(sha(repos.child)).toBe(pulled);
+
+    const recording = new RecordingCli(createGitCli());
+    const result = await new SafeBranchRestoreService(recording).reconcile({
+      parentRootPath: repos.parent,
+      relativePath: repos.childRel,
+      childRootPath: repos.child,
+      branch: "main",
+      pin: repos.pin,
+    });
+    expect(result.action).toBe("skipped");
+    expect(sha(repos.child)).toBe(pulled);
+    expect(recording.verbs()).not.toContain("switch");
+  }, 60_000);
+
   it("reconciles through the event coordinator without auto-fetch and honors disabled auto-safe", async () => {
     const repos = createRestoreRepos(tempDir());
     checkout(repos.child, repos.pin);

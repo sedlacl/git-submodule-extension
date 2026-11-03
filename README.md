@@ -86,7 +86,7 @@ Blocked restore cases appear on the submodule row, in the **Git Submodule** outp
 
 Open **View → Output**, then select **Git Submodule**. Every line uses one local wall-clock timestamp. Load lines retain `[changes #N]`: they identify one load generation and its trigger, bootstrap work, recursive discovery, tree build, serialization/post/render acknowledgement, total usable-tree time, result, and slowest phase. A separate `adopted counts` line reports background count hydration, including cache hits, Git diff calls, and the four-call concurrency bound. `stale/cancelled` means a newer generation replaced the load; it never represents a final tree.
 
-User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text. Restore writes `[blocked]`, `[attached]`, or `[already-attached]` for every child it evaluates, including an unchanged blocked reason on retry.
+User actions use a process-wide, monotonically increasing `[action #N]` id with monotonic durations. Each action has one start and exactly one `completed`, `cancelled`, or `failed` terminal line; concurrent actions remain attributable. Generate Message also reports its public AI command/provider result, submodule-chore preview count, and merge behavior without logging the generated text. Restore writes `[blocked]`, `[attached]`, `[already-attached]`, or `[skipped]` for every child it evaluates, including an unchanged blocked reason on retry.
 
 ```text
 [15:57:12.184] [action #14] generate message started (repository: web-app)
@@ -111,6 +111,7 @@ A child is attached (`git switch -C <branch> <pin>` plus upstream) only when all
 - target branch comes from committed `HEAD:.gitmodules`
 - target SHA comes from the current parent HEAD gitlink
 - child is an initialized Git worktree at the declared path
+- child HEAD is detached at the pin; a child on any branch is skipped (`[skipped]`) and never moved, and a child detached at another commit is blocked
 - no Git operation is in progress
 - working tree is clean
 - `origin` exists
