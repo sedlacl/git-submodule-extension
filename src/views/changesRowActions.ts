@@ -177,6 +177,14 @@ export function rowActions(contextValue: string, config: RowActionConfig = DEFAU
   return [...inlineActions(contextValue, config), ...contextActions(contextValue, config)];
 }
 
+/**
+ * Rows a row action applies to, as in the native tree: the whole selection when the row is part of it,
+ * otherwise only that row. Running an action never changes the selection.
+ */
+export function actionTargetIds(id: string, selected: ReadonlySet<string>): string[] {
+  return selected.has(id) ? [...selected] : [id];
+}
+
 function push(
   actions: RowAction[],
   command: string,

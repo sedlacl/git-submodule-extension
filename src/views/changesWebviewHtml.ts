@@ -753,7 +753,7 @@ root.addEventListener("click", (event) => {
   }
   if (act === "command") {
     event.stopPropagation();
-    vscode.postMessage({ type: "command", command: actionEl.getAttribute("data-command"), id, additive: event.ctrlKey || event.metaKey });
+    vscode.postMessage({ type: "command", command: actionEl.getAttribute("data-command"), id });
     return;
   }
   if (act === "generate") {

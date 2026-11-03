@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS, CONTEXT } from "../../../src/views/constants.js";
 import {
   DEFAULT_ROW_ACTION_CONFIG,
+  actionTargetIds,
   contextActions,
   inlineActions,
 } from "../../../src/views/changesRowActions.js";
@@ -37,5 +38,12 @@ describe("changesRowActions", () => {
     expect(actions.map((action) => action.command)).toEqual(
       expect.arrayContaining([COMMANDS.openChange, COMMANDS.openFile, COMMANDS.openHEADFile, COMMANDS.unstage]),
     );
+  });
+
+  it("targets the whole selection only when the acted-on row is part of it", () => {
+    const selected = new Set(["a", "b"]);
+    expect(actionTargetIds("b", selected)).toEqual(["a", "b"]);
+    expect(actionTargetIds("c", selected)).toEqual(["c"]);
+    expect(selected).toEqual(new Set(["a", "b"]));
   });
 });

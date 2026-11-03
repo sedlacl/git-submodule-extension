@@ -6,7 +6,7 @@ import { commitMessagePlaceholder } from "../scm/dailyGitActions.js";
 import { isPublicCommitMessageTargetSupported } from "../scm/generateCommitMessage.js";
 import type { AdoptedCountPatch, AdoptedTreeController } from "./adoptedTreeController.js";
 import { buildBootstrapRepoNodes, treeItemCommand, type AdoptedTreeNode } from "./adoptedViewModel.js";
-import { type RowActionConfig, contextActions } from "./changesRowActions.js";
+import { type RowActionConfig, actionTargetIds, contextActions } from "./changesRowActions.js";
 import { type ChangesTreeSettings } from "./changesTreeSettings.js";
 import {
   changesWebviewErrorHtml,
@@ -62,7 +62,7 @@ type WebviewMessage =
   | { type: "toggle"; id: string }
   | { type: "click"; id: string; additive?: boolean }
   | { type: "branch"; id: string }
-  | { type: "command"; command: string; id: string; additive?: boolean }
+  | { type: "command"; command: string; id: string }
   | { type: "commit"; id: string; message: string }
   | { type: "generate"; id: string }
   | { type: "explainGenerate"; id: string }
@@ -201,16 +201,16 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
         await this.onClick(message.id, Boolean(message.additive));
         return;
       case "branch":
-        await this.runCommand(COMMANDS.checkoutBranch, message.id, false);
+        await this.runCommand(COMMANDS.checkoutBranch, message.id);
         return;
       case "command":
-        await this.runCommand(message.command, message.id, Boolean(message.additive));
+        await this.runCommand(message.command, message.id);
         return;
       case "commit":
         await this.commit(message.id, message.message);
         return;
       case "generate":
-        await this.runCommand(COMMANDS.generateSubmoduleChore, message.id, false);
+        await this.runCommand(COMMANDS.generateSubmoduleChore, message.id);
         return;
       case "explainGenerate":
         void vscode.window.showInformationMessage(UNSUPPORTED_COMMIT_MESSAGE_TOOLTIP);
@@ -286,12 +286,12 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async runCommand(command: string, id: string, additive: boolean): Promise<void> {
+  private async runCommand(command: string, id: string): Promise<void> {
     const node = this.nodes.get(id);
     if (!node) {
       return;
     }
-    const selected = this.selectedNodes(id, additive);
+    const selected = this.selectedNodes(id);
     await this.trackRunning(id, command, () => vscode.commands.executeCommand(command, node, selected));
   }
 
@@ -328,15 +328,8 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     return new Map([...this.running].map(([id, commands]) => [id, new Set(commands.keys())]));
   }
 
-  private selectedNodes(id: string, additive: boolean): AdoptedTreeNode[] {
-    if (!additive && this.selected.size <= 1) {
-      const node = this.nodes.get(id);
-      return node ? [node] : [];
-    }
-    if (!this.selected.has(id)) {
-      this.selected.add(id);
-    }
-    return [...this.selected]
+  private selectedNodes(id: string): AdoptedTreeNode[] {
+    return actionTargetIds(id, this.selected)
       .map((selectedId) => this.nodes.get(selectedId))
       .filter((node): node is AdoptedTreeNode => Boolean(node));
   }
@@ -355,7 +348,7 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       { placeHolder: node.label },
     );
     if (picked) {
-      const selected = this.selectedNodes(id, true);
+      const selected = this.selectedNodes(id);
       await this.trackRunning(id, picked.action.command, () =>
         vscode.commands.executeCommand(picked.action.command, node, selected),
       );
