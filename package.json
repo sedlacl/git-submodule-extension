@@ -389,6 +389,113 @@
           "when": "view == gitSubmodule.repos && gitSubmodule.viewMode != tree",
           "group": "navigation@4"
         }
+      ],
+      "webview/context": [
+        {
+          "command": "gitSubmodule.checkoutBranch",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.checkoutBranch",
+          "group": "1_repository@1"
+        },
+        {
+          "command": "gitSubmodule.copyBranchName",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.copyBranchName",
+          "group": "1_repository@1"
+        },
+        {
+          "command": "gitSubmodule.fetch",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.fetch",
+          "group": "1_repository@2"
+        },
+        {
+          "command": "gitSubmodule.pull",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.pull",
+          "group": "1_repository@3"
+        },
+        {
+          "command": "gitSubmodule.pullRecurseSubmodules",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.pullRecurseSubmodules",
+          "group": "1_repository@3"
+        },
+        {
+          "command": "gitSubmodule.generateSubmoduleChore",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.generateSubmoduleChore",
+          "group": "1_repository@4"
+        },
+        {
+          "command": "gitSubmodule.openAllChanges",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.openAllChanges",
+          "group": "1_repository@5"
+        },
+        {
+          "command": "gitSubmodule.stageAll",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.stageAll",
+          "group": "2_changeGroup@10"
+        },
+        {
+          "command": "gitSubmodule.stageAllMerge",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.stageAllMerge",
+          "group": "2_changeGroup@10"
+        },
+        {
+          "command": "gitSubmodule.stageAllTracked",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.stageAllTracked",
+          "group": "2_changeGroup@10"
+        },
+        {
+          "command": "gitSubmodule.stageAllUntracked",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.stageAllUntracked",
+          "group": "2_changeGroup@10"
+        },
+        {
+          "command": "gitSubmodule.unstageAll",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.unstageAll",
+          "group": "2_changeGroup@10"
+        },
+        {
+          "command": "gitSubmodule.cleanAll",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.cleanAll",
+          "group": "2_changeGroup@11"
+        },
+        {
+          "command": "gitSubmodule.cleanAllTracked",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.cleanAllTracked",
+          "group": "2_changeGroup@11"
+        },
+        {
+          "command": "gitSubmodule.cleanAllUntracked",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.cleanAllUntracked",
+          "group": "2_changeGroup@11"
+        },
+        {
+          "command": "gitSubmodule.openChange",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.openChange",
+          "group": "3_open@20"
+        },
+        {
+          "command": "gitSubmodule.openFile",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.openFile",
+          "group": "3_open@21"
+        },
+        {
+          "command": "gitSubmodule.openHEADFile",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.openHEADFile",
+          "group": "3_open@22"
+        },
+        {
+          "command": "gitSubmodule.clean",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.clean",
+          "group": "4_change@30"
+        },
+        {
+          "command": "gitSubmodule.stage",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.stage",
+          "group": "4_change@30"
+        },
+        {
+          "command": "gitSubmodule.unstage",
+          "when": "webviewId == gitSubmodule.repos && gitSubmodule.menu.unstage",
+          "group": "4_change@30"
+        }
       ]
     },
     "viewsWelcome": [

@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizeRepoPath } from "../../../src/git/pathUtils.js";
 import type { AdoptedTreeNode } from "../../../src/views/adoptedViewModel.js";
-import { DEFAULT_ROW_ACTION_CONFIG } from "../../../src/views/changesRowActions.js";
+import { contextActions, contextMenuKey, DEFAULT_ROW_ACTION_CONFIG } from "../../../src/views/changesRowActions.js";
 import {
   changesWebviewErrorHtml,
   changesWebviewLoadingHtml,
@@ -54,6 +54,47 @@ function group(kind: "index" | "workingTree" | "merge", files: number): AdoptedT
 }
 
 describe("changes webview HTML", () => {
+  it("gives every row the native context menu keys of its context actions", () => {
+    const dirty = repo({
+      id: "root:/ws/app",
+      kind: "workspace-root",
+      label: "app",
+      contextValue: `${CONTEXT.workspaceRoot}.${CONTEXT.hasUpstream}`,
+      repositoryRoot: "/ws/app",
+      children: [group("workingTree", 1)],
+    });
+    const html = renderChangesTree(
+      toChangesWebviewRows([dirty], {
+        expanded: new Set(["root:/ws/app", "group:workingTree"]),
+        selected: new Set<string>(),
+        drafts: new Map(),
+        placeholders: new Map(),
+        config: DEFAULT_ROW_ACTION_CONFIG,
+      }),
+    );
+    const contexts = [...html.matchAll(/data-vscode-context="([^"]*)"/g)].map(
+      (match) => JSON.parse(match[1]!.replaceAll("&quot;", '"')) as Record<string, unknown>,
+    );
+    const rows = new Map(contexts.filter((context) => context.rowId).map((context) => [context.rowId, context]));
+    for (const [id, contextValue] of [
+      ["root:/ws/app", dirty.contextValue],
+      ["group:workingTree", CONTEXT.changeGroupWorkingTree],
+      ["file:workingTree:0", CONTEXT.changeWorkingTree],
+    ] as const) {
+      const expected = contextActions(contextValue, DEFAULT_ROW_ACTION_CONFIG).map((action) => contextMenuKey(action.command));
+      expect(expected.length).toBeGreaterThan(0);
+      const keys = Object.keys(rows.get(id) ?? {}).filter((key) => key.startsWith("gitSubmodule.menu."));
+      expect(keys.sort()).toEqual([...expected].sort());
+      expect(rows.get(id)?.webviewSection).toBe("row");
+    }
+    // Rows and empty space drop Cut/Copy/Paste; only the commit message box keeps them.
+    expect(contexts.filter((context) => "preventDefaultContextMenuItems" in context)).toEqual([
+      { preventDefaultContextMenuItems: true },
+      { preventDefaultContextMenuItems: false },
+    ]);
+    expect(html).toMatch(/<textarea class="commit-input" data-act="draft" data-vscode-context=/);
+  });
+
   it("renders commit chrome for a dirty repo and skips merge-only or descendant-only dirt", () => {
     const dirty = repo({
       id: "root:/ws/app",

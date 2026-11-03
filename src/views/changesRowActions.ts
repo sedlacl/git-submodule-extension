@@ -112,7 +112,10 @@ export function inlineActions(contextValue: string, config: RowActionConfig = DE
   return sortActions(actions);
 }
 
-/** Right-click / QuickPick actions for a tree row. Same slots as the former view/item/context groups. */
+/**
+ * Right-click actions for a tree row, shown by the native `webview/context` menu (see `contextMenuKey`).
+ * Same slots as the former view/item/context groups.
+ */
 export function contextActions(contextValue: string, config: RowActionConfig = DEFAULT_ROW_ACTION_CONFIG): RowAction[] {
   const actions: RowAction[] = [];
   const mixed = config.untrackedChanges === "mixed";
@@ -175,6 +178,17 @@ export function contextActions(contextValue: string, config: RowActionConfig = D
 
 export function rowActions(contextValue: string, config: RowActionConfig = DEFAULT_ROW_ACTION_CONFIG): RowAction[] {
   return [...inlineActions(contextValue, config), ...contextActions(contextValue, config)];
+}
+
+/** Key a row sets in its `data-vscode-context` to show `command` in the native `webview/context` menu. */
+export function contextMenuKey(command: string): string {
+  return `gitSubmodule.menu.${command.replace(/^gitSubmodule\./, "")}`;
+}
+
+/** `webview/context` group for a context action: separators follow the order decades. */
+export function contextMenuGroup(order: number): string {
+  const section = order < 10 ? "1_repository" : order < 20 ? "2_changeGroup" : order < 30 ? "3_open" : "4_change";
+  return `${section}@${order}`;
 }
 
 /**

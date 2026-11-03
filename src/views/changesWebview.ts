@@ -6,7 +6,7 @@ import { commitMessagePlaceholder } from "../scm/dailyGitActions.js";
 import { isPublicCommitMessageTargetSupported } from "../scm/generateCommitMessage.js";
 import type { AdoptedCountPatch, AdoptedTreeController } from "./adoptedTreeController.js";
 import { buildBootstrapRepoNodes, treeItemCommand, type AdoptedTreeNode } from "./adoptedViewModel.js";
-import { type RowActionConfig, actionTargetIds, contextActions } from "./changesRowActions.js";
+import { type RowActionConfig, actionTargetIds } from "./changesRowActions.js";
 import { type ChangesTreeSettings } from "./changesTreeSettings.js";
 import {
   changesWebviewErrorHtml,
@@ -66,8 +66,7 @@ type WebviewMessage =
   | { type: "commit"; id: string; message: string }
   | { type: "generate"; id: string }
   | { type: "explainGenerate"; id: string }
-  | { type: "draft"; rootPath: string; value: string }
-  | { type: "context"; id: string };
+  | { type: "draft"; rootPath: string; value: string };
 
 export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
@@ -218,9 +217,6 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
       case "draft":
         this.writeDraft(message.rootPath, message.value);
         return;
-      case "context":
-        await this.showContext(message.id);
-        return;
     }
   }
 
@@ -295,11 +291,33 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     await this.trackRunning(id, command, () => vscode.commands.executeCommand(command, node, selected));
   }
 
+  /**
+   * Runs a command picked in the row's native context menu (`webview/context`), which passes the row's
+   * `data-vscode-context` instead of a tree node. Returns `undefined` when `arg` does not come from that menu.
+   */
+  fromContextMenu<T>(
+    command: string,
+    arg: unknown,
+    run: (node: AdoptedTreeNode, selected: AdoptedTreeNode[]) => Thenable<T>,
+  ): Promise<T> | undefined {
+    const context = arg as { webview?: unknown; rowId?: unknown } | undefined;
+    if (context?.webview !== VIEW_ID || typeof context.rowId !== "string") {
+      return undefined;
+    }
+    const id = context.rowId;
+    const node = this.nodes.get(id);
+    if (!node) {
+      return undefined;
+    }
+    const selected = this.selectedNodes(id);
+    return this.trackRunning(id, command, () => run(node, selected));
+  }
+
   /** Animates the row's matching action icon while a command started from the view is running. */
-  private async trackRunning(id: string, command: string, run: () => Thenable<unknown>): Promise<void> {
+  private async trackRunning<T>(id: string, command: string, run: () => Thenable<T>): Promise<T> {
     this.adjustRunning(id, command, 1);
     try {
-      await run();
+      return await run();
     } finally {
       this.adjustRunning(id, command, -1);
     }
@@ -332,27 +350,6 @@ export class ChangesWebviewProvider implements vscode.WebviewViewProvider {
     return actionTargetIds(id, this.selected)
       .map((selectedId) => this.nodes.get(selectedId))
       .filter((node): node is AdoptedTreeNode => Boolean(node));
-  }
-
-  private async showContext(id: string): Promise<void> {
-    const node = this.nodes.get(id);
-    if (!node) {
-      return;
-    }
-    const actions = contextActions(node.contextValue, this.rowConfig());
-    if (actions.length === 0) {
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(
-      actions.map((action) => ({ label: action.title, description: action.command, action })),
-      { placeHolder: node.label },
-    );
-    if (picked) {
-      const selected = this.selectedNodes(id);
-      await this.trackRunning(id, picked.action.command, () =>
-        vscode.commands.executeCommand(picked.action.command, node, selected),
-      );
-    }
   }
 
   private beginLoad(batch: ChangesRefreshBatch): ChangesRenderVersion {

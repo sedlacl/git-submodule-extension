@@ -3,7 +3,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { RESTORE_COMMANDS, RESTORE_DEFAULTS, RESTORE_SETTINGS } from "../../../src/restore/settings.js";
 import { COMMANDS, CONTEXT, VIEW_ID } from "../../../src/views/constants.js";
-import { contextActions, inlineActions } from "../../../src/views/changesRowActions.js";
+import {
+  contextActions,
+  contextMenuGroup,
+  contextMenuKey,
+  DEFAULT_ROW_ACTION_CONFIG,
+  inlineActions,
+} from "../../../src/views/changesRowActions.js";
 
 const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
   contributes: {
@@ -12,6 +18,7 @@ const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "u
     commands: Array<{ command: string }>;
     menus: {
       "view/title": Array<{ command: string; when: string; group?: string }>;
+      "webview/context": Array<{ command: string; when: string; group?: string }>;
       "view/item/context"?: Array<{ command: string; when: string; group?: string }>;
     };
   };
@@ -24,6 +31,33 @@ const submodule = `${CONTEXT.submodule}.${CONTEXT.hasUpstream}`;
 const restoreBlocked = `${CONTEXT.submodule}.restoreBlocked`;
 
 describe("adopted-view contributions", () => {
+  it("contributes one native row context-menu item per context action, gated by the row's menu key", () => {
+    const contextValues = [
+      ...[CONTEXT.workspaceRoot, CONTEXT.submodule].flatMap((root) => [
+        `${root}.${CONTEXT.hasUpstream}`,
+        `${root}.${CONTEXT.noUpstream}`,
+      ]),
+      ...Object.values(CONTEXT).filter((value) => value.startsWith("gitSubmodule.")),
+      `${CONTEXT.changeIndex}.${CONTEXT.gitlink}`,
+      `${CONTEXT.changeWorkingTree}.${CONTEXT.gitlink}`,
+    ];
+    const expected = new Map<string, string>();
+    for (const untrackedChanges of ["mixed", "separate", "hidden"] as const) {
+      for (const contextValue of contextValues) {
+        for (const action of contextActions(contextValue, { ...DEFAULT_ROW_ACTION_CONFIG, untrackedChanges })) {
+          const group = contextMenuGroup(action.order);
+          expect(expected.get(action.command) ?? group).toBe(group);
+          expected.set(action.command, group);
+        }
+      }
+    }
+    const menu = pkg.contributes.menus["webview/context"];
+    expect(new Map(menu.map((entry) => [entry.command, entry.group]))).toEqual(expected);
+    for (const entry of menu) {
+      expect(entry.when).toBe(`webviewId == ${VIEW_ID} && ${contextMenuKey(entry.command)}`);
+    }
+  });
+
   it("registers the SCM webview and commands used by the view", () => {
     const view = pkg.contributes.views.scm.find((entry) => entry.id === VIEW_ID);
     expect(view?.type).toBe("webview");

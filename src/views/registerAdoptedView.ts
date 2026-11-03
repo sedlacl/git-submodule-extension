@@ -79,6 +79,14 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     onViewVisible: refreshGenerateCommitMessageCommand,
   });
 
+  /** Row commands take a tree node, or the row's context when picked in the view's native context menu. */
+  const registerRowCommand = (
+    command: string,
+    handler: (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) => Promise<void>,
+  ): vscode.Disposable =>
+    vscode.commands.registerCommand(command, (arg: unknown, selected: readonly AdoptedTreeNode[] | undefined) =>
+      webviewProvider.fromContextMenu(command, arg, handler) ?? handler(arg as AdoptedTreeNode | undefined, selected),
+    );
   const refresh = (reason: ChangesLoadReason, rediscover: boolean | (() => boolean)): void => {
     webviewProvider.refresh(reason, rediscover);
   };
@@ -112,25 +120,14 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         refresh("post-action overlay", () => controller.repositoryStateNeedsRediscovery());
       },
       explicitRefresh: () => refresh("explicit refresh", true),
+      fromContextMenu: (command, arg, run) => webviewProvider.fromContextMenu(command, arg, run),
     }),
-    vscode.commands.registerCommand(
-      COMMANDS.openDiff,
-      (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
-        openSelected(options.gitApi, controller, node, selected),
-    ),
-    vscode.commands.registerCommand(
-      COMMANDS.openChange,
-      (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
-        openSelected(options.gitApi, controller, node, selected),
-    ),
-    vscode.commands.registerCommand(COMMANDS.openFile, (node: AdoptedTreeNode | undefined) => openFile(node)),
-    vscode.commands.registerCommand(COMMANDS.openHEADFile, (node: AdoptedTreeNode | undefined) =>
-      openHeadFile(options.gitApi, node),
-    ),
-    vscode.commands.registerCommand(
-      COMMANDS.openAllChanges,
-      (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
-        openSelected(options.gitApi, controller, node, selected),
+    registerRowCommand(COMMANDS.openDiff, (node, selected) => openSelected(options.gitApi, controller, node, selected)),
+    registerRowCommand(COMMANDS.openChange, (node, selected) => openSelected(options.gitApi, controller, node, selected)),
+    registerRowCommand(COMMANDS.openFile, (node) => openFile(node)),
+    registerRowCommand(COMMANDS.openHEADFile, (node) => openHeadFile(options.gitApi, node)),
+    registerRowCommand(COMMANDS.openAllChanges, (node, selected) =>
+      openSelected(options.gitApi, controller, node, selected),
     ),
     vscode.commands.registerCommand(COMMANDS.viewAsTree, () => setSessionViewMode("tree")),
     vscode.commands.registerCommand(COMMANDS.viewAsList, () => setSessionViewMode("list")),

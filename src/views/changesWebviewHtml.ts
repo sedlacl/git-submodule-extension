@@ -3,7 +3,7 @@ import { repoHasOwnCommitChanges } from "./adoptedViewModel.js";
 import { compactFolderDisplayLabel } from "./fileIconTheme.js";
 import { repoMapGet, repoSetHas } from "../git/pathUtils.js";
 import type { RowAction, RowActionConfig } from "./changesRowActions.js";
-import { inlineActions } from "./changesRowActions.js";
+import { contextActions, contextMenuKey, inlineActions } from "./changesRowActions.js";
 import { COMMANDS } from "./constants.js";
 import type { ChangesRenderState } from "./changesRenderProtocol.js";
 
@@ -36,6 +36,8 @@ export interface ChangesWebviewRow {
   commitBusy: boolean;
   repositoryRoot?: string;
   inlineActions: RowAction[];
+  /** Commands of the row's native context menu (`webview/context`). */
+  contextMenuCommands: string[];
   children: ChangesWebviewRow[];
 }
 
@@ -135,6 +137,7 @@ export function toChangesWebviewRows(
         withSyncChrome(inlineActions(node.contextValue, state.config), node.syncLabel, node.syncTooltip),
         running,
       ),
+      contextMenuCommands: contextActions(node.contextValue, state.config).map((action) => action.command),
       children,
     };
   });
@@ -174,7 +177,8 @@ export function renderChangesTree(rows: readonly ChangesWebviewRow[]): string {
   if (rows.length === 0) {
     return `<div class="empty">No Git workspace folders found.</div>`;
   }
-  return `<div class="tree">${rows.map((row) => renderRow(row)).join("")}</div>`;
+  // No Cut/Copy/Paste on rows or empty space; the commit textarea opts back in.
+  return `<div class="tree" data-vscode-context="${escapeHtml(JSON.stringify({ preventDefaultContextMenuItems: true }))}">${rows.map((row) => renderRow(row)).join("")}</div>`;
 }
 
 export function changesWebviewLoadingHtml(): string {
@@ -271,6 +275,7 @@ function lazyLoadingRow(parentId: string, depth: number): ChangesWebviewRow {
     generateBusy: false,
     commitBusy: false,
     inlineActions: [],
+    contextMenuCommands: [],
     dirtyDot: false,
     children: [],
   };
@@ -333,7 +338,7 @@ function renderRow(row: ChangesWebviewRow): string {
   const chrome = row.showCommitChrome
     ? `<div class="commit-chrome" style="padding-left:${pad}px">
            <div class="commit-input-wrap">
-             <textarea class="commit-input" data-act="draft" data-root="${escapeHtml(row.repositoryRoot ?? "")}" rows="2" placeholder="${escapeHtml(row.commitPlaceholder)}">${escapeHtml(row.commitDraft)}</textarea>
+             <textarea class="commit-input" data-act="draft" data-vscode-context="${escapeHtml(JSON.stringify({ preventDefaultContextMenuItems: false }))}" data-root="${escapeHtml(row.repositoryRoot ?? "")}" rows="2" placeholder="${escapeHtml(row.commitPlaceholder)}">${escapeHtml(row.commitDraft)}</textarea>
              ${generate}
            </div>
            ${commit}
@@ -342,11 +347,20 @@ function renderRow(row: ChangesWebviewRow): string {
   const kids = row.children.map((child) => renderRow(child)).join("");
   const labelText = row.kind === "folder" ? compactFolderDisplayLabel(row.label) : row.label;
   return `<div class="node" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">
-    <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}${isLink ? " link-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" style="--row-pad:${pad}px;padding-left:${pad}px">
+    <div class="row${row.selected ? " selected" : ""}${isRepo ? " repo-row" : ""}${isGroup ? " group-row" : ""}${isLink ? " link-row" : ""}" role="treeitem" title="${escapeHtml(row.tooltip)}" data-act="row" data-vscode-context="${escapeHtml(rowMenuContext(row))}" style="--row-pad:${pad}px;padding-left:${pad}px">
       ${twistie}${icon}<span class="label"${row.labelColor ? ` style="color:${themeVar(row.labelColor)}"` : ""}>${escapeHtml(labelText)}</span>${repoKind}<span class="grow"></span>${branch}<span class="tail"><span class="inline">${actions}</span>${status}</span>
     </div>
     ${chrome}${kids}
   </div>`;
+}
+
+/** Read by the native context menu: `rowId` for the command argument, one key per menu command. */
+function rowMenuContext(row: ChangesWebviewRow): string {
+  const context: Record<string, string | boolean> = { webviewSection: "row", rowId: row.id };
+  for (const command of row.contextMenuCommands) {
+    context[contextMenuKey(command)] = true;
+  }
+  return JSON.stringify(context);
 }
 
 function codiconClass(iconId: string): string {
@@ -775,13 +789,6 @@ root.addEventListener("click", (event) => {
   if (act === "row") {
     vscode.postMessage({ type: "click", id, additive: event.ctrlKey || event.metaKey });
   }
-});
-
-root.addEventListener("contextmenu", (event) => {
-  event.preventDefault();
-  const nodeEl = event.target instanceof Element ? event.target.closest(".node") : null;
-  if (!nodeEl) return;
-  vscode.postMessage({ type: "context", id: nodeEl.getAttribute("data-id") });
 });
 
 root.addEventListener("input", (event) => {

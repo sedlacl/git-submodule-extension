@@ -31,6 +31,12 @@ export interface RegisterDailyGitActionsOptions {
   actionDiagnostics: ActionDiagnostics;
   postActionRefresh(): void;
   explicitRefresh(): void;
+  /** Resolves a call from the view's native context menu to its row and selection (`ChangesWebviewProvider`). */
+  fromContextMenu?<T>(
+    command: string,
+    arg: unknown,
+    run: (node: AdoptedTreeNode, selected: AdoptedTreeNode[]) => Thenable<T>,
+  ): Promise<T> | undefined;
 }
 
 export function registerDailyGitActions(options: RegisterDailyGitActionsOptions): vscode.Disposable {
@@ -50,33 +56,34 @@ export function registerDailyGitActions(options: RegisterDailyGitActionsOptions)
       action: ActionRun,
     ) => Promise<ActionOutcome>,
     runOptions?: { progress?: boolean; refresh?: boolean },
-  ): vscode.Disposable =>
-    vscode.commands.registerCommand(
-      command,
-      (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
-        runCommand(
-          options.actionDiagnostics,
-          actionKind,
-          title,
-          actionContext(node, selected),
-          async (action) => {
-            const outcome = await handler(node, selected, action);
-            if (
-              outcome.result === "completed" &&
-              runOptions?.refresh !== false &&
-              (actionKind !== "generate message" || outcome.details?.["draft changed"] === true)
-            ) {
-              if (actionKind === "refresh") {
-                options.explicitRefresh();
-              } else {
-                options.postActionRefresh();
-              }
+  ): vscode.Disposable => {
+    const execute = (node: AdoptedTreeNode | undefined, selected: readonly AdoptedTreeNode[] | undefined) =>
+      runCommand(
+        options.actionDiagnostics,
+        actionKind,
+        title,
+        actionContext(node, selected),
+        async (action) => {
+          const outcome = await handler(node, selected, action);
+          if (
+            outcome.result === "completed" &&
+            runOptions?.refresh !== false &&
+            (actionKind !== "generate message" || outcome.details?.["draft changed"] === true)
+          ) {
+            if (actionKind === "refresh") {
+              options.explicitRefresh();
+            } else {
+              options.postActionRefresh();
             }
-            return outcome;
-          },
-          runOptions,
-        ),
+          }
+          return outcome;
+        },
+        runOptions,
+      );
+    return vscode.commands.registerCommand(command, (arg: unknown, selected: readonly AdoptedTreeNode[] | undefined) =>
+      options.fromContextMenu?.(command, arg, execute) ?? execute(arg as AdoptedTreeNode | undefined, selected),
     );
+  };
 
   const changeHandler =
     (kind: "stage" | "unstage" | "discard") =>
