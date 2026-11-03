@@ -4,11 +4,16 @@
   <img src="media/icon.png" width="128" height="128" alt="Git Submodule Extension icon"/>
 </p>
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/qjohn.git-submodule-extension?label=vs%20code%20marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension)
+[![VS Code Marketplace](https://img.shields.io/badge/vs%20code%20marketplace-install-blue)](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension)
 [![Open VSX](https://img.shields.io/open-vsx/v/qjohn/git-submodule-extension?label=open%20vsx&color=blue)](https://open-vsx.org/extension/qjohn/git-submodule-extension)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-VS Code extension for **hierarchical Git changes with submodules**: one SCM webview lists workspace repos and nested submodule checkouts, nests gitlink pointer diffs under the matching change row, and optionally restores submodule branches after parent Git operations (fail-closed).
+**CHANGES with submodules** is a Source Control view for workspaces with Git submodules. It shows every repository and nested submodule in one tree, with the groups, labels and settings of the built-in **Changes** view.
+
+- **Nested repositories**: each submodule sits under its parent. A gitlink change expands into **Adopted Changes**, the files changed by the commits the pointer moved over.
+- **Everyday Git**: commit, sync, pull with submodules, stage, unstage, discard, open diffs and copy paths, from row toolbars and a native context menu that works on a multi-row selection.
+- **Commit messages**: the sparkle writes a submodule update message from the pointer diffs, and can use Cursor, Claude Code or GitLens for the rest.
+- **Branch restore**: when a checkout, pull or discard leaves a submodule detached at its gitlink commit, the submodule is switched back to its branch. Restore is fail-closed: it never switches a submodule that is on a branch, never touches a dirty checkout, never drops local commits and never fetches (see [Security guarantees](#security-guarantees)).
 
 Publisher: **`qjohn`**. Extension ID: **`qjohn.git-submodule-extension`**.
 
