@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-11-03
+
+### Fixed
+
+- Branch restore now also reattaches a submodule when only the submodule reports a change, for example after it was detached at its gitlink commit while its parent's status stayed the same. Before, such an event restored only the submodule's own nested submodules, and the submodule stayed on a detached HEAD until the parent changed. Restore still runs only when `gitSubmodule.restore.enabled` is on and keeps every safety check.
+
 ## [0.4.4] - 2026-11-03
 
 ### Fixed
@@ -156,7 +162,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.1...v0.4.2
