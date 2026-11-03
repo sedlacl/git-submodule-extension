@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-11-03
+
+### Changed
+
+- Right-clicking a row in CHANGES with submodules opens a native context menu at the cursor, with separators between the repository, change group, open and change actions, instead of a quick pick at the top of the window. The actions are the same as before and apply to the selection only when the row is part of it. Rows show no Cut, Copy and Paste; the commit message box keeps them.
+
 ## [0.4.6] - 2026-11-03
 
 ### Changed
@@ -166,7 +172,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.3...v0.4.4
