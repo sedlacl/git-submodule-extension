@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-11-03
+
+### Changed
+
+- The extension is published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=qjohn.git-submodule-extension) as `qjohn.git-submodule-extension`, next to Open VSX. Every release is published to both from the same VSIX.
+
 ## [0.4.8] - 2026-11-03
 
 ### Added
@@ -178,7 +184,8 @@ First public release.
 - The built-in Git **Changes** panel remains visible (no stable API to replace or hide it).
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
-[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...HEAD
+[Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...HEAD
+[0.4.9]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.5...v0.4.6
