@@ -6,6 +6,7 @@ import {
   type ActionDetails,
   type ActionWriter,
 } from "../actionDiagnostics.js";
+import { subscribeWhenReady } from "../git/gitApiReady.js";
 import type { GitCli } from "../git/gitCli.js";
 import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { BranchReconciler } from "./branchReconciler.js";
@@ -26,6 +27,12 @@ export interface RegisterBranchRestoreOptions {
   output: vscode.OutputChannel;
   writeDiagnostic: ActionWriter;
   actionDiagnostics: ActionDiagnostics;
+  /**
+   * Automatic restore listens to repository events only after this resolves, so `vscode.git`
+   * opening repositories during its initial scan does not start restore passes. Explicit
+   * commands work right away.
+   */
+  gitReady?: Promise<void>;
 }
 
 export interface BranchRestoreRegistration extends vscode.Disposable {
@@ -91,10 +98,12 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
         renderStatusBar();
       }
     }),
-    options.gitApi.subscribe({
-      onOpenRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
-      onDidChangeRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
-    }),
+    subscribeWhenReady(options.gitReady ?? Promise.resolve(), () =>
+      options.gitApi.subscribe({
+        onOpenRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
+        onDidChangeRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
+      }),
+    ),
     vscode.commands.registerCommand(RESTORE_COMMANDS.retry, (arg?: unknown) =>
       retryRestore(options.actionDiagnostics, coordinator, options.gitApi, status, arg),
     ),

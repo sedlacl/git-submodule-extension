@@ -62,3 +62,31 @@ export function waitForGitApi(api: GitApiReadiness, timeoutMs?: number): Promise
     }, timeoutMs);
   });
 }
+
+export interface DisposableLike {
+  dispose(): void;
+}
+
+/**
+ * Calls `subscribe` once `ready` resolves, unless the returned handle was
+ * disposed first. Disposing the handle later also disposes the subscription.
+ */
+export function subscribeWhenReady(ready: Promise<void>, subscribe: () => DisposableLike): DisposableLike {
+  let disposed = false;
+  let subscription: DisposableLike | undefined;
+  void ready.then(
+    () => {
+      if (!disposed) {
+        subscription = subscribe();
+      }
+    },
+    () => undefined,
+  );
+  return {
+    dispose() {
+      disposed = true;
+      subscription?.dispose();
+      subscription = undefined;
+    },
+  };
+}

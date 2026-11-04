@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { ActionDiagnostics } from "./actionDiagnostics.js";
 import { GitCliRunner } from "./git/gitCli.js";
 import { createGitModelService } from "./git/gitModelService.js";
-import { activateVsCodeGitApi } from "./git/vscodeGitApi.js";
+import { activateVsCodeGitApi, type VsCodeGitApiAdapter } from "./git/vscodeGitApi.js";
 import { registerBranchRestore } from "./restore/registerBranchRestore.js";
 import { VIEW_ID } from "./views/constants.js";
 import { createChangesDiagnosticWriter, formatDuration } from "./views/changesLoadDiagnostics.js";
@@ -33,26 +33,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   writeDiagnostic("waiting for vscode.git");
   const waitStarted = Date.now();
+  const elapsed = (): string => formatDuration(Date.now() - waitStarted);
+  let gitApi: VsCodeGitApiAdapter | undefined;
   const heartbeat = setInterval(() => {
-    writeDiagnostic(`still waiting for vscode.git (${formatDuration(Date.now() - waitStarted)})`);
+    writeDiagnostic(
+      gitApi
+        ? `vscode.git still opening repositories (${elapsed()}; ${gitApi.getOpenRepositoryPaths().length} open)`
+        : `still waiting for vscode.git (${elapsed()})`,
+    );
   }, GIT_WAIT_HEARTBEAT_MS);
   const slowNotice = setTimeout(() => {
     output.show(true);
     void vscode.window.showInformationMessage(
-      "Git Submodule is still waiting for Git to finish opening this workspace. Progress is in the Output channel Git Submodule.",
+      "Git Submodule is still waiting for Git to start. Progress is in the Output channel Git Submodule.",
     );
   }, GIT_WAIT_NOTICE_MS);
-  const stopWaitingUi = (): void => {
-    clearInterval(heartbeat);
-    clearTimeout(slowNotice);
-  };
-  context.subscriptions.push({ dispose: stopWaitingUi });
+  const stopHeartbeat = (): void => clearInterval(heartbeat);
+  context.subscriptions.push({ dispose: stopHeartbeat }, { dispose: () => clearTimeout(slowNotice) });
 
-  let gitApi;
   try {
     gitApi = await activateVsCodeGitApi();
   } catch (error) {
-    stopWaitingUi();
+    stopHeartbeat();
+    clearTimeout(slowNotice);
     const message = error instanceof Error ? error.message : String(error);
     writeDiagnostic(`activation stopped: ${message}`);
     if (alive) {
@@ -61,38 +64,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     return;
   }
-  stopWaitingUi();
+  clearTimeout(slowNotice);
   if (!alive) {
+    stopHeartbeat();
     return;
   }
-  writeDiagnostic(`vscode.git ready (${formatDuration(Date.now() - waitStarted)})`);
+  const api = gitApi;
+  writeDiagnostic(`vscode.git active (${elapsed()}; ${api.getOpenRepositoryPaths().length} repositories open so far)`);
+  // The view and actions start now; repositories appear as vscode.git opens them.
+  const gitReady = api.whenInitialized();
+  void gitReady.then(() => {
+    stopHeartbeat();
+    if (alive) {
+      writeDiagnostic(`vscode.git ready (${elapsed()}; ${api.getOpenRepositoryPaths().length} repositories)`);
+    }
+  });
 
-  const cli = new GitCliRunner(gitApi.gitPath);
+  const cli = new GitCliRunner(api.gitPath);
   const model = createGitModelService({
-    gitPath: gitApi.gitPath,
+    gitPath: api.gitPath,
     cli,
-    getWorkspaceFolderPaths: () => gitApi.getWorkspaceFolderPaths(),
+    getWorkspaceFolderPaths: () => api.getWorkspaceFolderPaths(),
   });
 
   const actionDiagnostics = new ActionDiagnostics(writeDiagnostic);
   const restore = registerBranchRestore({
     cli,
-    gitApi,
+    gitApi: api,
     output,
     writeDiagnostic,
     actionDiagnostics,
+    gitReady,
   });
   context.subscriptions.push(
     restore,
     registerAdoptedView({
       model,
-      gitApi,
+      gitApi: api,
       cli,
       restoreStatus: restore.status,
       extensionUri: context.extensionUri,
       workspaceState: context.workspaceState,
       writeDiagnostic,
       actionDiagnostics,
+      gitReady,
     }),
   );
 }

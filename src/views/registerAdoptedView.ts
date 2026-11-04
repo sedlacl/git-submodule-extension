@@ -34,6 +34,8 @@ export interface RegisterAdoptedViewOptions {
   workspaceState: vscode.Memento;
   writeDiagnostic: ChangesDiagnosticWriter;
   actionDiagnostics: ActionDiagnostics;
+  /** The view shows a progress bar until this resolves; repositories still appear as `vscode.git` opens them. */
+  gitReady?: Promise<void>;
 }
 
 export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode.Disposable {
@@ -182,6 +184,10 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
 
   syncViewModeContext();
   refresh("activation", true);
+  const gitReady = options.gitReady;
+  if (gitReady) {
+    void vscode.window.withProgress({ location: { viewId: VIEW_ID } }, () => gitReady);
+  }
 
   return new vscode.Disposable(() => {
     for (const disposable of disposables) {

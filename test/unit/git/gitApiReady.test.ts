@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { APIState } from "../../../src/git/git.js";
-import { waitForGitApi, type GitApiReadiness } from "../../../src/git/gitApiReady.js";
+import { subscribeWhenReady, waitForGitApi, type GitApiReadiness } from "../../../src/git/gitApiReady.js";
 
 class ControllableGitApi implements GitApiReadiness {
   private readonly listeners = new Set<(state: APIState) => void>();
@@ -74,6 +74,21 @@ describe("waitForGitApi", () => {
     }
   });
 
+  it("lets callers subscribe before Git is initialized and resolves later", async () => {
+    const api = new ControllableGitApi("uninitialized");
+    const ready = waitForGitApi(api);
+    const subscribed = vi.fn(() => ({ dispose() {} }));
+    subscribeWhenReady(ready, subscribed);
+
+    await Promise.resolve();
+    expect(subscribed).not.toHaveBeenCalled();
+
+    api.setState("initialized");
+    await ready;
+    await Promise.resolve();
+    expect(subscribed).toHaveBeenCalledTimes(1);
+  });
+
   it("treats a configured timeout as success when Git initialized without an event", async () => {
     vi.useFakeTimers();
     try {
@@ -85,5 +100,50 @@ describe("waitForGitApi", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("subscribeWhenReady", () => {
+  it("subscribes after ready resolves and disposes the subscription with the handle", async () => {
+    let markReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      markReady = resolve;
+    });
+    const dispose = vi.fn();
+    const subscribe = vi.fn(() => ({ dispose }));
+
+    const handle = subscribeWhenReady(ready, subscribe);
+    await Promise.resolve();
+    expect(subscribe).not.toHaveBeenCalled();
+
+    markReady();
+    await ready;
+    await Promise.resolve();
+    expect(subscribe).toHaveBeenCalledTimes(1);
+
+    handle.dispose();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("never subscribes when disposed before ready resolves", async () => {
+    const subscribe = vi.fn(() => ({ dispose() {} }));
+    const ready = Promise.resolve();
+
+    subscribeWhenReady(ready, subscribe).dispose();
+    await ready;
+    await Promise.resolve();
+
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it("never subscribes when ready rejects", async () => {
+    const subscribe = vi.fn(() => ({ dispose() {} }));
+    const ready = Promise.reject(new Error("no git"));
+
+    subscribeWhenReady(ready, subscribe);
+    await ready.catch(() => undefined);
+    await Promise.resolve();
+
+    expect(subscribe).not.toHaveBeenCalled();
   });
 });

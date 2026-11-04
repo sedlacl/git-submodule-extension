@@ -37,6 +37,14 @@ export class VsCodeGitApiAdapter {
     return this.api.git.path;
   }
 
+  /**
+   * Resolves when `vscode.git` finishes its initial repository scan. Repositories it opens
+   * before then are already in `getOpenRepositories()` and still raise `onOpenRepository`.
+   */
+  whenInitialized(): Promise<void> {
+    return waitForGitApi(this.api);
+  }
+
   toGitUri(filePath: string, ref: string): vscode.Uri {
     return this.api.toGitUri(vscode.Uri.file(filePath), ref);
   }
@@ -139,9 +147,13 @@ export class VsCodeGitApiAdapter {
   }
 }
 
+/**
+ * Returns as soon as `vscode.git` is active, without waiting for its initial repository scan
+ * (that can take tens of seconds in a large multi-root workspace). Use `whenInitialized()`
+ * for work that needs every repository open.
+ */
 export async function activateVsCodeGitApi(
   getExtension: typeof vscode.extensions.getExtension = vscode.extensions.getExtension.bind(vscode.extensions),
-  timeoutMs?: number,
 ): Promise<VsCodeGitApiAdapter> {
   const extension = getExtension<GitExtension>("vscode.git");
   if (!extension) {
@@ -153,7 +165,5 @@ export async function activateVsCodeGitApi(
     throw new Error("vscode.git is disabled.");
   }
 
-  const api = exported.getAPI(1);
-  await waitForGitApi(api, timeoutMs);
-  return new VsCodeGitApiAdapter(api);
+  return new VsCodeGitApiAdapter(exported.getAPI(1));
 }
