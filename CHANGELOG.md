@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.11] - 2026-11-04
+
+### Changed
+
+- CHANGES with submodules no longer waits for `vscode.git` to finish opening every repository in the workspace. The view and its actions start as soon as `vscode.git` is active, and each repository appears as Git opens it; a progress bar on the view runs until Git has opened them all. In a large multi-root workspace this brings the first rows forward by tens of seconds. Automatic branch restore still starts only after Git has opened every repository, as before.
+- The Output channel **Git Submodule** reports when `vscode.git` becomes active and when it has opened all repositories, with the count of open repositories while it is still opening them.
+
 ## [0.4.10] - 2026-11-03
 
 ### Changed
@@ -191,6 +198,7 @@ First public release.
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
 [Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...HEAD
+[0.4.11]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.7...v0.4.8
