@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.12] - 2026-11-23
+
+### Added
+
+- Opt-in automatic fetch, `gitSubmodule.autofetch.enabled`. It runs `git fetch` in every open repository, submodules included, every `gitSubmodule.autofetch.periodSeconds` (180 by default) while the window has focus. Unlike `git.autofetch`, the first pass waits `gitSubmodule.autofetch.startupDelaySeconds` (120 by default), so opening a large workspace does not start a fetch in every repository at once. It fetches one repository at a time, never prompts for credentials and never recurses into submodules. Failures are written to the Output channel **Git Submodule**. When a submodule restore is blocked, for example on a missing `origin/<branch>`, a successful fetch runs the restore again.
+- fsmonitor advice. The extension times the `git status` runs it makes anyway, when loading CHANGES and during branch restore. When the median of a repository's last three runs is a second or more, it offers once per window to turn on Git's builtin file system monitor there, with **Turn On**, **Not Now** and **Never for This Repository**. Turning it on writes `core.fsmonitor=true` and `core.untrackedCache=true` to that repository's local config. Repositories on a network share, those that already have `core.fsmonitor`, and Git builds without the daemon are left out. The setting `gitSubmodule.fsmonitor.suggest` turns the offer off.
+- Command **Git Submodule: Analyze fsmonitor for Repositories** lists every open repository with its `git status` time, timing the ones not measured yet, and turns fsmonitor on in the repositories you pick after a confirmation. The reasons are in the Output channel **Git Submodule**. Nothing is turned on by itself, because every repository with fsmonitor on runs its own daemon process.
+
+### Fixed
+
+- Automatic branch restore no longer runs in a loop for minutes while the window has focus. Its own `git status` in each submodule refreshed the index, `vscode.git` saw the change and reported the repository again, and that started the next restore pass. Background Git reads now run without optional locks, and restore runs only when a repository's HEAD, upstream or changed files differ from the last time.
+- Restore no longer reports bogus "committed parent gitlink is missing" entries under an uninitialized submodule. It used to look for nested submodules in the empty folder, where Git reads the parent repository.
+- The CHANGES view no longer redraws after every restore pass that finds nothing new.
+
 ## [0.4.11] - 2026-11-04
 
 ### Changed
@@ -198,6 +212,7 @@ First public release.
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
 [Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...HEAD
+[0.4.12]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.11...v0.4.12
 [0.4.11]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.8...v0.4.9
