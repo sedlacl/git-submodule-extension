@@ -51,6 +51,30 @@
           "maximum": 10000,
           "description": "Delay in milliseconds before coalescing Git change events into a restore pass."
         },
+        "gitSubmodule.autofetch.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Periodically run `git fetch` in every open repository, submodules included, like `git.autofetch` but only after a startup delay. Fetches one repository at a time, never prompts for credentials, and never pulls or changes your files. Turn off `git.autofetch` so repositories are not fetched twice."
+        },
+        "gitSubmodule.autofetch.periodSeconds": {
+          "type": "number",
+          "default": 180,
+          "minimum": 60,
+          "maximum": 86400,
+          "description": "Seconds between the end of one automatic fetch pass and the start of the next."
+        },
+        "gitSubmodule.autofetch.startupDelaySeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 3600,
+          "description": "Seconds after the window opens before the first automatic fetch pass, so startup is not slowed by fetching every repository at once."
+        },
+        "gitSubmodule.fsmonitor.suggest": {
+          "type": "boolean",
+          "default": true,
+          "description": "Time the `git status` runs the extension makes anyway, and when a repository's typical status takes a second or more, offer to turn on Git's fsmonitor there. Nothing is changed without your choice."
+        },
         "gitSubmodule.commitMessage.provider": {
           "type": "string",
           "enum": [
@@ -281,6 +305,11 @@
         "title": "Fetch Submodule Remote",
         "category": "Git Submodule",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitSubmodule.analyzeFsmonitor",
+        "title": "Analyze fsmonitor for Repositories",
+        "category": "Git Submodule"
       }
     ],
     "menus": {

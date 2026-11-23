@@ -12,6 +12,7 @@ import type { VsCodeGitApiAdapter } from "../git/vscodeGitApi.js";
 import { BranchReconciler } from "./branchReconciler.js";
 import { SafeBranchRestoreService, type RestoreRequest } from "./branchRestoreService.js";
 import { cachedSuperprojectResolver, RestoreCoordinator } from "./restoreCoordinator.js";
+import { RepositoryChangeFilter } from "./repositoryChangeFilter.js";
 import { RestoreStatusStore } from "./restoreStatusStore.js";
 import {
   fetchConfirmMessage,
@@ -41,6 +42,11 @@ export interface BranchRestoreRegistration extends vscode.Disposable {
   retry(parentRootPath: string): Promise<void>;
   retryAll(): Promise<void>;
   fetch(request: RestoreRequest): Promise<void>;
+  /**
+   * A fetch can bring the remote branch a blocked submodule was waiting for without changing any
+   * state that raises a repository event, so it schedules restore while something is blocked.
+   */
+  onRepositoryFetched(rootPath: string): void;
   isAutoEnabled(): boolean;
 }
 
@@ -67,6 +73,7 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
     isAutoEnabled,
     cachedSuperprojectResolver(options.cli),
   );
+  const changes = new RepositoryChangeFilter();
 
   const renderStatusBar = (): void => {
     if (!isAutoEnabled()) {
@@ -100,8 +107,14 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
     }),
     subscribeWhenReady(options.gitReady ?? Promise.resolve(), () =>
       options.gitApi.subscribe({
+        // Opening also delivers the first snapshot below, which records the fingerprint.
         onOpenRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
-        onDidChangeRepository: (rootPath) => coordinator.onRepositoryEvent(rootPath),
+        onDidChangeRepositoryState: (snapshot) => {
+          if (changes.changed(snapshot)) {
+            coordinator.onRepositoryEvent(snapshot.rootPath);
+          }
+        },
+        onCloseRepository: (rootPath) => changes.forget(rootPath),
       }),
     ),
     vscode.commands.registerCommand(RESTORE_COMMANDS.retry, (arg?: unknown) =>
@@ -120,6 +133,11 @@ export function registerBranchRestore(options: RegisterBranchRestoreOptions): Br
     retry: (parentRootPath) => coordinator.retry(parentRootPath),
     retryAll: () => coordinator.retryMany(options.gitApi.getWorkspaceFolderPaths()),
     fetch: (request) => coordinator.fetch(request),
+    onRepositoryFetched: (rootPath) => {
+      if (status.blocked().length > 0) {
+        coordinator.onRepositoryEvent(rootPath);
+      }
+    },
     isAutoEnabled,
     dispose: () => {
       for (const disposable of disposables) {

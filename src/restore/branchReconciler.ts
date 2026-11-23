@@ -120,15 +120,21 @@ export class BranchReconciler {
         if (visiting.has(child.childRootPath)) {
           continue;
         }
+        let result: RestoreResult | undefined;
         await this.withChildLock(child.childRootPath, async () => {
           if (!this.current(parent, generation)) {
             return;
           }
-          const result = await this.restore.reconcile(child);
+          result = await this.restore.reconcile(child);
           this.publish(parent, generation, result);
         });
         if (!this.current(parent, generation)) {
           return;
+        }
+        // An uninitialized submodule folder belongs to the parent's worktree: Git run there would
+        // read the parent's .gitmodules and report every nested entry as a missing gitlink.
+        if (!result || result.worktree === false) {
+          continue;
         }
         // Nested .gitmodules/gitlinks are committed in the child itself.
         await this.reconcileParent(

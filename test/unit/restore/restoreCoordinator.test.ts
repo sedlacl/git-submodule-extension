@@ -41,7 +41,7 @@ describe("RestoreCoordinator", () => {
     await coordinator.fetch(request);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith(request);
-    expect(fetchConfirmMessage("mod", "main")).toContain("never done automatically");
+    expect(fetchConfirmMessage("mod", "main")).toContain("will not pull, push, commit, or discard");
     expect(restoreOutputLine({ action: "blocked", path: "mod", detail: "dirty" })).toBe("[blocked] mod: dirty");
   });
 

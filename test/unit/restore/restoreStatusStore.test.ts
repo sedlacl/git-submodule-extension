@@ -46,4 +46,28 @@ describe("RestoreStatusStore", () => {
     expect(ticks).toBe(afterFirst + 1);
     expect(store.get("/repo/mod")?.detail).toBe("pinned commit is not an ancestor of origin/main");
   });
+
+  it("stays silent when a pass only confirms the same state", () => {
+    // Every pass used to emit for each attached child and for begin/end, so the Changes view
+    // redrew on every repository event.
+    const store = new RestoreStatusStore();
+    let ticks = 0;
+    let resultTicks = 0;
+    store.subscribe(() => {
+      ticks += 1;
+    });
+    store.subscribeResults(() => {
+      resultTicks += 1;
+    });
+    store.beginRun();
+    store.beginRun();
+    store.put(result("already-attached"));
+    store.endRun();
+    store.endRun();
+    expect(ticks).toBe(2);
+    expect(resultTicks).toBe(0);
+    store.put(result("blocked"));
+    store.put(result("attached"));
+    expect(resultTicks).toBe(2);
+  });
 });

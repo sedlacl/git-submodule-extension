@@ -60,6 +60,10 @@ Built-in labels, menu slots, and intentional deviations (webview vs SourceContro
 | --- | --- | --- |
 | `gitSubmodule.restore.enabled` | `true` | After parent Git checkout/commit/state-change events, run fail-closed branch restore. A state change reported only by a submodule (for example a checkout that detached it at its pin) runs the restore of its parent too. |
 | `gitSubmodule.restore.debounceMs` | `250` | Coalesce bursty Git events before a restore pass (`0`–`10000`). |
+| `gitSubmodule.autofetch.enabled` | `false` | Periodically `git fetch` every open repository, submodules included, like `git.autofetch` but after a startup delay. One repository at a time, no credential prompts, no submodule recursion. Turn off `git.autofetch` so repositories are not fetched twice. |
+| `gitSubmodule.autofetch.periodSeconds` | `180` | Seconds between the end of one fetch pass and the start of the next (`60`–`86400`). |
+| `gitSubmodule.autofetch.startupDelaySeconds` | `120` | Seconds after the window opens before the first fetch pass (`0`–`3600`). |
+| `gitSubmodule.fsmonitor.suggest` | `true` | Offer Git's fsmonitor for a repository whose typical `git status` (timed on the runs the extension makes anyway) takes a second or more. Asks once per window; nothing changes without your choice. |
 | `gitSubmodule.commitMessage.provider` | `auto` | AI provider for Generate Commit Message: `auto`, `cursor`, `claude`, or `gitlens`. |
 | `gitSubmodule.commitMessage.claudeModel` | `haiku` | Model passed to the Claude Code CLI (`--model`). |
 
@@ -69,7 +73,8 @@ The generated UI fixture workspace sets `gitSubmodule.restore.enabled` to `false
 
 - **Git Submodule: Refresh** — reload the tree
 - **Git Submodule: Retry Branch Restore** — explicit retry (never fetches)
-- **Git Submodule: Fetch Submodule Remote** — `git fetch origin <branch>` after a modal confirmation; never runs automatically
+- **Git Submodule: Fetch Submodule Remote** — `git fetch origin <branch>` after a modal confirmation
+- **Git Submodule: Analyze fsmonitor for Repositories** — lists open repositories by their `git status` time and recommends `core.fsmonitor` where it takes a second or more, skipping network shares; writes `core.fsmonitor=true` and `core.untrackedCache=true` to the picked repositories' local config only after confirmation
 - **Git Submodule: Pull (Recurse Submodules)** — `git pull --recurse-submodules` on the repository row; pulls the parent and updates the submodules its incoming gitlinks point at
 - **Git Submodule: Generate Commit Message** — fills the commit draft of a repository with an AI message; never stages or commits. Takes a repository `Uri`, a `SourceControl`, or a path (otherwise a repository picker), so it also works from keybindings and other extensions. In VS Code it appears in the built-in Source Control title when Claude Code or GitLens is the provider
 - Open Changes / Open File / Open All Changes — tree item actions
@@ -111,7 +116,7 @@ Action diagnostics include only repository basenames, counts, operation outcomes
 
 ## Security guarantees
 
-Restore is fail-closed. Automatic work never does fetch, pull, push, commit, force, discard, or working-tree reset.
+Restore is fail-closed. Automatic restore never does fetch, pull, push, commit, force, discard, or working-tree reset. The only automatic network operation is the opt-in `gitSubmodule.autofetch`, which runs plain `git fetch` and changes no branch or file.
 
 A child is attached (`git switch -C <branch> <pin>` plus upstream) only when all of these hold, re-checked immediately before the write:
 

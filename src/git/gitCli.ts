@@ -1,11 +1,14 @@
 import { execFile as execFileCallback } from "node:child_process";
 import type { ExecFileOptions } from "node:child_process";
+import { performance } from "node:perf_hooks";
 
 export interface GitRunOptions {
   cwd: string;
   args: readonly string[];
   timeoutMs?: number;
   allowedExitCodes?: readonly number[];
+  /** Extra environment for this call; it cannot replace the variables set for every call. */
+  env?: Readonly<Record<string, string>>;
 }
 
 export interface GitRunResult {
@@ -16,6 +19,14 @@ export interface GitRunResult {
 
 export interface GitCli {
   run(options: GitRunOptions): Promise<GitRunResult>;
+}
+
+/** A finished Git call, reported to `GitCliRunner.onDidRun` listeners. */
+export interface GitRunRecord {
+  readonly cwd: string;
+  readonly args: readonly string[];
+  readonly durationMs: number;
+  readonly exitCode: number | null;
 }
 
 export interface ExecFileInvocation {
@@ -110,12 +121,38 @@ function assertSafeArgs(args: readonly string[]): void {
  * stay literal.
  */
 export class GitCliRunner implements GitCli {
+  private readonly runListeners = new Set<(record: GitRunRecord) => void>();
+
   constructor(
     private readonly gitPath: string,
     private readonly execFileUtf8: ExecFileUtf8 = promisifiedExecFile,
   ) {
     if (!gitPath || gitPath.includes("\0")) {
       throw new Error("Git executable path is missing or invalid.");
+    }
+  }
+
+  /** Lets callers observe how long Git calls take, for example to spot a slow `git status`. */
+  onDidRun(listener: (record: GitRunRecord) => void): { dispose(): void } {
+    this.runListeners.add(listener);
+    return {
+      dispose: () => {
+        this.runListeners.delete(listener);
+      },
+    };
+  }
+
+  private report(options: GitRunOptions, started: number, exitCode: number | null): void {
+    if (this.runListeners.size === 0) {
+      return;
+    }
+    const record: GitRunRecord = { cwd: options.cwd, args: options.args, durationMs: performance.now() - started, exitCode };
+    for (const listener of this.runListeners) {
+      try {
+        listener(record);
+      } catch {
+        // An observer must never break the Git call it observes.
+      }
     }
   }
 
@@ -135,18 +172,24 @@ export class GitCliRunner implements GitCli {
       shell: false,
       env: {
         ...process.env,
+        ...options.env,
         GIT_TERMINAL_PROMPT: "0",
-        GIT_OPTIONAL_LOCKS: "1",
+        // Background reads must not take index.lock or rewrite the index: that fires vscode.git's
+        // watchers, its status run fires a repository event, and restore would run again.
+        GIT_OPTIONAL_LOCKS: "0",
         LC_ALL: "C",
       },
     };
 
+    const started = performance.now();
     try {
       const result = await this.execFileUtf8(this.gitPath, options.args, execOptions);
+      this.report(options, started, 0);
       return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
     } catch (error) {
       const execError = asExecError(error);
       const exitCode = typeof execError.code === "number" ? execError.code : null;
+      this.report(options, started, exitCode);
       const stdout = execError.stdout ? String(execError.stdout) : "";
       const stderr = execError.stderr ? String(execError.stderr) : "";
       if (exitCode !== null && allowedExitCodes.includes(exitCode)) {

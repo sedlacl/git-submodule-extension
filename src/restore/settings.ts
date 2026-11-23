@@ -24,7 +24,7 @@ export interface RestoreCommandContext {
 export function fetchConfirmMessage(relativePath: string, branch: string): string {
   return (
     `Fetch origin/${branch} for '${relativePath}'? ` +
-    "This contacts the configured remote and is never done automatically. " +
+    "This contacts the configured remote. " +
     "The extension will not pull, push, commit, or discard files."
   );
 }

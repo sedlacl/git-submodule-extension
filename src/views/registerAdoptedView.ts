@@ -178,7 +178,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     vscode.window.onDidChangeActiveColorTheme(() => {
       void webviewProvider.reloadFileIcons();
     }),
-    options.restoreStatus?.subscribe(() => refresh("restore update", false)) ?? { dispose() {} },
+    options.restoreStatus?.subscribeResults(() => refresh("restore update", false)) ?? { dispose() {} },
     new vscode.Disposable(() => webviewProvider.dispose()),
   ];
 

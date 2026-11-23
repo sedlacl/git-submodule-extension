@@ -7,6 +7,8 @@ import { activateVsCodeGitApi, type VsCodeGitApiAdapter } from "./git/vscodeGitA
 import { registerBranchRestore } from "./restore/registerBranchRestore.js";
 import { VIEW_ID } from "./views/constants.js";
 import { createChangesDiagnosticWriter, formatDuration } from "./views/changesLoadDiagnostics.js";
+import { registerAutoFetch } from "./fetch/registerAutoFetch.js";
+import { registerFsmonitorAdvisor } from "./fsmonitor/registerFsmonitorAdvisor.js";
 import { registerAdoptedView } from "./views/registerAdoptedView.js";
 
 const GIT_WAIT_HEARTBEAT_MS = 5_000;
@@ -98,6 +100,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
   context.subscriptions.push(
     restore,
+    registerAutoFetch({
+      cli,
+      gitApi: api,
+      writeDiagnostic,
+      gitReady,
+      onFetched: (rootPath) => restore.onRepositoryFetched(rootPath),
+    }),
+    registerFsmonitorAdvisor({
+      cli,
+      gitApi: api,
+      output,
+      writeDiagnostic,
+      actionDiagnostics,
+      workspaceState: context.workspaceState,
+    }),
     registerAdoptedView({
       model,
       gitApi: api,

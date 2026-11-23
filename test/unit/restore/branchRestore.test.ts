@@ -304,4 +304,30 @@ describe("BranchReconciler event loop", () => {
     expect(restores).toBeLessThanOrEqual(32);
     expect(details).toContain("restore depth limit exceeded");
   });
+
+  it("does not look for nested submodules in an uninitialized submodule folder", async () => {
+    // Git run in an uninitialized submodule folder reads the parent: its .gitmodules, and no
+    // gitlinks under that subfolder. Recursing there reported every entry as a missing gitlink.
+    const uninitialized = path.resolve(parent, "child");
+    const parentModules = '[submodule "child"]\n\tpath = child\n\tbranch = main\n[submodule "other"]\n\tpath = other\n\tbranch = main\n';
+    const git: GitCli = {
+      run: async (options) => {
+        const key = options.args.join("\0");
+        const atParent = normalizeRepoPath(options.cwd) === normalizeRepoPath(parent);
+        if (key === "show\0HEAD:.gitmodules") return ok(parentModules);
+        if (key === "ls-tree\0-r\0-z\0HEAD") return ok(atParent ? `160000 commit ${PIN}\tchild\0` : "");
+        if (key === "rev-parse\0--is-inside-work-tree") return ok("true\n");
+        if (key === "rev-parse\0--show-toplevel") return ok(`${parent}\n`);
+        return { stdout: "", stderr: "", exitCode: 128 };
+      },
+    };
+    const results: string[] = [];
+    await new BranchReconciler(git, new SafeBranchRestoreService(git, { exists: () => false }), {
+      onResult: (result) => results.push(`${normalizeRepoPath(result.childRootPath)}: ${result.detail}`),
+    }).retry(parent);
+    expect(results).toEqual([
+      `${normalizeRepoPath(path.resolve(parent, "other"))}: committed parent gitlink is missing`,
+      `${normalizeRepoPath(uninitialized)}: submodule path is not its Git worktree root`,
+    ]);
+  });
 });

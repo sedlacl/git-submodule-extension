@@ -13,6 +13,11 @@ export interface RestoreResult {
   readonly childRootPath: string;
   readonly action: RestoreAction;
   readonly detail: string;
+  /**
+   * `false` when the submodule folder is not its own initialized worktree. Git run there reads
+   * the parent, so the reconciler must not look for nested submodules in it.
+   */
+  readonly worktree?: false;
 }
 
 export interface RestoreRequest {
@@ -71,7 +76,8 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
       await this.assertAttached(request);
       return this.result(request, "attached", `attached ${request.branch}@${shortSha(request.pin)}`);
     } catch (error) {
-      return this.result(request, "blocked", message(error));
+      const blocked = this.result(request, "blocked", message(error));
+      return error instanceof NotWorktreeError ? { ...blocked, worktree: false } : blocked;
     }
   }
 
@@ -89,12 +95,12 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
       allowedExitCodes: [0, 128],
     });
     if (workTree.exitCode !== 0 || workTree.stdout.trim() !== "true") {
-      throw new Error("submodule is not an initialized Git worktree");
+      throw new NotWorktreeError("submodule is not an initialized Git worktree");
     }
 
     const topLevel = await this.cli.run({ cwd: child, args: ["rev-parse", "--show-toplevel"] });
     if (!sameRepoPath(topLevel.stdout.trim(), child)) {
-      throw new Error("submodule path is not its Git worktree root");
+      throw new NotWorktreeError("submodule path is not its Git worktree root");
     }
   }
 
@@ -200,6 +206,8 @@ export class SafeBranchRestoreService implements BranchRestoreExecutor {
     };
   }
 }
+
+class NotWorktreeError extends Error {}
 
 function message(error: unknown): string {
   if (error instanceof GitCliError) {
