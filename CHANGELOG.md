@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.13] - 2026-11-25
+
+### Changed
+
+- CHANGES with submodules also shows the repositories `vscode.git` has open outside the workspace folders, as its Repositories list does: for example a repository opened through one of its files, or via **Git: Open Repository**. A repository that is a submodule of another one still appears under its parent. When `vscode.git` closes such a repository, it leaves the view.
+
+### Fixed
+
+- CHANGES with submodules follows Git again: a branch switch, a commit or a new repository shows up as soon as `vscode.git` reports it. Branch restore subscribed to repository events after the view and replaced the view's listeners, so the view had kept up only because restore refreshed it in a loop. Since 0.4.12 stopped that loop, the view showed an old branch or missed a repository until something else refreshed it.
+
 ## [0.4.12] - 2026-11-23
 
 ### Added
@@ -212,6 +222,7 @@ First public release.
 - Branch restore is fail-closed: it never fetches, initializes missing submodules, updates gitlinks, or writes when any safety check fails.
 
 [Unreleased]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...HEAD
+[0.4.13]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.12...v0.4.13
 [0.4.12]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.11...v0.4.12
 [0.4.11]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/sedlacl/git-submodule-extension/compare/v0.4.9...v0.4.10
