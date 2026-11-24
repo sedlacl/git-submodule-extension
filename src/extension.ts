@@ -86,7 +86,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const model = createGitModelService({
     gitPath: api.gitPath,
     cli,
-    getWorkspaceFolderPaths: () => api.getWorkspaceFolderPaths(),
+    getWorkspaceFolderPaths: () => api.getRootPaths(),
   });
 
   const actionDiagnostics = new ActionDiagnostics(writeDiagnostic);

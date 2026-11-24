@@ -26,8 +26,6 @@ export interface GitApiListener {
  * internal Git extension types to the rest of the model.
  */
 export class VsCodeGitApiAdapter {
-  private readonly repoDisposables = new Map<string, vscode.Disposable>();
-
   constructor(
     private readonly api: API,
     private readonly workspace: typeof vscode.workspace = vscode.workspace,
@@ -51,6 +49,25 @@ export class VsCodeGitApiAdapter {
 
   getWorkspaceFolderPaths(): string[] {
     return this.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
+  }
+
+  /**
+   * Where CHANGES with submodules starts discovery: the workspace folders, then every repository
+   * `vscode.git` has open, as in its own Repositories list. That includes a repository outside the
+   * workspace, opened because a file of it was opened or via Git: Open Repository. Discovery shows
+   * an open repository that is a submodule of another root under its parent, not as a root.
+   */
+  getRootPaths(): string[] {
+    const seen = new Set<string>();
+    const roots: string[] = [];
+    for (const rootPath of [...this.getWorkspaceFolderPaths(), ...this.getOpenRepositoryPaths()]) {
+      const key = normalizeRepoPath(rootPath);
+      if (!seen.has(key)) {
+        seen.add(key);
+        roots.push(rootPath);
+      }
+    }
+    return roots;
   }
 
   getOpenRepositoryPaths(): string[] {
@@ -79,14 +96,19 @@ export class VsCodeGitApiAdapter {
     return overlayHierarchicalRepositoryState(model, this.snapshotAll());
   }
 
+  /**
+   * Each subscription keeps its own per-repository listeners: the CHANGES view and branch restore
+   * subscribe separately, and a later subscription must not replace an earlier one's.
+   */
   subscribe(listener: GitApiListener): vscode.Disposable {
     const disposables: vscode.Disposable[] = [];
+    const repoDisposables = new Map<string, vscode.Disposable>();
 
     const attachRepo = (repository: Repository): void => {
       const rootPath = repository.rootUri.fsPath;
       const key = normalizeRepoPath(rootPath);
-      this.repoDisposables.get(key)?.dispose();
-      this.repoDisposables.set(
+      repoDisposables.get(key)?.dispose();
+      repoDisposables.set(
         key,
         repository.state.onDidChange(() => {
           const snapshot = snapshotRepository(repository);
@@ -111,8 +133,8 @@ export class VsCodeGitApiAdapter {
       this.api.onDidCloseRepository((repository) => {
         const rootPath = repository.rootUri.fsPath;
         const key = normalizeRepoPath(rootPath);
-        this.repoDisposables.get(key)?.dispose();
-        this.repoDisposables.delete(key);
+        repoDisposables.get(key)?.dispose();
+        repoDisposables.delete(key);
         listener.onCloseRepository?.(rootPath);
       }),
     );
@@ -121,10 +143,10 @@ export class VsCodeGitApiAdapter {
       for (const disposable of disposables) {
         disposable.dispose();
       }
-      for (const disposable of this.repoDisposables.values()) {
+      for (const disposable of repoDisposables.values()) {
         disposable.dispose();
       }
-      this.repoDisposables.clear();
+      repoDisposables.clear();
     });
   }
 

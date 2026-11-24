@@ -61,7 +61,7 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
         );
       }
     },
-    () => options.gitApi.getWorkspaceFolderPaths(),
+    () => options.gitApi.getRootPaths(),
   );
   const contentProvider = new GitShowContentProvider(options.cli);
   let generateCommitMessageCommand: string | undefined;
@@ -140,7 +140,8 @@ export function registerAdoptedView(options: RegisterAdoptedViewOptions): vscode
     options.gitApi.subscribe({
       onOpenRepository: (rootPath) =>
         refresh("repository opened", () => controller.repositoryOpenNeedsRediscovery(rootPath)),
-      onCloseRepository: () => refresh("repository closed", false),
+      // A closed repository that was a root of its own (outside the workspace folders) leaves the view.
+      onCloseRepository: () => refresh("repository closed", () => controller.workspaceFoldersNeedRediscovery()),
       onDidChangeRepositoryState: (snapshot) => {
         controller.consumeRepositoryState(snapshot);
         refresh("Git state event", () => controller.repositoryStateNeedsRediscovery());
